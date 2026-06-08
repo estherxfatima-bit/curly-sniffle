@@ -1,16 +1,22 @@
 -- Life OS — full schema
 -- Run in Supabase SQL editor
--- All tables are created first, then RLS is enabled, then all policies are added last.
--- This avoids "relation does not exist" errors from forward references in policy bodies.
+--
+-- Structure:
+--   1. Extensions
+--   2. All table definitions
+--   3. Enable RLS on all tables
+--   4. Helper function for cross-table policy (security definer avoids parse-time resolution errors)
+--   5. All policies
+--   6. Indexes
 
 -- =====================
--- EXTENSIONS
+-- 1. EXTENSIONS
 -- =====================
 create extension if not exists "uuid-ossp";
 
 
 -- =====================
--- TABLE DEFINITIONS
+-- 2. TABLE DEFINITIONS
 -- =====================
 
 create table if not exists profiles (
@@ -32,13 +38,11 @@ create table if not exists goals (
   created_at timestamptz default now()
 );
 
--- accountability_partners is created BEFORE weekly_tasks so the partner-read
--- policy on weekly_tasks can safely reference it.
 create table if not exists accountability_partners (
   id uuid primary key default uuid_generate_v4(),
   user_id uuid not null references auth.users(id) on delete cascade,
   partner_id uuid not null references auth.users(id) on delete cascade,
-  status text default 'pending', -- 'pending' | 'accepted'
+  status text default 'pending',
   created_at timestamptz default now(),
   unique(user_id, partner_id)
 );
@@ -76,7 +80,6 @@ create table if not exists habit_logs (
   unique(user_id, habit_id, log_date)
 );
 
--- comments references weekly_tasks, so weekly_tasks must exist first (it does).
 create table if not exists comments (
   id uuid primary key default uuid_generate_v4(),
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -151,54 +154,68 @@ create table if not exists content_ideas (
 
 
 -- =====================
--- ENABLE RLS ON ALL TABLES
+-- 3. ENABLE RLS
 -- =====================
-alter table profiles               enable row level security;
-alter table goals                  enable row level security;
+alter table profiles                enable row level security;
+alter table goals                   enable row level security;
 alter table accountability_partners enable row level security;
-alter table weekly_tasks           enable row level security;
-alter table habits                 enable row level security;
-alter table habit_logs             enable row level security;
-alter table comments               enable row level security;
-alter table weekly_reviews         enable row level security;
-alter table mood_logs              enable row level security;
-alter table content_inspiration    enable row level security;
-alter table content_batches        enable row level security;
-alter table content_ideas          enable row level security;
+alter table weekly_tasks            enable row level security;
+alter table habits                  enable row level security;
+alter table habit_logs              enable row level security;
+alter table comments                enable row level security;
+alter table weekly_reviews          enable row level security;
+alter table mood_logs               enable row level security;
+alter table content_inspiration     enable row level security;
+alter table content_batches         enable row level security;
+alter table content_ideas           enable row level security;
 
 
 -- =====================
--- RLS POLICIES
--- All tables exist by this point, so cross-table references in policy bodies are safe.
+-- 4. HELPER FUNCTION
+-- =====================
+-- security definer runs as the function owner (postgres), bypassing RLS on
+-- accountability_partners when called from a policy on weekly_tasks.
+-- This is the Supabase-recommended pattern for cross-table RLS checks.
+create or replace function is_accepted_partner(task_owner_id uuid)
+returns boolean
+language sql
+security definer
+stable
+as $$
+  select exists (
+    select 1
+    from accountability_partners
+    where accountability_partners.user_id   = auth.uid()
+      and accountability_partners.partner_id = task_owner_id
+      and accountability_partners.status     = 'accepted'
+  );
+$$;
+
+
+-- =====================
+-- 5. RLS POLICIES
 -- =====================
 
--- profiles: users can only read and write their own row
+-- profiles: each user can only read/write their own row
 create policy "profiles: own row read"   on profiles for select using (auth.uid() = id);
 create policy "profiles: own row insert" on profiles for insert with check (auth.uid() = id);
 create policy "profiles: own row update" on profiles for update using (auth.uid() = id);
 
--- goals: users can only access their own goals
+-- goals: own rows only
 create policy "goals: own rows" on goals
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
--- accountability_partners: users manage their own rows; partners can see the relation from either side
+-- accountability_partners: manage your own rows; see rows where you are the partner
 create policy "partners: own rows" on accountability_partners
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "partners: partner read" on accountability_partners
   for select using (auth.uid() = partner_id);
 
--- weekly_tasks: own rows full access; accepted partners can read
+-- weekly_tasks: own rows full access; accepted partners can read via helper function
 create policy "weekly_tasks: own rows" on weekly_tasks
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "weekly_tasks: partner read" on weekly_tasks
-  for select using (
-    exists (
-      select 1 from accountability_partners
-      where accountability_partners.user_id   = auth.uid()
-        and accountability_partners.partner_id = weekly_tasks.user_id
-        and accountability_partners.status     = 'accepted'
-    )
-  );
+  for select using (is_accepted_partner(weekly_tasks.user_id));
 
 -- habits: own rows only
 create policy "habits: own rows" on habits
@@ -208,7 +225,7 @@ create policy "habits: own rows" on habits
 create policy "habit_logs: own rows" on habit_logs
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
--- comments: author can manage their own; task owner can read nudges on their tasks
+-- comments: author manages their own; task owner can read nudges left on their tasks
 create policy "comments: own rows" on comments
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "comments: task owner read" on comments
@@ -242,9 +259,9 @@ create policy "content_ideas: own rows" on content_ideas
 
 
 -- =====================
--- INDEXES
+-- 6. INDEXES
 -- =====================
-create index if not exists habit_logs_user_date    on habit_logs(user_id, log_date);
-create index if not exists mood_logs_user_date     on mood_logs(user_id, log_date);
-create index if not exists weekly_tasks_user_week  on weekly_tasks(user_id, week_start);
-create index if not exists content_ideas_user      on content_ideas(user_id);
+create index if not exists habit_logs_user_date   on habit_logs(user_id, log_date);
+create index if not exists mood_logs_user_date    on mood_logs(user_id, log_date);
+create index if not exists weekly_tasks_user_week on weekly_tasks(user_id, week_start);
+create index if not exists content_ideas_user     on content_ideas(user_id);
