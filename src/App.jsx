@@ -1,0 +1,52 @@
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { AuthProvider, useAuth } from './hooks/useAuth'
+import AppLayout from './components/layout/AppLayout'
+import AuthPage from './pages/AuthPage'
+import DashboardPage from './pages/DashboardPage'
+import WeeklyPage from './pages/WeeklyPage'
+import GoalsPage from './pages/GoalsPage'
+import HabitsPage from './pages/HabitsPage'
+import ContentPage from './pages/ContentPage'
+import InsightsPage from './pages/InsightsPage'
+import PartnersPage from './pages/PartnersPage'
+
+function AppRoutes() {
+  const { session, loading } = useAuth()
+
+  if (loading) {
+    return (
+      <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)' }}>
+        <span style={{ color: 'var(--text-3)', fontFamily: 'var(--font-mono)', fontSize: '12px', letterSpacing: '0.1em' }}>
+          LOADING…
+        </span>
+      </div>
+    )
+  }
+
+  if (!session) return <AuthPage />
+
+  return (
+    <AppLayout>
+      <Routes>
+        <Route path="/" element={<DashboardPage />} />
+        <Route path="/weekly" element={<WeeklyPage />} />
+        <Route path="/goals" element={<GoalsPage />} />
+        <Route path="/habits" element={<HabitsPage />} />
+        <Route path="/content" element={<ContentPage />} />
+        <Route path="/insights" element={<InsightsPage />} />
+        <Route path="/partners" element={<PartnersPage />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </AppLayout>
+  )
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <AuthProvider>
+        <AppRoutes />
+      </AuthProvider>
+    </BrowserRouter>
+  )
+}
