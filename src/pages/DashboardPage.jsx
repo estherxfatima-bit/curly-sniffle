@@ -123,7 +123,7 @@ export default function DashboardPage() {
       {isFriday && (
         <div style={{
           background: 'linear-gradient(135deg, var(--career-tint) 0%, var(--bg) 100%)',
-          border: '1.5px solid var(--career)',
+          border: '1px solid var(--career)',
           borderRadius: 'var(--radius-lg)',
           padding: '16px 22px',
           marginBottom: '28px',

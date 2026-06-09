@@ -9,7 +9,7 @@ const DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
 function CustomTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null
   return (
-    <div style={{ background: 'var(--bg)', border: '1.5px solid var(--border)', borderRadius: 'var(--radius)', padding: '8px 12px', fontSize: 12, boxShadow: 'var(--shadow)' }}>
+    <div style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '8px 12px', fontSize: 12, boxShadow: 'var(--shadow-card)' }}>
       <p style={{ color: 'var(--text-3)', marginBottom: 4, fontFamily: 'var(--font-mono)', fontSize: 10 }}>{label}</p>
       {payload.map(p => <p key={p.name} style={{ color: p.color || 'var(--text)' }}>{p.name}: {typeof p.value === 'number' ? p.value.toFixed(1) : p.value}</p>)}
     </div>

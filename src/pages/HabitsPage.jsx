@@ -141,7 +141,7 @@ export default function HabitsPage() {
       ) : (
         <div className="card" style={{ padding: 0, overflow: 'auto' }}>
           {/* Day headers */}
-          <div style={{ display: 'grid', gridTemplateColumns: '200px 100px 1fr 52px', padding: '12px 20px', borderBottom: '1.5px solid var(--border)', background: 'var(--bg-2)', minWidth: 700 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '200px 100px 1fr 52px', padding: '12px 20px', borderBottom: '1px solid var(--border)', background: 'var(--bg-2)', minWidth: 700 }}>
             <span className="mono">Habit</span>
             <span className="mono">Streak</span>
             <div style={{ display: 'grid', gridTemplateColumns: `repeat(14, 1fr)`, gap: 4 }}>

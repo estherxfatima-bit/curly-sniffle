@@ -45,7 +45,7 @@ export default function MoodWidget() {
               background: todayMood === m.value ? 'var(--personal-tint)' : 'transparent',
               padding: '5px 7px',
               borderRadius: 'var(--radius)',
-              border: todayMood === m.value ? '1.5px solid var(--personal)' : '1.5px solid transparent',
+              border: todayMood === m.value ? '2px solid var(--personal)' : '2px solid transparent',
               opacity: todayMood && todayMood !== m.value ? 0.3 : 1,
               cursor: todayMood ? 'default' : 'pointer',
               transition: 'all 0.15s',

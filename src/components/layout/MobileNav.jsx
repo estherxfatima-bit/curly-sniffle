@@ -33,8 +33,8 @@ export default function MobileNav() {
       {showOverflow && (
         <div style={{
           position: 'fixed', bottom: 72, right: 12,
-          background: 'var(--bg)',
-          border: '1.5px solid var(--border)',
+          background: 'var(--card-bg)',
+          border: '1px solid var(--border)',
           borderRadius: 'var(--radius-lg)',
           padding: '8px',
           zIndex: 90,
@@ -60,12 +60,13 @@ export default function MobileNav() {
 
       <nav style={{
         position: 'fixed', bottom: 0, left: 0, right: 0, height: 60,
-        background: 'var(--bg)',
-        borderTop: '1.5px solid var(--border)',
+        background: 'var(--card-bg)',
+        borderTop: '1px solid var(--border)',
         display: 'flex', alignItems: 'center',
         zIndex: 80,
         paddingBottom: 'env(safe-area-inset-bottom)',
-        backdropFilter: 'blur(12px)',
+        backdropFilter: 'blur(16px)',
+        boxShadow: '0 -1px 16px rgba(45,37,32,0.06)',
       }}>
         {primaryItems.map(({ to, label, icon: Icon }) => (
           <NavLink

@@ -91,15 +91,15 @@ export default function AIPlanningPanel({ onClose }) {
     <div style={{
       position: 'fixed', top: 0, right: 0, bottom: 0,
       width: 420, maxWidth: '100vw',
-      background: 'var(--bg)',
-      borderLeft: '1.5px solid var(--border)',
+      background: 'var(--card-bg)',
+      borderLeft: '1px solid var(--border)',
       boxShadow: 'var(--shadow-lg)',
       display: 'flex', flexDirection: 'column',
       zIndex: 200,
-      animation: 'slideRight 0.2s ease',
+      animation: 'slideRight 0.22s ease',
     }}>
       {/* Header */}
-      <div style={{ padding: '20px 24px', borderBottom: '1.5px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div style={{ padding: '22px 24px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <Sparkles size={18} color="var(--career)" />
           <h3 style={{ fontSize: '1rem' }}>AI Planning</h3>
@@ -154,7 +154,7 @@ export default function AIPlanningPanel({ onClose }) {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {recentEntries.map(e => (
-                <div key={e.id} style={{ background: 'var(--bg-2)', borderRadius: 'var(--radius)', padding: '10px 14px', border: '1.5px solid var(--border)' }}>
+                <div key={e.id} style={{ background: 'var(--bg-2)', borderRadius: 'var(--radius)', padding: '10px 14px', border: '1px solid var(--border)' }}>
                   <div className="flex items-center gap-2 mb-1">
                     <span className="badge badge-career" style={{ fontSize: 9 }}>{TYPE_LABELS[e.type] || e.type}</span>
                     <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-3)' }}>{format(new Date(e.created_at), 'd MMM')}</span>

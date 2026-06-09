@@ -229,8 +229,8 @@ function TodoItem({ todo, categories, expanded, onToggleExpand, onToggle, onDele
 
   return (
     <div style={{
-      background: todo.complete ? 'var(--bg-2)' : 'var(--bg)',
-      border: '1.5px solid var(--border)',
+      background: todo.complete ? 'var(--bg-2)' : 'var(--card-bg)',
+      border: '1px solid var(--border)',
       borderLeft: `3px solid ${catColor}`,
       borderRadius: 'var(--radius)',
       padding: '10px 12px',
