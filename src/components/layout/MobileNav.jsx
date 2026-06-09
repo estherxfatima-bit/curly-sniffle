@@ -2,18 +2,22 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import { LayoutDashboard, CalendarDays, Film, Heart, MoreHorizontal } from 'lucide-react'
 import { useState } from 'react'
 
-// Max 4 primary items — Dashboard, Week, Content, Habits in the bar
+// Phase 7: primary 4 tabs — Dashboard, Week, Content, Wellness
 const primaryItems = [
-  { to: '/',        label: 'Home',    icon: LayoutDashboard },
-  { to: '/weekly',  label: 'Week',    icon: CalendarDays    },
-  { to: '/content', label: 'Content', icon: Film            },
-  { to: '/habits',  label: 'Habits',  icon: Heart           },
+  { to: '/',         label: 'Home',     icon: LayoutDashboard },
+  { to: '/weekly',   label: 'Week',     icon: CalendarDays    },
+  { to: '/content',  label: 'Content',  icon: Film            },
+  { to: '/wellness', label: 'Wellness', icon: Heart           },
 ]
 
 const overflowItems = [
   { to: '/goals',    label: 'Goals'    },
+  { to: '/habits',   label: 'Habits'   },
+  { to: '/finance',  label: 'Finance'  },
   { to: '/insights', label: 'Insights' },
   { to: '/partners', label: 'Partners' },
+  { to: '/ai-log',   label: 'AI Log'   },
+  { to: '/settings', label: 'Settings' },
 ]
 
 export default function MobileNav() {
