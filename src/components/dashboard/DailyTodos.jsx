@@ -1,44 +1,45 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
-import { format } from 'date-fns'
+import { format, subDays } from 'date-fns'
 import { Plus, Trash2, ChevronDown, ChevronRight, Check, Clock } from 'lucide-react'
 
-const DEFAULT_CATEGORIES = ['Work', 'Personal', 'Errands', 'Creative', 'Sanctum', 'Health']
+const DEFAULT_CATS = ['Work', 'Personal', 'Errands', 'Creative', 'Health']
+const TIME_OPTS = ['15 min', '30 min', '45 min', '1 hr', '1.5 hr', '2 hr', '3 hr']
 
-const TIME_OPTIONS = ['15 mins', '30 mins', '45 mins', '1 hour', '1.5 hours', '2 hours', '3 hours']
-
-const CATEGORY_COLORS = {
-  Work:     'var(--career)',
+const CAT_COLOR = {
+  Work: 'var(--career)',
   Personal: 'var(--personal)',
-  Errands:  'var(--creative)',
+  Errands: 'var(--creative)',
   Creative: 'var(--creative)',
-  Sanctum:  'var(--wellness)',
-  Health:   'var(--wellness)',
+  Health: 'var(--wellness)',
 }
+function catColor(c) { return CAT_COLOR[c] || 'var(--career)' }
 
-export default function DailyTodos() {
+export default function DailyTodos({ compact = false }) {
   const { user } = useAuth()
-  const [todos, setTodos] = useState([])
+  const today     = format(new Date(), 'yyyy-MM-dd')
+  const yesterday = format(subDays(new Date(), 1), 'yyyy-MM-dd')
+
+  const [todos,   setTodos]   = useState([])
   const [loading, setLoading] = useState(true)
-  const [input, setInput] = useState('')
-  const [filter, setFilter] = useState('all') // all | incomplete | complete
+  const [input,   setInput]   = useState('')
+  const [statusFilter,   setStatusFilter]   = useState('all')    // all | active | done
   const [categoryFilter, setCategoryFilter] = useState('')
-  const [expanded, setExpanded] = useState({})
-  const [categories, setCategories] = useState(DEFAULT_CATEGORIES)
+  const [categories, setCategories] = useState(DEFAULT_CATS)
+  const [newCatInput, setNewCatInput] = useState('')
+  const [showAddCat,  setShowAddCat]  = useState(false)
   const inputRef = useRef(null)
-  const today = format(new Date(), 'yyyy-MM-dd')
 
-  useEffect(() => { if (user) loadTodos() }, [user])
-
-  // Carry over incomplete from yesterday at midnight (simple: check if any incomplete yesterday tasks exist)
+  // Load todos, carrying over yesterday's incomplete tasks atomically
   useEffect(() => {
-    if (user) carryOver()
+    if (user) init()
   }, [user])
 
-  async function carryOver() {
-    const yesterday = format(new Date(Date.now() - 86400000), 'yyyy-MM-dd')
-    const { data: yesterdayTodos } = await supabase
+  async function init() {
+    setLoading(true)
+    // 1. Carry over yesterday's incomplete (idempotent guard via carried_from)
+    const { data: yd } = await supabase
       .from('daily_todos')
       .select('*')
       .eq('user_id', user.id)
@@ -46,47 +47,47 @@ export default function DailyTodos() {
       .eq('complete', false)
       .eq('archived', false)
 
-    if (!yesterdayTodos?.length) return
+    if (yd?.length) {
+      const { data: alreadyDone } = await supabase
+        .from('daily_todos')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('date', today)
+        .eq('carried_from', yesterday)
+        .limit(1)
 
-    // Check if we already carried over (avoid double carry)
-    const { data: alreadyCarried } = await supabase
-      .from('daily_todos')
-      .select('id')
-      .eq('user_id', user.id)
-      .eq('date', today)
-      .eq('carried_from', yesterday)
-      .limit(1)
+      if (!alreadyDone?.length) {
+        // Insert carry-overs then archive yesterday
+        await supabase.from('daily_todos').insert(
+          yd.map(t => ({
+            user_id: user.id,
+            text: t.text,
+            date: today,
+            complete: false,
+            category: t.category || 'Personal',
+            time_allocation: t.time_allocation,
+            subtasks: t.subtasks,
+            carried_from: yesterday,
+          }))
+        )
+        await supabase.from('daily_todos')
+          .update({ archived: true })
+          .eq('user_id', user.id)
+          .eq('date', yesterday)
+          .eq('complete', false)
+      }
+    }
 
-    if (alreadyCarried?.length) return
-
-    await supabase.from('daily_todos').insert(
-      yesterdayTodos.map(t => ({
-        user_id: user.id,
-        text: t.text,
-        complete: false,
-        category: t.category,
-        time_allocation: t.time_allocation,
-        subtasks: t.subtasks,
-        date: today,
-        carried_from: yesterday,
-      }))
-    )
-    // Archive the yesterday ones
-    await supabase.from('daily_todos').update({ archived: true })
-      .eq('user_id', user.id).eq('date', yesterday).eq('complete', false)
-  }
-
-  async function loadTodos() {
-    setLoading(true)
-    const { data } = await supabase
+    // 2. Load today's todos
+    const { data: td } = await supabase
       .from('daily_todos')
       .select('*')
       .eq('user_id', user.id)
       .eq('date', today)
       .eq('archived', false)
-      .order('sort_order')
       .order('created_at')
-    setTodos(data || [])
+
+    setTodos(td || [])
     setLoading(false)
   }
 
@@ -94,21 +95,22 @@ export default function DailyTodos() {
     const text = input.trim()
     if (!text) return
     const { data } = await supabase.from('daily_todos').insert({
-      user_id: user.id, text, date: today, category: 'Personal', complete: false,
+      user_id: user.id, text, date: today,
+      category: categoryFilter || 'Personal',
+      complete: false,
     }).select().single()
     if (data) setTodos(prev => [...prev, data])
     setInput('')
     inputRef.current?.focus()
   }
 
-  async function toggleTodo(todo) {
-    // If all subtasks exist, check if all done
+  async function toggle(todo) {
     const newVal = !todo.complete
     await supabase.from('daily_todos').update({ complete: newVal }).eq('id', todo.id)
     setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, complete: newVal } : t))
   }
 
-  async function deleteTodo(id) {
+  async function remove(id) {
     await supabase.from('daily_todos').delete().eq('id', id)
     setTodos(prev => prev.filter(t => t.id !== id))
   }
@@ -118,83 +120,110 @@ export default function DailyTodos() {
     setTodos(prev => prev.map(t => t.id === id ? { ...t, [field]: value } : t))
   }
 
-  async function toggleSubtask(todo, subtaskId) {
-    const subtasks = (todo.subtasks || []).map(s =>
-      s.id === subtaskId ? { ...s, complete: !s.complete } : s
-    )
-    // Auto-complete parent if all subtasks done
-    const allDone = subtasks.every(s => s.complete)
-    await supabase.from('daily_todos').update({ subtasks, complete: allDone }).eq('id', todo.id)
-    setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, subtasks, complete: allDone } : t))
+  async function toggleSubtask(todo, subId) {
+    const subs = (todo.subtasks || []).map(s => s.id === subId ? { ...s, complete: !s.complete } : s)
+    const allDone = subs.every(s => s.complete)
+    await supabase.from('daily_todos').update({ subtasks: subs, complete: allDone }).eq('id', todo.id)
+    setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, subtasks: subs, complete: allDone } : t))
   }
 
   async function addSubtask(todo, text) {
-    if (!text.trim()) return
-    const subtasks = [...(todo.subtasks || []), { id: Date.now().toString(), text: text.trim(), complete: false }]
-    await supabase.from('daily_todos').update({ subtasks }).eq('id', todo.id)
-    setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, subtasks } : t))
+    const subs = [...(todo.subtasks || []), { id: String(Date.now()), text, complete: false }]
+    await supabase.from('daily_todos').update({ subtasks: subs }).eq('id', todo.id)
+    setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, subtasks: subs } : t))
+  }
+
+  function addCategory() {
+    const c = newCatInput.trim()
+    if (c && !categories.includes(c)) setCategories(prev => [...prev, c])
+    setNewCatInput('')
+    setShowAddCat(false)
   }
 
   const filtered = todos.filter(t => {
-    if (filter === 'complete' && !t.complete) return false
-    if (filter === 'incomplete' && t.complete) return false
+    if (statusFilter === 'active' && t.complete) return false
+    if (statusFilter === 'done'   && !t.complete) return false
     if (categoryFilter && t.category !== categoryFilter) return false
     return true
   })
 
-  const doneCount = todos.filter(t => t.complete).length
-  const totalCount = todos.length
+  const done  = todos.filter(t => t.complete).length
+  const total = todos.length
 
   return (
-    <div className="card card-career">
-      <div className="flex items-center justify-between mb-4">
+    <div>
+      {/* Header */}
+      <div className="flex items-center justify-between mb-3">
         <div>
           <h3>Today's to-dos</h3>
-          <p style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
-            {doneCount}/{totalCount} done · {format(new Date(), 'EEE d MMM')}
-          </p>
+          {!loading && (
+            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-3)', marginTop: 2, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+              {done}/{total} done · {format(new Date(), 'EEE d MMM')}
+            </p>
+          )}
         </div>
-        <div style={{ display: 'flex', gap: 6 }}>
-          {['all', 'incomplete', 'complete'].map(f => (
-            <button key={f} onClick={() => setFilter(f)} className={`btn btn-sm ${filter === f ? 'btn-career' : 'btn-ghost'}`} style={filter === f ? { color: '#fff' } : {}}>
+        <div className="flex gap-2">
+          {(['all', 'active', 'done']).map(f => (
+            <button key={f} onClick={() => setStatusFilter(f)}
+              className={`btn btn-xs ${statusFilter === f ? 'btn-career' : 'btn-ghost'}`}
+              style={statusFilter === f ? { color: '#fff' } : {}}>
               {f}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Category filter */}
-      <div className="flex items-center gap-2 mb-4 wrap">
-        <button onClick={() => setCategoryFilter('')} className={`btn btn-xs ${!categoryFilter ? 'btn-career' : 'btn-ghost'}`} style={!categoryFilter ? { color: '#fff' } : {}}>All</button>
-        {categories.map(c => (
-          <button key={c} onClick={() => setCategoryFilter(categoryFilter === c ? '' : c)} className={`btn btn-xs ${categoryFilter === c ? 'btn-career' : 'btn-ghost'}`} style={categoryFilter === c ? { color: '#fff' } : {}}>
-            {c}
-          </button>
-        ))}
-      </div>
-
       {/* Quick-add input */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+      <div style={{ display: 'flex', gap: 7, marginBottom: 12 }}>
         <input
           ref={inputRef}
           value={input}
           onChange={e => setInput(e.target.value)}
-          placeholder="Add a task… press Enter"
           onKeyDown={e => e.key === 'Enter' && addTodo()}
+          placeholder="Add task… Enter to save"
           style={{ flex: 1 }}
         />
         <button className="btn btn-career btn-sm" style={{ color: '#fff', flexShrink: 0 }} onClick={addTodo}>
-          <Plus size={14} />
+          <Plus size={13} />
         </button>
       </div>
 
-      {/* Todo list */}
+      {/* Category filter chips */}
+      <div className="flex items-center gap-2 mb-4 wrap">
+        <button
+          onClick={() => setCategoryFilter('')}
+          className={`btn btn-xs ${!categoryFilter ? 'btn-career' : 'btn-ghost'}`}
+          style={!categoryFilter ? { color: '#fff' } : {}}
+        >All</button>
+        {categories.map(c => (
+          <button key={c} onClick={() => setCategoryFilter(categoryFilter === c ? '' : c)}
+            className={`btn btn-xs ${categoryFilter === c ? '' : 'btn-ghost'}`}
+            style={categoryFilter === c ? { background: catColor(c), color: '#fff', border: 'none' } : {}}
+          >
+            {c}
+          </button>
+        ))}
+        {showAddCat ? (
+          <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
+            <input value={newCatInput} onChange={e => setNewCatInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') addCategory(); if (e.key === 'Escape') setShowAddCat(false) }}
+              placeholder="Category name" style={{ fontSize: 11, padding: '3px 8px', width: 110 }} autoFocus />
+            <button className="btn btn-xs btn-career" style={{ color: '#fff' }} onClick={addCategory}>+</button>
+          </div>
+        ) : (
+          <button className="btn btn-xs btn-ghost" onClick={() => setShowAddCat(true)} title="Add custom category" style={{ color: 'var(--text-3)' }}>+ cat</button>
+        )}
+      </div>
+
+      {/* List */}
       {loading ? (
-        <p style={{ textAlign: 'center', color: 'var(--text-3)', padding: '20px 0' }}>Loading…</p>
+        <p style={{ color: 'var(--text-3)', fontSize: 13, textAlign: 'center', padding: '16px 0' }}>Loading…</p>
       ) : filtered.length === 0 ? (
-        <p style={{ textAlign: 'center', color: 'var(--text-3)', padding: '20px 0', fontStyle: 'italic', fontSize: 13 }}>
-          {filter === 'complete' ? 'Nothing completed yet today.' : 'No tasks here — add something above.'}
-        </p>
+        <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--text-3)' }}>
+          <p style={{ fontSize: 13, fontStyle: 'italic' }}>
+            {statusFilter === 'done' ? 'Nothing completed yet today.' : 'Nothing here — add something above.'}
+          </p>
+        </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {filtered.map(todo => (
@@ -202,13 +231,11 @@ export default function DailyTodos() {
               key={todo.id}
               todo={todo}
               categories={categories}
-              expanded={!!expanded[todo.id]}
-              onToggleExpand={() => setExpanded(p => ({ ...p, [todo.id]: !p[todo.id] }))}
-              onToggle={() => toggleTodo(todo)}
-              onDelete={() => deleteTodo(todo.id)}
-              onUpdateField={(field, val) => updateField(todo.id, field, val)}
-              onToggleSubtask={(sid) => toggleSubtask(todo, sid)}
-              onAddSubtask={(text) => addSubtask(todo, text)}
+              onToggle={() => toggle(todo)}
+              onRemove={() => remove(todo.id)}
+              onUpdateField={(f, v) => updateField(todo.id, f, v)}
+              onToggleSubtask={sid => toggleSubtask(todo, sid)}
+              onAddSubtask={text => addSubtask(todo, text)}
             />
           ))}
         </div>
@@ -217,113 +244,151 @@ export default function DailyTodos() {
   )
 }
 
-function TodoItem({ todo, categories, expanded, onToggleExpand, onToggle, onDelete, onUpdateField, onToggleSubtask, onAddSubtask }) {
-  const [addingSubtask, setAddingSubtask] = useState(false)
-  const [subtaskInput, setSubtaskInput] = useState('')
+function TodoItem({ todo, categories, onToggle, onRemove, onUpdateField, onToggleSubtask, onAddSubtask }) {
+  const [expanded,     setExpanded]     = useState(false)
+  const [addingSub,    setAddingSub]    = useState(false)
+  const [subInput,     setSubInput]     = useState('')
+  const [editingTime,  setEditingTime]  = useState(false)
+  const [editingCat,   setEditingCat]   = useState(false)
   const subtasks = todo.subtasks || []
-  const catColor = CATEGORY_COLORS[todo.category] || 'var(--career)'
+  const cc = catColor(todo.category)
 
-  function submitSubtask() {
-    if (subtaskInput.trim()) { onAddSubtask(subtaskInput.trim()); setSubtaskInput(''); setAddingSubtask(false) }
+  function submitSub() {
+    if (subInput.trim()) { onAddSubtask(subInput.trim()); setSubInput('') }
+    setAddingSub(false)
   }
 
   return (
     <div style={{
       background: todo.complete ? 'var(--bg-2)' : 'var(--card-bg)',
       border: '1px solid var(--border)',
-      borderLeft: `3px solid ${catColor}`,
+      borderLeft: `3px solid ${todo.complete ? 'var(--border)' : cc}`,
       borderRadius: 'var(--radius)',
-      padding: '10px 12px',
-      transition: 'all 0.2s',
-      opacity: todo.complete ? 0.65 : 1,
+      padding: '9px 12px',
+      transition: 'opacity 0.2s, transform 0.2s',
+      opacity: todo.complete ? 0.62 : 1,
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        {/* Expand toggle if has subtasks */}
+      {/* Main row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+        {/* Expand chevron */}
         {subtasks.length > 0 ? (
-          <button className="btn-icon btn" style={{ padding: 2 }} onClick={onToggleExpand}>
-            {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+          <button className="btn-icon" style={{ padding: 2, flexShrink: 0, color: 'var(--text-3)' }} onClick={() => setExpanded(v => !v)}>
+            {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
           </button>
-        ) : <div style={{ width: 19 }} />}
+        ) : <div style={{ width: 18, flexShrink: 0 }} />}
 
-        {/* Check */}
-        <div className={`toggle-dot ${todo.complete ? 'done' : ''}`} onClick={onToggle} style={{ borderColor: catColor }}>
-          {todo.complete && <Check size={11} color="white" strokeWidth={3} />}
+        {/* Toggle dot */}
+        <div className={`toggle-dot ${todo.complete ? 'done' : ''}`} onClick={onToggle}
+          style={{ borderColor: todo.complete ? 'var(--success)' : cc, flexShrink: 0, cursor: 'pointer' }}>
+          {todo.complete && <Check size={10} color="white" strokeWidth={3} />}
         </div>
 
         {/* Text */}
         <span style={{
-          flex: 1, fontSize: 13, fontWeight: 500,
-          textDecoration: todo.complete ? 'line-through' : 'none',
+          flex: 1,
+          fontSize: 13,
+          fontWeight: 500,
           color: todo.complete ? 'var(--text-3)' : 'var(--text)',
-          transition: 'all 0.2s',
+          textDecoration: todo.complete ? 'line-through' : 'none',
+          transition: 'all 0.18s',
+          minWidth: 0,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
         }}>
           {todo.text}
-          {todo.carried_from && (
-            <span className="badge badge-warning" style={{ marginLeft: 8, fontSize: 9 }}>from yesterday</span>
-          )}
         </span>
 
-        {/* Metadata pills */}
-        <div style={{ display: 'flex', gap: 5, alignItems: 'center', flexShrink: 0 }}>
-          {todo.time_allocation && (
-            <span style={{ fontSize: 10, color: 'var(--text-3)', background: 'var(--bg-3)', borderRadius: 10, padding: '2px 7px', display: 'flex', alignItems: 'center', gap: 3, fontFamily: 'var(--font-mono)' }}>
-              <Clock size={9} /> {todo.time_allocation}
-            </span>
-          )}
-          <span style={{ fontSize: 10, color: catColor, background: `${catColor}18`, borderRadius: 10, padding: '2px 7px', fontFamily: 'var(--font-mono)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-            {todo.category}
-          </span>
+        {/* Carried-from label */}
+        {todo.carried_from && (
+          <span className="badge badge-warning" style={{ fontSize: 9, flexShrink: 0 }}>yesterday</span>
+        )}
 
-          {/* Options */}
+        {/* Time pill — click to cycle */}
+        {editingTime ? (
           <select
+            autoFocus
             value={todo.time_allocation || ''}
-            onChange={e => onUpdateField('time_allocation', e.target.value || null)}
-            style={{ width: 'auto', padding: '2px 6px', fontSize: 10, background: 'transparent', border: 'none', color: 'var(--text-3)', cursor: 'pointer' }}
-            title="Set time allocation"
+            onChange={e => { onUpdateField('time_allocation', e.target.value || null); setEditingTime(false) }}
+            onBlur={() => setEditingTime(false)}
+            style={{ fontSize: 11, padding: '2px 6px', width: 'auto', border: '1px solid var(--border)', borderRadius: 6 }}
           >
-            <option value="">⏱</option>
-            {TIME_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
+            <option value="">No time</option>
+            {TIME_OPTS.map(t => <option key={t} value={t}>{t}</option>)}
           </select>
+        ) : todo.time_allocation ? (
+          <span
+            onClick={() => setEditingTime(true)}
+            title="Click to change"
+            style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 10, color: 'var(--text-3)', background: 'var(--bg-3)', borderRadius: 10, padding: '2px 7px', cursor: 'pointer', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>
+            <Clock size={9} /> {todo.time_allocation}
+          </span>
+        ) : (
+          <button onClick={() => setEditingTime(true)} className="btn-icon" style={{ padding: 2, color: 'var(--border)', flexShrink: 0 }} title="Set time">
+            <Clock size={12} />
+          </button>
+        )}
+
+        {/* Category pill — click to cycle */}
+        {editingCat ? (
           <select
+            autoFocus
             value={todo.category || 'Personal'}
-            onChange={e => onUpdateField('category', e.target.value)}
-            style={{ width: 'auto', padding: '2px 6px', fontSize: 10, background: 'transparent', border: 'none', color: 'var(--text-3)', cursor: 'pointer' }}
-            title="Set category"
+            onChange={e => { onUpdateField('category', e.target.value); setEditingCat(false) }}
+            onBlur={() => setEditingCat(false)}
+            style={{ fontSize: 11, padding: '2px 6px', width: 'auto', border: '1px solid var(--border)', borderRadius: 6 }}
           >
             {categories.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
+        ) : (
+          <span
+            onClick={() => setEditingCat(true)}
+            title="Click to change category"
+            style={{ fontSize: 9, color: cc, background: `${cc}1a`, borderRadius: 10, padding: '2px 7px', fontFamily: 'var(--font-mono)', letterSpacing: '0.04em', textTransform: 'uppercase', cursor: 'pointer', flexShrink: 0 }}>
+            {todo.category}
+          </span>
+        )}
 
-          <button className="btn-icon btn" style={{ padding: 2, color: 'var(--text-3)' }} onClick={() => setAddingSubtask(v => !v)} title="Add subtask">+</button>
-          <button className="btn-icon btn" style={{ padding: 2 }} onClick={onDelete}><Trash2 size={12} /></button>
-        </div>
+        {/* Add subtask */}
+        <button className="btn-icon" style={{ padding: 2, color: 'var(--text-3)', flexShrink: 0 }} onClick={() => setAddingSub(v => !v)} title="Add subtask">
+          <Plus size={12} />
+        </button>
+
+        {/* Delete */}
+        <button className="btn-icon" style={{ padding: 2, flexShrink: 0 }} onClick={onRemove}>
+          <Trash2 size={12} />
+        </button>
       </div>
 
       {/* Subtasks */}
-      {(expanded && subtasks.length > 0) && (
-        <div style={{ marginTop: 8, paddingLeft: 28, display: 'flex', flexDirection: 'column', gap: 5 }}>
-          {subtasks.map(sub => (
-            <div key={sub.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }} onClick={() => onToggleSubtask(sub.id)}>
-              <div className={`toggle-dot ${sub.complete ? 'done' : ''}`} style={{ width: 16, height: 16, cursor: 'pointer' }}>
-                {sub.complete && <Check size={9} color="white" strokeWidth={3} />}
+      {expanded && subtasks.length > 0 && (
+        <div style={{ marginTop: 8, paddingLeft: 42, display: 'flex', flexDirection: 'column', gap: 5 }}>
+          {subtasks.map(s => (
+            <div key={s.id} onClick={() => onToggleSubtask(s.id)}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+              <div className={`toggle-dot ${s.complete ? 'done' : ''}`} style={{ width: 16, height: 16, borderColor: cc, flexShrink: 0 }}>
+                {s.complete && <Check size={8} color="white" strokeWidth={3} />}
               </div>
-              <span style={{ fontSize: 12, color: sub.complete ? 'var(--text-3)' : 'var(--text-2)', textDecoration: sub.complete ? 'line-through' : 'none' }}>{sub.text}</span>
+              <span style={{ fontSize: 12, color: s.complete ? 'var(--text-3)' : 'var(--text-2)', textDecoration: s.complete ? 'line-through' : 'none' }}>
+                {s.text}
+              </span>
             </div>
           ))}
         </div>
       )}
 
-      {/* Add subtask input */}
-      {addingSubtask && (
-        <div style={{ marginTop: 8, paddingLeft: 28, display: 'flex', gap: 8 }}>
+      {/* Add-subtask input */}
+      {addingSub && (
+        <div style={{ marginTop: 8, paddingLeft: 42, display: 'flex', gap: 7 }}>
           <input
-            value={subtaskInput}
-            onChange={e => setSubtaskInput(e.target.value)}
+            value={subInput}
+            onChange={e => setSubInput(e.target.value)}
             placeholder="Subtask…"
             style={{ fontSize: 12, flex: 1 }}
-            onKeyDown={e => { if (e.key === 'Enter') submitSubtask(); if (e.key === 'Escape') setAddingSubtask(false) }}
             autoFocus
+            onKeyDown={e => { if (e.key === 'Enter') submitSub(); if (e.key === 'Escape') setAddingSub(false) }}
           />
-          <button className="btn btn-career btn-xs" style={{ color: '#fff' }} onClick={submitSubtask}>Add</button>
+          <button className="btn btn-career btn-xs" style={{ color: '#fff' }} onClick={submitSub}>Add</button>
         </div>
       )}
     </div>
