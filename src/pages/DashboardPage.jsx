@@ -4,6 +4,7 @@ import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
 import { getCurrentQuarter, getQuarterYear } from '../lib/constants'
 import MoodWidget from '../components/dashboard/MoodWidget'
+import DailyTodos from '../components/dashboard/DailyTodos'
 import ArcRing from '../components/ui/ArcRing'
 import Confetti from '../components/ui/Confetti'
 import { Check, ArrowRight } from 'lucide-react'
@@ -302,6 +303,11 @@ export default function DashboardPage() {
             })}
           </div>
         )}
+      </div>
+
+      {/* Daily to-dos */}
+      <div className="mb-4">
+        <DailyTodos />
       </div>
 
       {/* Mood */}
