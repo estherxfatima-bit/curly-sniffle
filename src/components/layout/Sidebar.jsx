@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, CalendarDays, Target, CheckSquare, Film,
-  TrendingUp, Users, LogOut, Sun, Moon, Sparkles,
+  TrendingUp, Users, LogOut, Sun, Moon, Sparkles, PiggyBank,
 } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { useTheme } from '../../hooks/useTheme'
@@ -13,6 +13,7 @@ const navItems = [
   { to: '/habits',    label: 'Habits',      icon: CheckSquare,     section: 'personal' },
   { to: '/content',   label: 'Content',     icon: Film,            section: 'creative' },
   { to: '/insights',  label: 'Insights',    icon: TrendingUp,      section: 'career'   },
+  { to: '/finance',   label: 'Finance',     icon: PiggyBank,       section: 'finance'  },
   { to: '/partners',  label: 'Partners',    icon: Users,           section: 'personal' },
   { to: '/ai-log',   label: 'AI Log',      icon: Sparkles,        section: 'career'   },
 ]

@@ -128,6 +128,35 @@ Return JSON:
   return result
 }
 
+export async function generateFinanceSummary(userId, { income, fixed, variable, totalIncome, totalFixed, totalVariable, taxPot, takeHome }) {
+  const system = `You are a direct financial advisor. Analyse the user's income and expenses plainly. No cheerleading, no generic advice. Look at the actual numbers and give a specific observation about their financial health, what stands out, and one concrete thing to address. Max 3 sentences.`
+
+  const incomeLines = income.map(i => `  - ${i.name}: £${i.amount} ${i.frequency}${i.is_self_employed ? ' (self-employed)' : ''}`).join('\n')
+  const fixedLines  = fixed.map(i => `  - ${i.name}: £${i.amount}/mo [${i.category}]`).join('\n')
+  const varLines    = variable.slice(0, 15).map(i => `  - ${i.name}: £${i.amount} [${i.category}] ${i.date}`).join('\n')
+
+  const prompt = `Monthly financial snapshot:
+
+INCOME (total £${totalIncome.toFixed(0)}/mo):
+${incomeLines || '  None'}
+
+FIXED EXPENSES (£${totalFixed.toFixed(0)}/mo):
+${fixedLines || '  None'}
+
+VARIABLE EXPENSES this month (£${totalVariable.toFixed(0)}):
+${varLines || '  None'}
+
+TAX POT SET ASIDE: £${taxPot.toFixed(0)}/mo
+NET TAKE-HOME AFTER ALL: £${takeHome.toFixed(0)}/mo
+
+Give a direct financial observation in 2-3 sentences.`
+
+  const response = await callClaude(prompt, system, 400)
+  const title = `Finance summary — ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`
+  await saveAndReturn(userId, 'finance_summary', title, response)
+  return response
+}
+
 export async function smartBatchIdeas(userId, ideas) {
   const system = `You are a production coordinator helping a content creator batch filming days efficiently. Group ideas by filming setup. Respond in valid JSON only.`
 

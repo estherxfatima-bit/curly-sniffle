@@ -11,6 +11,7 @@ import ContentPage from './pages/ContentPage'
 import InsightsPage from './pages/InsightsPage'
 import PartnersPage from './pages/PartnersPage'
 import AILogPage from './pages/AILogPage'
+import FinancePage from './pages/FinancePage'
 
 function AppRoutes() {
   const { session, loading } = useAuth()
@@ -38,6 +39,7 @@ function AppRoutes() {
         <Route path="/insights" element={<InsightsPage />} />
         <Route path="/partners" element={<PartnersPage />} />
         <Route path="/ai-log"   element={<AILogPage />} />
+        <Route path="/finance"  element={<FinancePage />} />
         <Route path="*"         element={<Navigate to="/" replace />} />
       </Routes>
     </AppLayout>
