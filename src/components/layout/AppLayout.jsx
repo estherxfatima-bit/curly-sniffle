@@ -14,7 +14,7 @@ export default function AppLayout({ children }) {
   return (
     <div className="app-layout">
       {!isMobile && <Sidebar />}
-      <main className="main-content">
+      <main className="main-content fade-in">
         {children}
       </main>
       {isMobile && <MobileNav />}

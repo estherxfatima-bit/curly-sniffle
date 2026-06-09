@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './hooks/useAuth'
+import { ThemeProvider } from './hooks/useTheme'
 import AppLayout from './components/layout/AppLayout'
 import AuthPage from './pages/AuthPage'
 import DashboardPage from './pages/DashboardPage'
@@ -16,7 +17,7 @@ function AppRoutes() {
   if (loading) {
     return (
       <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)' }}>
-        <span style={{ color: 'var(--text-3)', fontFamily: 'var(--font-mono)', fontSize: '12px', letterSpacing: '0.1em' }}>
+        <span style={{ color: 'var(--text-3)', fontFamily: 'var(--font-mono)', fontSize: 12, letterSpacing: '0.1em' }}>
           LOADING…
         </span>
       </div>
@@ -28,14 +29,14 @@ function AppRoutes() {
   return (
     <AppLayout>
       <Routes>
-        <Route path="/" element={<DashboardPage />} />
-        <Route path="/weekly" element={<WeeklyPage />} />
-        <Route path="/goals" element={<GoalsPage />} />
-        <Route path="/habits" element={<HabitsPage />} />
-        <Route path="/content" element={<ContentPage />} />
+        <Route path="/"         element={<DashboardPage />} />
+        <Route path="/weekly"   element={<WeeklyPage />} />
+        <Route path="/goals"    element={<GoalsPage />} />
+        <Route path="/habits"   element={<HabitsPage />} />
+        <Route path="/content"  element={<ContentPage />} />
         <Route path="/insights" element={<InsightsPage />} />
         <Route path="/partners" element={<PartnersPage />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*"         element={<Navigate to="/" replace />} />
       </Routes>
     </AppLayout>
   )
@@ -44,9 +45,11 @@ function AppRoutes() {
 export default function App() {
   return (
     <BrowserRouter>
-      <AuthProvider>
-        <AppRoutes />
-      </AuthProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <AppRoutes />
+        </AuthProvider>
+      </ThemeProvider>
     </BrowserRouter>
   )
 }

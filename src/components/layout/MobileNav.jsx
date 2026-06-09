@@ -1,17 +1,17 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, CalendarDays, CheckSquare, Film, MoreHorizontal } from 'lucide-react'
+import { LayoutDashboard, CalendarDays, Film, Heart, MoreHorizontal } from 'lucide-react'
 import { useState } from 'react'
 
-// Max 4 primary items in mobile tab bar — everything else in overflow
+// Max 4 primary items — Dashboard, Week, Content, Habits in the bar
 const primaryItems = [
-  { to: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/weekly', label: 'Week', icon: CalendarDays },
-  { to: '/habits', label: 'Habits', icon: CheckSquare },
-  { to: '/content', label: 'Content', icon: Film },
+  { to: '/',        label: 'Home',    icon: LayoutDashboard },
+  { to: '/weekly',  label: 'Week',    icon: CalendarDays    },
+  { to: '/content', label: 'Content', icon: Film            },
+  { to: '/habits',  label: 'Habits',  icon: Heart           },
 ]
 
 const overflowItems = [
-  { to: '/goals', label: 'Goals' },
+  { to: '/goals',    label: 'Goals'    },
   { to: '/insights', label: 'Insights' },
   { to: '/partners', label: 'Partners' },
 ]
@@ -23,23 +23,18 @@ export default function MobileNav() {
   return (
     <>
       {showOverflow && (
-        <div
-          style={{ position: 'fixed', inset: 0, zIndex: 89 }}
-          onClick={() => setShowOverflow(false)}
-        />
+        <div style={{ position: 'fixed', inset: 0, zIndex: 89 }} onClick={() => setShowOverflow(false)} />
       )}
 
       {showOverflow && (
         <div style={{
-          position: 'fixed',
-          bottom: '72px',
-          right: '12px',
-          background: 'var(--bg-2)',
-          border: '1px solid var(--border)',
+          position: 'fixed', bottom: 72, right: 12,
+          background: 'var(--bg)',
+          border: '1.5px solid var(--border)',
           borderRadius: 'var(--radius-lg)',
           padding: '8px',
           zIndex: 90,
-          minWidth: '160px',
+          minWidth: 160,
           boxShadow: 'var(--shadow-lg)',
         }}>
           {overflowItems.map(item => (
@@ -47,13 +42,9 @@ export default function MobileNav() {
               key={item.to}
               onClick={() => { navigate(item.to); setShowOverflow(false) }}
               style={{
-                display: 'block',
-                width: '100%',
-                padding: '10px 14px',
-                background: 'transparent',
-                color: 'var(--text-2)',
-                fontSize: '13px',
-                textAlign: 'left',
+                display: 'block', width: '100%', padding: '11px 16px',
+                background: 'transparent', color: 'var(--text-2)',
+                fontSize: '14px', textAlign: 'left',
                 borderRadius: 'var(--radius)',
               }}
             >
@@ -64,17 +55,13 @@ export default function MobileNav() {
       )}
 
       <nav style={{
-        position: 'fixed',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        height: '64px',
-        background: 'var(--bg-2)',
-        borderTop: '1px solid var(--border)',
-        display: 'flex',
-        alignItems: 'center',
+        position: 'fixed', bottom: 0, left: 0, right: 0, height: 60,
+        background: 'var(--bg)',
+        borderTop: '1.5px solid var(--border)',
+        display: 'flex', alignItems: 'center',
         zIndex: 80,
         paddingBottom: 'env(safe-area-inset-bottom)',
+        backdropFilter: 'blur(12px)',
       }}>
         {primaryItems.map(({ to, label, icon: Icon }) => (
           <NavLink
@@ -82,18 +69,12 @@ export default function MobileNav() {
             to={to}
             end={to === '/'}
             style={({ isActive }) => ({
-              flex: 1,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: '3px',
-              padding: '8px 0',
-              color: isActive ? 'var(--accent)' : 'var(--text-3)',
+              flex: 1, display: 'flex', flexDirection: 'column',
+              alignItems: 'center', gap: '3px', padding: '8px 0',
+              color: isActive ? 'var(--career)' : 'var(--text-3)',
               textDecoration: 'none',
-              fontSize: '10px',
-              fontFamily: 'var(--font-mono)',
-              letterSpacing: '0.04em',
-              textTransform: 'uppercase',
+              fontSize: '10px', fontFamily: 'var(--font-mono)',
+              letterSpacing: '0.04em', textTransform: 'uppercase',
             })}
           >
             <Icon size={18} />
@@ -101,22 +82,15 @@ export default function MobileNav() {
           </NavLink>
         ))}
 
-        {/* More overflow */}
         <button
           onClick={() => setShowOverflow(v => !v)}
           style={{
-            flex: 1,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '3px',
-            padding: '8px 0',
+            flex: 1, display: 'flex', flexDirection: 'column',
+            alignItems: 'center', gap: '3px', padding: '8px 0',
             background: 'transparent',
-            color: showOverflow ? 'var(--accent)' : 'var(--text-3)',
-            fontSize: '10px',
-            fontFamily: 'var(--font-mono)',
-            letterSpacing: '0.04em',
-            textTransform: 'uppercase',
+            color: showOverflow ? 'var(--career)' : 'var(--text-3)',
+            fontSize: '10px', fontFamily: 'var(--font-mono)',
+            letterSpacing: '0.04em', textTransform: 'uppercase',
           }}
         >
           <MoreHorizontal size={18} />

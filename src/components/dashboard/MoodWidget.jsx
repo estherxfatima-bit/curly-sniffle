@@ -19,45 +19,37 @@ export default function MoodWidget() {
 
   useEffect(() => {
     if (!user) return
-    supabase
-      .from('mood_logs')
-      .select('mood_score')
-      .eq('user_id', user.id)
-      .eq('log_date', today)
-      .maybeSingle()
+    supabase.from('mood_logs').select('mood_score').eq('user_id', user.id).eq('log_date', today).maybeSingle()
       .then(({ data }) => { if (data) setTodayMood(data.mood_score) })
   }, [user, today])
 
-  const logMood = async (score) => {
+  async function logMood(score) {
     if (todayMood || saving) return
     setSaving(true)
-    await supabase.from('mood_logs').upsert({
-      user_id: user.id,
-      mood_score: score,
-      log_date: today,
-    }, { onConflict: 'user_id,log_date' })
+    await supabase.from('mood_logs').upsert({ user_id: user.id, mood_score: score, log_date: today }, { onConflict: 'user_id,log_date' })
     setTodayMood(score)
     setSaving(false)
   }
 
   return (
-    <div className="card card-sm">
-      <p className="mono mb-2">Today's mood</p>
-      <div style={{ display: 'flex', gap: '8px' }}>
+    <div className="card card-personal card-sm">
+      <p className="mono mb-3">Today's mood</p>
+      <div style={{ display: 'flex', gap: 6 }}>
         {MOODS.map(m => (
           <button
             key={m.value}
             onClick={() => logMood(m.value)}
             title={m.label}
             style={{
-              fontSize: '22px',
-              background: 'transparent',
-              padding: '4px 6px',
+              fontSize: 24,
+              background: todayMood === m.value ? 'var(--personal-tint)' : 'transparent',
+              padding: '5px 7px',
               borderRadius: 'var(--radius)',
-              border: todayMood === m.value ? '1px solid var(--accent)' : '1px solid transparent',
-              opacity: todayMood && todayMood !== m.value ? 0.35 : 1,
+              border: todayMood === m.value ? '1.5px solid var(--personal)' : '1.5px solid transparent',
+              opacity: todayMood && todayMood !== m.value ? 0.3 : 1,
               cursor: todayMood ? 'default' : 'pointer',
-              transition: 'all 0.12s',
+              transition: 'all 0.15s',
+              transform: todayMood === m.value ? 'scale(1.1)' : 'scale(1)',
             }}
           >
             {m.emoji}
@@ -65,7 +57,7 @@ export default function MoodWidget() {
         ))}
       </div>
       {todayMood && (
-        <p style={{ fontSize: '11px', color: 'var(--text-3)', marginTop: '6px', fontFamily: 'var(--font-mono)' }}>
+        <p style={{ fontSize: 11, color: 'var(--personal)', marginTop: 8, fontFamily: 'var(--font-mono)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
           Logged — {MOODS.find(m => m.value === todayMood)?.label}
         </p>
       )}
