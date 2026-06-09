@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, CalendarDays, Target, CheckSquare, Film,
-  TrendingUp, Users, LogOut, Sun, Moon, Settings,
+  TrendingUp, Users, LogOut, Sun, Moon, Sparkles,
 } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { useTheme } from '../../hooks/useTheme'
@@ -14,6 +14,7 @@ const navItems = [
   { to: '/content',   label: 'Content',     icon: Film,            section: 'creative' },
   { to: '/insights',  label: 'Insights',    icon: TrendingUp,      section: 'career'   },
   { to: '/partners',  label: 'Partners',    icon: Users,           section: 'personal' },
+  { to: '/ai-log',   label: 'AI Log',      icon: Sparkles,        section: 'career'   },
 ]
 
 const SECTION_COLORS = {

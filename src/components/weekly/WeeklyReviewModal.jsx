@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
-import { generateWeeklyReviewSummary } from '../../lib/claude'
+import { generateWeeklyReviewSummary } from '../../lib/aiLog'
 import { X } from 'lucide-react'
 
 export default function WeeklyReviewModal({ weekStart, incompleteTasks, onClose, onComplete }) {
@@ -15,7 +15,7 @@ export default function WeeklyReviewModal({ weekStart, incompleteTasks, onClose,
   async function submit() {
     setSaving(true)
     try {
-      const aiSummary = await generateWeeklyReviewSummary({
+      const aiSummary = await generateWeeklyReviewSummary(user.id, {
         shipped: form.shipped,
         didntShip: form.didnt_ship,
         energyLevel: form.energy_level,
