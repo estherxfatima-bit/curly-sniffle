@@ -4,7 +4,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { format, subDays } from 'date-fns'
 import { Plus, Trash2, ChevronDown, ChevronRight, Check, Clock, Target } from 'lucide-react'
 
-const DEFAULT_CATS = ['Work', 'Personal', 'Errands', 'Creative', 'Sanctum', 'Health']
+const DEFAULT_CATS = ['Work', 'Personal', 'Errands', 'Creative', 'Health']
 const TIME_OPTS = ['15 min', '30 min', '45 min', '1 hr', '1.5 hr', '2 hr', '3 hr']
 
 const CAT_COLOR = {
@@ -12,7 +12,6 @@ const CAT_COLOR = {
   Personal: 'var(--personal)',
   Errands: 'var(--creative)',
   Creative: 'var(--creative)',
-  Sanctum: 'var(--finance)',
   Health: 'var(--wellness)',
 }
 function catColor(c) { return CAT_COLOR[c] || 'var(--career)' }

@@ -1,14 +1,35 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Fragment } from 'react'
 import { format, startOfWeek, endOfWeek, addWeeks, subWeeks } from 'date-fns'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
-import { TASK_AREAS } from '../lib/constants'
-import { ChevronLeft, ChevronRight, Plus, Trash2, RotateCcw, MessageSquare, Check } from 'lucide-react'
+import { TASK_AREAS, AREA_COLORS } from '../lib/constants'
+import { ChevronLeft, ChevronRight, ChevronDown, Plus, Trash2, RotateCcw, MessageSquare, Check } from 'lucide-react'
 import WeeklyReviewModal from '../components/weekly/WeeklyReviewModal'
 import PastReviews from '../components/weekly/PastReviews'
 import WeeklyQuote from '../components/dashboard/WeeklyQuote'
+import TaskExpansion from '../components/weekly/TaskExpansion'
+import ArcRing from '../components/ui/ArcRing'
 
 const FREQUENCIES = ['Daily', 'Weekly', '2x/week', '3x/week', 'One-off']
+
+function areaColor(area) {
+  return AREA_COLORS[area] || AREA_COLORS.Other
+}
+
+function goalProgress(goal, metrics, allTasks) {
+  if (goal.tracking_type === 'metric') {
+    const start = Number(goal.metric_start ?? 0)
+    const target = Number(goal.metric_target ?? 0)
+    const hist = metrics.filter(m => m.goal_id === goal.id)
+    const current = hist.length ? Number(hist[hist.length - 1].value) : start
+    const span = target - start
+    return span !== 0 ? Math.round(Math.min(Math.max((current - start) / span, 0), 1) * 100) : 0
+  }
+  const linked = allTasks.filter(t => t.goal_id === goal.id)
+  const total = linked.length
+  const done = linked.filter(t => t.complete).length
+  return total ? Math.round((done / total) * 100) : 0
+}
 
 function WeekDecoration() {
   return (
@@ -27,11 +48,13 @@ export default function WeeklyPage() {
   const [currentWeek, setCurrentWeek] = useState(new Date())
   const [tasks, setTasks] = useState([])
   const [goals, setGoals] = useState([])
+  const [metrics, setMetrics] = useState([])
   const [loading, setLoading] = useState(true)
   const [showAddRow, setShowAddRow] = useState(false)
   const [showReview, setShowReview] = useState(false)
   const [showPastReviews, setShowPastReviews] = useState(false)
-  const [editingNote, setEditingNote] = useState(null)
+  const [expandedTask, setExpandedTask] = useState(null)
+  const [groupBy, setGroupBy] = useState('area')
   const [newTask, setNewTask] = useState({ area: 'Career', action: '', frequency: 'Weekly', specific_task: '', goal_id: '' })
   const [savedQuote, setSavedQuote] = useState(null)
 
@@ -56,8 +79,10 @@ export default function WeeklyPage() {
   }
 
   async function loadGoals() {
-    const { data } = await supabase.from('goals').select('id, primary_goal, category').eq('user_id', user.id)
-    setGoals(data || [])
+    const { data: goalsData } = await supabase.from('goals').select('*').eq('user_id', user.id)
+    setGoals(goalsData || [])
+    const { data: metricsData } = await supabase.from('goal_metrics').select('*').eq('user_id', user.id).order('recorded_at')
+    setMetrics(metricsData || [])
   }
 
   async function addTask() {
@@ -87,19 +112,44 @@ export default function WeeklyPage() {
     const incomplete = tasks.filter(t => !t.complete)
     if (!incomplete.length) return
     await supabase.from('weekly_tasks').insert(
-      incomplete.map(t => ({ user_id: user.id, week_start: nextWeekStart, area: t.area, action: t.action, frequency: t.frequency, specific_task: t.specific_task, goal_id: t.goal_id, complete: false, carried_forward: true, notes: t.notes }))
+      incomplete.map(t => ({ user_id: user.id, week_start: nextWeekStart, area: t.area, action: t.action, frequency: t.frequency, specific_task: t.specific_task, goal_id: t.goal_id, complete: false, carried_forward: true, notes: t.notes, subtasks: t.subtasks, time_allocation: t.time_allocation }))
     )
     alert(`${incomplete.length} task(s) carried forward to next week`)
   }
 
-  async function saveNote(taskId, note) {
-    await supabase.from('weekly_tasks').update({ notes: note }).eq('id', taskId)
-    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, notes: note } : t))
-    setEditingNote(null)
+  async function updateTaskField(taskId, field, value) {
+    await supabase.from('weekly_tasks').update({ [field]: value }).eq('id', taskId)
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, [field]: value } : t))
+  }
+
+  async function toggleSubtask(task, subId) {
+    const subs = (task.subtasks || []).map(s => s.id === subId ? { ...s, complete: !s.complete } : s)
+    await supabase.from('weekly_tasks').update({ subtasks: subs }).eq('id', task.id)
+    setTasks(prev => prev.map(t => t.id === task.id ? { ...t, subtasks: subs } : t))
+  }
+
+  async function addSubtask(task, text) {
+    const subs = [...(task.subtasks || []), { id: String(Date.now()), text, complete: false }]
+    await supabase.from('weekly_tasks').update({ subtasks: subs }).eq('id', task.id)
+    setTasks(prev => prev.map(t => t.id === task.id ? { ...t, subtasks: subs } : t))
   }
 
   const incompleteCount = tasks.filter(t => !t.complete).length
   const doneCount = tasks.filter(t => t.complete).length
+
+  // Build groups based on the grouping toggle
+  let groups = []
+  if (groupBy === 'area') {
+    groups = TASK_AREAS.map(area => ({
+      key: area, label: area, color: areaColor(area), tasks: tasks.filter(t => t.area === area),
+    })).filter(g => g.tasks.length)
+  } else {
+    groups = goals.map(g => ({
+      key: g.id, label: g.primary_goal, goal: g, pct: goalProgress(g, metrics, tasks), tasks: tasks.filter(t => t.goal_id === g.id),
+    })).filter(g => g.tasks.length)
+    const ungrouped = tasks.filter(t => !t.goal_id)
+    if (ungrouped.length) groups.push({ key: 'ungrouped', label: 'Ungrouped', tasks: ungrouped })
+  }
 
   return (
     <div>
@@ -127,10 +177,17 @@ export default function WeeklyPage() {
       </div>
 
       {/* Week nav */}
-      <div className="flex items-center gap-3 mb-5">
+      <div className="flex items-center gap-3 mb-5 wrap">
         <button className="btn btn-icon" onClick={() => setCurrentWeek(w => subWeeks(w, 1))}><ChevronLeft size={16} /></button>
         <button className="btn btn-ghost btn-sm" onClick={() => setCurrentWeek(new Date())} style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>This week</button>
         <button className="btn btn-icon" onClick={() => setCurrentWeek(w => addWeeks(w, 1))}><ChevronRight size={16} /></button>
+
+        {/* Grouping toggle */}
+        <div className="flex items-center gap-1" style={{ marginLeft: 8 }}>
+          <button className={`btn btn-xs ${groupBy === 'area' ? 'btn-career' : 'btn-ghost'}`} style={groupBy === 'area' ? { color: '#fff' } : {}} onClick={() => setGroupBy('area')}>Group by Area</button>
+          <button className={`btn btn-xs ${groupBy === 'goal' ? 'btn-career' : 'btn-ghost'}`} style={groupBy === 'goal' ? { color: '#fff' } : {}} onClick={() => setGroupBy('goal')}>Group by Goal</button>
+        </div>
+
         <div style={{ flex: 1 }} />
         {incompleteCount > 0 && (
           <button className="btn btn-ghost btn-sm" onClick={carryForwardIncomplete}>
@@ -154,7 +211,7 @@ export default function WeeklyPage() {
               <th>Specific Task</th>
               <th>Goal</th>
               <th style={{ width: 90 }}>Status</th>
-              <th style={{ width: 72 }}></th>
+              <th style={{ width: 56 }}></th>
             </tr>
           </thead>
           <tbody>
@@ -180,38 +237,71 @@ export default function WeeklyPage() {
             ) : tasks.length === 0 && !showAddRow ? (
               <tr><td colSpan={8} style={{ textAlign: 'center', padding: 40, color: 'var(--text-3)', fontStyle: 'italic' }}>No tasks this week — click "Add task" to start</td></tr>
             ) : (
-              tasks.map(task => (
-                <>
-                  <tr key={task.id} style={{ opacity: task.complete ? 0.55 : 1, transition: 'opacity 0.2s' }}>
-                    <td>
-                      <div className={`toggle-dot ${task.complete ? 'done' : ''}`} onClick={() => toggleTask(task)} style={{ margin: '0 auto' }}>
-                        {task.complete && <Check size={11} color="white" strokeWidth={3} />}
-                      </div>
-                    </td>
-                    <td><span className="badge badge-career">{task.area}</span></td>
-                    <td style={{ color: 'var(--text-2)', fontSize: 12 }}>{task.action}</td>
-                    <td><span className="mono">{task.frequency}</span></td>
-                    <td>
-                      <span style={{ textDecoration: task.complete ? 'line-through' : 'none', fontSize: 13 }}>{task.specific_task}</span>
-                      {task.carried_forward && <span className="badge badge-warning" style={{ marginLeft: 6, fontSize: 9 }}>carried</span>}
-                    </td>
-                    <td style={{ fontSize: 12, color: 'var(--text-3)' }}>{goals.find(g => g.id === task.goal_id)?.primary_goal?.slice(0, 24) || '—'}</td>
-                    <td>{task.complete ? <span className="badge badge-success">Done</span> : <span className="badge badge-muted">Open</span>}</td>
-                    <td>
-                      <div className="flex items-center gap-1">
-                        <button className="btn-icon btn" title="Notes" onClick={() => setEditingNote(editingNote === task.id ? null : task.id)} style={{ color: task.notes ? 'var(--creative)' : undefined }}><MessageSquare size={13} /></button>
-                        <button className="btn-icon btn" onClick={() => deleteTask(task.id)}><Trash2 size={13} /></button>
-                      </div>
+              groups.map(group => (
+                <Fragment key={group.key}>
+                  <tr style={{ background: 'var(--bg-2)' }}>
+                    <td colSpan={8} style={{ padding: '8px 16px' }}>
+                      {groupBy === 'area' ? (
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 600, color: group.color, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                          {group.label}
+                        </span>
+                      ) : (
+                        <div className="flex items-center gap-3">
+                          {group.goal && <ArcRing value={group.pct} max={100} size={28} strokeWidth={3} color="var(--career)" label={`${group.pct}%`} fontSize={8} />}
+                          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>{group.label}</span>
+                        </div>
+                      )}
                     </td>
                   </tr>
-                  {editingNote === task.id && (
-                    <tr key={`note-${task.id}`} style={{ background: 'var(--bg-2)' }}>
-                      <td colSpan={8} style={{ padding: '8px 16px' }}>
-                        <NoteEditor task={task} onSave={saveNote} />
-                      </td>
-                    </tr>
-                  )}
-                </>
+                  {group.tasks.map(task => {
+                    const expanded = expandedTask === task.id
+                    return (
+                      <Fragment key={task.id}>
+                        <tr
+                          onClick={() => setExpandedTask(expanded ? null : task.id)}
+                          style={{ opacity: task.complete ? 0.55 : 1, transition: 'opacity 0.2s', cursor: 'pointer', borderLeft: `3px solid ${areaColor(task.area)}` }}
+                        >
+                          <td>
+                            <div className={`toggle-dot ${task.complete ? 'done' : ''}`} onClick={e => { e.stopPropagation(); toggleTask(task) }} style={{ margin: '0 auto' }}>
+                              {task.complete && <Check size={11} color="white" strokeWidth={3} />}
+                            </div>
+                          </td>
+                          <td><span className="badge" style={{ background: `${areaColor(task.area)}22`, color: areaColor(task.area) }}>{task.area}</span></td>
+                          <td style={{ color: 'var(--text-2)', fontSize: 12 }}>{task.action}</td>
+                          <td><span className="mono">{task.frequency}</span></td>
+                          <td>
+                            <div className="flex items-center gap-1">
+                              <ChevronDown size={12} color="var(--text-3)" style={{ flexShrink: 0, transform: expanded ? 'none' : 'rotate(-90deg)', transition: 'transform 0.15s' }} />
+                              <span style={{ textDecoration: task.complete ? 'line-through' : 'none', fontSize: 13 }}>{task.specific_task}</span>
+                              {task.carried_forward && <span className="badge badge-warning" style={{ marginLeft: 6, fontSize: 9 }}>carried</span>}
+                              {task.notes && <MessageSquare size={11} color="var(--creative)" style={{ flexShrink: 0 }} />}
+                            </div>
+                          </td>
+                          <td style={{ fontSize: 12, color: 'var(--text-3)' }}>{goals.find(g => g.id === task.goal_id)?.primary_goal?.slice(0, 24) || '—'}</td>
+                          <td>{task.complete ? <span className="badge badge-success">Done</span> : <span className="badge badge-muted">Open</span>}</td>
+                          <td>
+                            <div className="flex items-center gap-1">
+                              <button className="btn-icon btn" onClick={e => { e.stopPropagation(); deleteTask(task.id) }}><Trash2 size={13} /></button>
+                            </div>
+                          </td>
+                        </tr>
+                        {expanded && (
+                          <tr style={{ background: 'var(--bg-2)' }}>
+                            <td colSpan={8} style={{ padding: '8px 20px 14px' }}>
+                              <TaskExpansion
+                                task={task}
+                                goals={goals}
+                                onUpdateField={(field, value) => updateTaskField(task.id, field, value)}
+                                onToggleSubtask={subId => toggleSubtask(task, subId)}
+                                onAddSubtask={text => addSubtask(task, text)}
+                              />
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    )
+                  })}
+                </Fragment>
               ))
             )}
           </tbody>
@@ -220,16 +310,6 @@ export default function WeeklyPage() {
 
       {showReview && <WeeklyReviewModal weekStart={weekStartStr} incompleteTasks={tasks.filter(t => !t.complete)} onClose={() => setShowReview(false)} onComplete={carryForwardIncomplete} />}
       {showPastReviews && <PastReviews onClose={() => setShowPastReviews(false)} />}
-    </div>
-  )
-}
-
-function NoteEditor({ task, onSave }) {
-  const [note, setNote] = useState(task.notes || '')
-  return (
-    <div className="flex items-center gap-2">
-      <input value={note} onChange={e => setNote(e.target.value)} placeholder="Add a note or comment…" style={{ fontSize: 12 }} onKeyDown={e => e.key === 'Enter' && onSave(task.id, note)} autoFocus />
-      <button className="btn btn-career btn-sm" style={{ color: '#fff' }} onClick={() => onSave(task.id, note)}>Save</button>
     </div>
   )
 }

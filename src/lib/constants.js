@@ -1,4 +1,13 @@
-export const TASK_AREAS = ['Career', 'Creative', 'Business/Sanctum', 'Personal', 'Financial', 'Health']
+export const TASK_AREAS = ['Career', 'Creative', 'Personal', 'Financial', 'Health/Wellness', 'Other']
+
+export const AREA_COLORS = {
+  Career: '#1a4fff',
+  Creative: '#e8a020',
+  Personal: '#d4506a',
+  Financial: '#0a8a5a',
+  'Health/Wellness': '#e07820',
+  Other: '#8a7d75',
+}
 
 export const GOAL_CATEGORIES = ['Career', 'Creative', 'Financial', 'Personal', 'Wellness']
 
