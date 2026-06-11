@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
 import { format, subDays } from 'date-fns'
-import { Plus, Trash2, ChevronDown, ChevronRight, Check, Clock } from 'lucide-react'
+import { Plus, Trash2, ChevronDown, ChevronRight, Check, Clock, Target } from 'lucide-react'
 
 const DEFAULT_CATS = ['Work', 'Personal', 'Errands', 'Creative', 'Sanctum', 'Health']
 const TIME_OPTS = ['15 min', '30 min', '45 min', '1 hr', '1.5 hr', '2 hr', '3 hr']
@@ -30,12 +30,18 @@ export default function DailyTodos({ compact = false }) {
   const [categories, setCategories] = useState(DEFAULT_CATS)
   const [newCatInput, setNewCatInput] = useState('')
   const [showAddCat,  setShowAddCat]  = useState(false)
+  const [goals, setGoals] = useState([])
   const inputRef = useRef(null)
 
   // Load todos, carrying over yesterday's incomplete tasks atomically
   useEffect(() => {
-    if (user) init()
+    if (user) { init(); loadGoals() }
   }, [user])
+
+  async function loadGoals() {
+    const { data } = await supabase.from('goals').select('id, primary_goal, category').eq('user_id', user.id)
+    setGoals(data || [])
+  }
 
   async function init() {
     setLoading(true)
@@ -234,6 +240,7 @@ export default function DailyTodos({ compact = false }) {
               key={todo.id}
               todo={todo}
               categories={allCategories}
+              goals={goals}
               onToggle={() => toggle(todo)}
               onRemove={() => remove(todo.id)}
               onUpdateField={(f, v) => updateField(todo.id, f, v)}
@@ -247,13 +254,15 @@ export default function DailyTodos({ compact = false }) {
   )
 }
 
-function TodoItem({ todo, categories, onToggle, onRemove, onUpdateField, onToggleSubtask, onAddSubtask }) {
+function TodoItem({ todo, categories, goals, onToggle, onRemove, onUpdateField, onToggleSubtask, onAddSubtask }) {
   const [expanded,     setExpanded]     = useState(false)
   const [addingSub,    setAddingSub]    = useState(false)
   const [subInput,     setSubInput]     = useState('')
   const [editingTime,  setEditingTime]  = useState(false)
   const [editingCat,   setEditingCat]   = useState(false)
+  const [editingGoal,  setEditingGoal]  = useState(false)
   const subtasks = todo.subtasks || []
+  const linkedGoal = goals.find(g => g.id === todo.goal_id)
   const cc = catColor(todo.category)
 
   function submitSub() {
@@ -350,6 +359,31 @@ function TodoItem({ todo, categories, onToggle, onRemove, onUpdateField, onToggl
             style={{ fontSize: 9, color: cc, background: `${cc}1a`, borderRadius: 10, padding: '2px 7px', fontFamily: 'var(--font-mono)', letterSpacing: '0.04em', textTransform: 'uppercase', cursor: 'pointer', flexShrink: 0 }}>
             {todo.category}
           </span>
+        )}
+
+        {/* Linked goal — click to set */}
+        {editingGoal ? (
+          <select
+            autoFocus
+            value={todo.goal_id || ''}
+            onChange={e => { onUpdateField('goal_id', e.target.value || null); setEditingGoal(false) }}
+            onBlur={() => setEditingGoal(false)}
+            style={{ fontSize: 11, padding: '2px 6px', width: 'auto', maxWidth: 140, border: '1px solid var(--border)', borderRadius: 6 }}
+          >
+            <option value="">No linked goal</option>
+            {goals.map(g => <option key={g.id} value={g.id}>{g.category}: {g.primary_goal?.slice(0, 24)}</option>)}
+          </select>
+        ) : linkedGoal ? (
+          <span
+            onClick={() => setEditingGoal(true)}
+            title={linkedGoal.primary_goal}
+            style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 9, color: 'var(--career)', background: 'var(--career-tint)', borderRadius: 10, padding: '2px 7px', cursor: 'pointer', fontFamily: 'var(--font-mono)', flexShrink: 0, maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <Target size={9} /> {linkedGoal.primary_goal?.slice(0, 14)}
+          </span>
+        ) : (
+          <button onClick={() => setEditingGoal(true)} className="btn-icon" style={{ padding: 2, color: 'var(--border)', flexShrink: 0 }} title="Link to a goal">
+            <Target size={12} />
+          </button>
         )}
 
         {/* Add subtask */}

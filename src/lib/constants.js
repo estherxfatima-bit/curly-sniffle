@@ -1,6 +1,6 @@
 export const TASK_AREAS = ['Career', 'Creative', 'Business/Sanctum', 'Personal', 'Financial', 'Health']
 
-export const GOAL_CATEGORIES = ['Career', 'Creative', 'Financial', 'Personal']
+export const GOAL_CATEGORIES = ['Career', 'Creative', 'Financial', 'Personal', 'Wellness']
 
 export const CONTENT_PILLARS = [
   'Work & Becoming',

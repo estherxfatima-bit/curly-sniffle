@@ -2,22 +2,24 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { GOAL_CATEGORIES, QUARTERS, getCurrentQuarter } from '../lib/constants'
-import { Plus, Edit2, Trash2, X } from 'lucide-react'
-import ArcRing from '../components/ui/ArcRing'
+import { Plus, X, ChevronDown, ChevronRight } from 'lucide-react'
 import QuarterlyWins from '../components/goals/QuarterlyWins'
 import IdeaParkingLot from '../components/goals/IdeaParkingLot'
+import GoalCard from '../components/goals/GoalCard'
 
 const CATEGORY_COLORS = {
   Career:    'var(--career)',
   Creative:  'var(--creative)',
   Financial: 'var(--finance)',
   Personal:  'var(--personal)',
+  Wellness:  'var(--wellness)',
 }
 const CATEGORY_CLASSES = {
   Career:    'card-career',
   Creative:  'card-creative',
   Financial: 'card-finance',
   Personal:  'card-personal',
+  Wellness:  'card-wellness',
 }
 
 function GoalsDecoration() {
@@ -34,114 +36,178 @@ function GoalsDecoration() {
 
 export default function GoalsPage() {
   const { user } = useAuth()
-  const [quarter, setQuarter] = useState(getCurrentQuarter())
-  const [year, setYear] = useState(new Date().getFullYear())
   const [goals, setGoals] = useState([])
-  const [tasks, setTasks] = useState([])
+  const [weeklyTasks, setWeeklyTasks] = useState([])
+  const [dailyTodos, setDailyTodos] = useState([])
+  const [metrics, setMetrics] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [editing, setEditing] = useState(null)
+  const [createCtx, setCreateCtx] = useState(null) // { year, quarter, category }
 
-  useEffect(() => { if (user) { loadGoals(); loadTasks() } }, [user, quarter, year])
+  const currentYear = new Date().getFullYear()
+  const currentQuarter = getCurrentQuarter()
 
-  async function loadGoals() {
+  const [expandedYears, setExpandedYears] = useState(() => new Set([currentYear]))
+  const [expandedQuarters, setExpandedQuarters] = useState(() => new Set([`${currentYear}-${currentQuarter}`]))
+
+  useEffect(() => { if (user) loadAll() }, [user])
+
+  async function loadAll() {
     setLoading(true)
-    const { data } = await supabase.from('goals').select('*').eq('user_id', user.id).eq('quarter', quarter).eq('year', year).order('category')
-    setGoals(data || [])
+    const [goalsRes, weeklyRes, dailyRes, metricsRes] = await Promise.all([
+      supabase.from('goals').select('*').eq('user_id', user.id).order('year', { ascending: false }).order('quarter').order('category'),
+      supabase.from('weekly_tasks').select('id, goal_id, area, specific_task, complete').eq('user_id', user.id).not('goal_id', 'is', null),
+      supabase.from('daily_todos').select('id, goal_id, category, text, complete').eq('user_id', user.id).not('goal_id', 'is', null),
+      supabase.from('goal_metrics').select('*').eq('user_id', user.id).order('recorded_at'),
+    ])
+    setGoals(goalsRes.data || [])
+    setWeeklyTasks(weeklyRes.data || [])
+    setDailyTodos(dailyRes.data || [])
+    setMetrics(metricsRes.data || [])
     setLoading(false)
   }
 
-  async function loadTasks() {
-    const { data } = await supabase.from('weekly_tasks').select('goal_id, complete').eq('user_id', user.id)
-    setTasks(data || [])
+  function toggleYear(year) {
+    setExpandedYears(prev => {
+      const next = new Set(prev)
+      next.has(year) ? next.delete(year) : next.add(year)
+      return next
+    })
   }
 
-  function getGoalProgress(goalId) {
-    const linked = tasks.filter(t => t.goal_id === goalId)
-    if (!linked.length) return null
-    const done = linked.filter(t => t.complete).length
-    return { done, total: linked.length, pct: Math.round((done / linked.length) * 100) }
+  function toggleQuarter(key) {
+    setExpandedQuarters(prev => {
+      const next = new Set(prev)
+      next.has(key) ? next.delete(key) : next.add(key)
+      return next
+    })
   }
 
   async function deleteGoal(id) {
     if (!confirm('Delete this goal?')) return
     await supabase.from('goals').delete().eq('id', id)
     setGoals(prev => prev.filter(g => g.id !== id))
+    setMetrics(prev => prev.filter(m => m.goal_id !== id))
   }
+
+  async function addMetric(goal, value) {
+    const { data } = await supabase.from('goal_metrics').insert({
+      goal_id: goal.id, user_id: user.id, value,
+    }).select().single()
+    if (data) setMetrics(prev => [...prev, data])
+    await supabase.from('goals').update({ updated_at: new Date().toISOString() }).eq('id', goal.id)
+    setGoals(prev => prev.map(g => g.id === goal.id ? { ...g, updated_at: new Date().toISOString() } : g))
+  }
+
+  function linkedTasksFor(goalId) {
+    return [
+      ...weeklyTasks.filter(t => t.goal_id === goalId).map(t => ({ text: t.specific_task, complete: t.complete, area: t.area })),
+      ...dailyTodos.filter(t => t.goal_id === goalId).map(t => ({ text: t.text, complete: t.complete, area: t.category })),
+    ]
+  }
+
+  // Group goals: year -> quarter -> category
+  const years = [...new Set(goals.map(g => g.year))].sort((a, b) => b - a)
+  if (!years.includes(currentYear)) years.unshift(currentYear)
+  years.sort((a, b) => b - a)
 
   return (
     <div>
       <div className="page-header header-career mb-6">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1>Quarterly Goals</h1>
-            <p>Set intentions, track progress</p>
+            <h1>Goals</h1>
+            <p>Year → quarter → progress, all in one place</p>
           </div>
-          <button className="btn btn-career btn-sm" style={{ color: '#fff', flexShrink: 0 }} onClick={() => { setEditing(null); setShowModal(true) }}>
+          <button className="btn btn-career btn-sm" style={{ color: '#fff', flexShrink: 0 }} onClick={() => { setEditing(null); setCreateCtx({ year: currentYear, quarter: currentQuarter, category: GOAL_CATEGORIES[0] }); setShowModal(true) }}>
             <Plus size={14} /> Add goal
           </button>
         </div>
         <div className="page-header-decoration" style={{ color: 'var(--career)' }}><GoalsDecoration /></div>
       </div>
 
-      {/* Quarter selector */}
-      <div className="flex items-center gap-2 mb-6 wrap">
-        {QUARTERS.map(q => (
-          <button key={q} onClick={() => setQuarter(q)} className={`btn btn-sm ${quarter === q ? 'btn-career' : 'btn-ghost'}`} style={quarter === q ? { color: '#fff' } : {}}>
-            {q}
-          </button>
-        ))}
-        <select value={year} onChange={e => setYear(Number(e.target.value))} style={{ width: 'auto', padding: '5px 12px', fontSize: 13 }}>
-          {[2024, 2025, 2026, 2027].map(y => <option key={y}>{y}</option>)}
-        </select>
-      </div>
-
       {loading ? (
         <p style={{ textAlign: 'center', padding: 40, color: 'var(--text-3)' }}>Loading…</p>
       ) : (
-        <div className="grid-2">
-          {GOAL_CATEGORIES.map(cat => {
-            const catGoals = goals.filter(g => g.category === cat)
-            const color = CATEGORY_COLORS[cat]
-            const cardClass = CATEGORY_CLASSES[cat]
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {years.map(year => {
+            const yearGoals = goals.filter(g => g.year === year)
+            const isOpen = expandedYears.has(year)
             return (
-              <div key={cat} className={`card ${cardClass}`}>
-                <div className="flex items-center justify-between mb-5">
-                  <h3 style={{ color }}>{cat}</h3>
-                  <button className="btn-icon btn" onClick={() => { setEditing({ category: cat }); setShowModal(true) }} style={{ color }}>
-                    <Plus size={15} />
-                  </button>
-                </div>
+              <div key={year} className="card">
+                <button
+                  onClick={() => toggleYear(year)}
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer' }}
+                >
+                  <div className="flex items-center gap-2">
+                    {isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                    <h2 style={{ fontSize: '1.2rem' }}>{year}</h2>
+                  </div>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-3)' }}>{yearGoals.length} goal{yearGoals.length === 1 ? '' : 's'}</span>
+                </button>
 
-                {catGoals.length === 0 ? (
-                  <p style={{ fontSize: 13, color: 'var(--text-3)', fontStyle: 'italic' }}>No {cat.toLowerCase()} goals for {quarter} {year}</p>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-                    {catGoals.map(goal => {
-                      const prog = getGoalProgress(goal.id)
+                {isOpen && (
+                  <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
+                    {QUARTERS.map(q => {
+                      const qGoals = yearGoals.filter(g => g.quarter === q)
+                      const key = `${year}-${q}`
+                      const qOpen = expandedQuarters.has(key)
                       return (
-                        <div key={goal.id} style={{ borderBottom: '1px solid var(--border)', paddingBottom: 16 }}>
-                          <div className="flex items-start justify-between gap-2 mb-3">
-                            <p style={{ fontSize: 14, fontWeight: 600, flex: 1, lineHeight: 1.4 }}>{goal.primary_goal}</p>
-                            <div className="flex items-center gap-1" style={{ flexShrink: 0 }}>
-                              {prog && <ArcRing value={prog.pct} max={100} size={44} strokeWidth={4} color={color} label={`${prog.pct}%`} fontSize={9} />}
-                              <button className="btn-icon btn btn-sm" onClick={() => { setEditing(goal); setShowModal(true) }}><Edit2 size={12} /></button>
-                              <button className="btn-icon btn btn-sm" onClick={() => deleteGoal(goal.id)}><Trash2 size={12} /></button>
+                        <div key={q} style={{ borderTop: '1px solid var(--border)', paddingTop: 14 }}>
+                          <button
+                            onClick={() => toggleQuarter(key)}
+                            style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer' }}
+                          >
+                            <div className="flex items-center gap-2">
+                              {qOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                              <h3 style={{ fontSize: '0.95rem' }}>{q} {year}</h3>
                             </div>
-                          </div>
-                          {goal.key_actions && (
-                            <div className="mb-2">
-                              <p className="mono mb-1">Key actions</p>
-                              <p style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.6 }}>{goal.key_actions}</p>
+                            <div className="flex items-center gap-2">
+                              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-3)' }}>{qGoals.length} goal{qGoals.length === 1 ? '' : 's'}</span>
+                              <button
+                                className="btn-icon btn btn-sm"
+                                onClick={e => { e.stopPropagation(); setEditing(null); setCreateCtx({ year, quarter: q, category: GOAL_CATEGORIES[0] }); setShowModal(true) }}
+                                title={`Add goal for ${q} ${year}`}
+                              >
+                                <Plus size={12} />
+                              </button>
                             </div>
+                          </button>
+
+                          {qOpen && (
+                            qGoals.length === 0 ? (
+                              <p style={{ fontSize: 13, color: 'var(--text-3)', fontStyle: 'italic', marginTop: 12 }}>No goals for {q} {year}.</p>
+                            ) : (
+                              <div className="grid-2 mt-3">
+                                {GOAL_CATEGORIES.map(cat => {
+                                  const catGoals = qGoals.filter(g => g.category === cat)
+                                  if (catGoals.length === 0) return null
+                                  const color = CATEGORY_COLORS[cat]
+                                  const cardClass = CATEGORY_CLASSES[cat]
+                                  return (
+                                    <div key={cat} className={`card ${cardClass}`}>
+                                      <h3 className="mb-4" style={{ color }}>{cat}</h3>
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                                        {catGoals.map(goal => (
+                                          <GoalCard
+                                            key={goal.id}
+                                            goal={goal}
+                                            color={color}
+                                            linkedTasks={linkedTasksFor(goal.id)}
+                                            metricHistory={metrics.filter(m => m.goal_id === goal.id)}
+                                            onEdit={g => { setEditing(g); setCreateCtx(null); setShowModal(true) }}
+                                            onDelete={deleteGoal}
+                                            onAddMetric={addMetric}
+                                          />
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            )
                           )}
-                          {goal.success_metrics && (
-                            <div>
-                              <p className="mono mb-1">Success metrics</p>
-                              <p style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.6 }}>{goal.success_metrics}</p>
-                            </div>
-                          )}
-                          {prog && <p style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 6, fontFamily: 'var(--font-mono)' }}>{prog.done}/{prog.total} linked tasks complete</p>}
                         </div>
                       )
                     })}
@@ -154,14 +220,19 @@ export default function GoalsPage() {
       )}
 
       <div className="grid-2 mt-6">
-        <QuarterlyWins quarter={`${quarter} ${year}`} />
+        <QuarterlyWins quarter={`${currentQuarter} ${currentYear}`} />
         <IdeaParkingLot />
       </div>
 
       {showModal && (
-        <GoalModal goal={editing} quarter={quarter} year={year} onClose={() => setShowModal(false)}
+        <GoalModal
+          goal={editing}
+          defaults={createCtx}
+          onClose={() => setShowModal(false)}
           onSave={goal => {
             setGoals(prev => { const idx = prev.findIndex(g => g.id === goal.id); if (idx >= 0) { const n = [...prev]; n[idx] = goal; return n } return [...prev, goal] })
+            setExpandedYears(prev => new Set(prev).add(goal.year))
+            setExpandedQuarters(prev => new Set(prev).add(`${goal.year}-${goal.quarter}`))
             setShowModal(false)
           }}
         />
@@ -170,20 +241,43 @@ export default function GoalsPage() {
   )
 }
 
-function GoalModal({ goal, quarter, year, onClose, onSave }) {
+function GoalModal({ goal, defaults, onClose, onSave }) {
   const { user } = useAuth()
   const isNew = !goal?.id
-  const [form, setForm] = useState({ category: goal?.category || GOAL_CATEGORIES[0], primary_goal: goal?.primary_goal || '', key_actions: goal?.key_actions || '', success_metrics: goal?.success_metrics || '' })
+  const [form, setForm] = useState({
+    category: goal?.category || defaults?.category || GOAL_CATEGORIES[0],
+    primary_goal: goal?.primary_goal || '',
+    key_actions: goal?.key_actions || '',
+    success_metrics: goal?.success_metrics || '',
+    quarter: goal?.quarter || defaults?.quarter || getCurrentQuarter(),
+    year: goal?.year || defaults?.year || new Date().getFullYear(),
+    tracking_type: goal?.tracking_type || 'tasks',
+    metric_name: goal?.metric_name || '',
+    metric_start: goal?.metric_start ?? '',
+    metric_target: goal?.metric_target ?? '',
+  })
   const [saving, setSaving] = useState(false)
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
 
   async function save() {
     if (!form.primary_goal.trim()) return
     setSaving(true)
-    const payload = { ...form, user_id: user.id, quarter, year }
+    const payload = {
+      category: form.category,
+      primary_goal: form.primary_goal,
+      key_actions: form.key_actions,
+      success_metrics: form.success_metrics,
+      quarter: form.quarter,
+      year: Number(form.year),
+      tracking_type: form.tracking_type,
+      metric_name: form.tracking_type === 'metric' ? form.metric_name : null,
+      metric_start: form.tracking_type === 'metric' && form.metric_start !== '' ? Number(form.metric_start) : null,
+      metric_target: form.tracking_type === 'metric' && form.metric_target !== '' ? Number(form.metric_target) : null,
+      updated_at: new Date().toISOString(),
+    }
     const { data, error } = isNew
-      ? await supabase.from('goals').insert(payload).select().single()
-      : await supabase.from('goals').update(form).eq('id', goal.id).select().single()
+      ? await supabase.from('goals').insert({ ...payload, user_id: user.id }).select().single()
+      : await supabase.from('goals').update(payload).eq('id', goal.id).select().single()
     setSaving(false)
     if (!error) onSave(data)
   }
@@ -195,6 +289,20 @@ function GoalModal({ goal, quarter, year, onClose, onSave }) {
           <h2 style={{ fontSize: '1.3rem' }}>{isNew ? 'Add goal' : 'Edit goal'}</h2>
           <button className="btn-icon btn" onClick={onClose}><X size={16} /></button>
         </div>
+
+        <div className="flex gap-2 mb-1">
+          <div className="form-group" style={{ flex: 1 }}>
+            <label>Year</label>
+            <input type="number" value={form.year} onChange={e => set('year', e.target.value)} />
+          </div>
+          <div className="form-group" style={{ flex: 1 }}>
+            <label>Quarter</label>
+            <select value={form.quarter} onChange={e => set('quarter', e.target.value)}>
+              {QUARTERS.map(q => <option key={q}>{q}</option>)}
+            </select>
+          </div>
+        </div>
+
         <div className="form-group">
           <label>Category</label>
           <select value={form.category} onChange={e => set('category', e.target.value)}>
@@ -203,7 +311,7 @@ function GoalModal({ goal, quarter, year, onClose, onSave }) {
         </div>
         <div className="form-group">
           <label>Primary goal</label>
-          <input value={form.primary_goal} onChange={e => set('primary_goal', e.target.value)} placeholder="What do you want to achieve this quarter?" />
+          <input value={form.primary_goal} onChange={e => set('primary_goal', e.target.value)} placeholder="What do you want to achieve?" />
         </div>
         <div className="form-group">
           <label>Key actions</label>
@@ -213,6 +321,34 @@ function GoalModal({ goal, quarter, year, onClose, onSave }) {
           <label>Success metrics</label>
           <textarea value={form.success_metrics} onChange={e => set('success_metrics', e.target.value)} placeholder="How will you know you've achieved this?" style={{ minHeight: 60 }} />
         </div>
+
+        <div className="form-group">
+          <label>Tracking</label>
+          <select value={form.tracking_type} onChange={e => set('tracking_type', e.target.value)}>
+            <option value="tasks">Task completion — link weekly tasks / to-dos</option>
+            <option value="metric">Manual metric — track a number over time</option>
+          </select>
+        </div>
+
+        {form.tracking_type === 'metric' && (
+          <>
+            <div className="form-group">
+              <label>Metric name</label>
+              <input value={form.metric_name} onChange={e => set('metric_name', e.target.value)} placeholder="e.g. TikTok followers, Self-employed income £" />
+            </div>
+            <div className="flex gap-2">
+              <div className="form-group" style={{ flex: 1 }}>
+                <label>Start value</label>
+                <input type="number" value={form.metric_start} onChange={e => set('metric_start', e.target.value)} />
+              </div>
+              <div className="form-group" style={{ flex: 1 }}>
+                <label>Target value</label>
+                <input type="number" value={form.metric_target} onChange={e => set('metric_target', e.target.value)} />
+              </div>
+            </div>
+          </>
+        )}
+
         <div className="flex gap-2 justify-end">
           <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
           <button className="btn btn-career" style={{ color: '#fff' }} onClick={save} disabled={saving}>
