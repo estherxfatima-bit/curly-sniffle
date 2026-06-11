@@ -1,10 +1,23 @@
 import { Check } from 'lucide-react'
-import { format, startOfWeek, addDays } from 'date-fns'
+import { format, addDays } from 'date-fns'
 import ArcRing from '../../ui/ArcRing'
 import WeeklyQuote from '../WeeklyQuote'
 import { SortableCard, DraggableCardList } from '../DraggableCard'
+import AddWidgetMenu from '../AddWidgetMenu'
 
-const DEFAULT_ORDER = ['quote', 'momentum', 'tasks', 'habit-grid']
+export const CARD_LABELS = {
+  quote: 'Weekly quote',
+  momentum: 'Momentum',
+  tasks: 'This week',
+  'habit-grid': 'Habit week',
+}
+
+export const DEFAULT_ORDER = [
+  { id: 'quote', size: 'wide' },
+  { id: 'momentum', size: 'wide' },
+  { id: 'tasks', size: 'wide' },
+  { id: 'habit-grid', size: 'wide' },
+]
 
 const DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
 
@@ -12,6 +25,7 @@ export default function WeeklyView({
   habits, weekTasks, momentum, habitScore, taskScore, moodScore, moodAvg, moodWeek,
   weekStart, savedQuote, userId,
   onSaveQuote, onOpenPanel, cardOrder, onReorder, onToggleTask,
+  editing, onResize, onRemoveCard, onAddCard,
 }) {
   const order = cardOrder?.length ? cardOrder : DEFAULT_ORDER
 
@@ -149,13 +163,26 @@ export default function WeeklyView({
     ),
   }
 
+  const available = Object.entries(CARD_LABELS)
+    .filter(([id]) => !order.some(o => o.id === id))
+    .map(([id, label]) => ({ id, label }))
+
   return (
-    <DraggableCardList cardOrder={order} onReorder={onReorder}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        {order.map(id => (
+    <div>
+      {editing && (
+        <div className="mb-4">
+          <AddWidgetMenu available={available} onAdd={onAddCard} />
+        </div>
+      )}
+      <DraggableCardList cardOrder={order} onReorder={onReorder}>
+        {order.map(({ id, size }) => (
           <SortableCard
             key={id}
             id={id}
+            size={size}
+            editing={editing}
+            onResize={s => onResize(id, s)}
+            onRemove={() => onRemoveCard(id)}
             onClick={id !== 'quote' ? () => openPanel(
               id === 'momentum' ? 'momentum' :
               id === 'tasks'    ? 'tasks'    :
@@ -166,7 +193,7 @@ export default function WeeklyView({
             {CARDS[id] || null}
           </SortableCard>
         ))}
-      </div>
-    </DraggableCardList>
+      </DraggableCardList>
+    </div>
   )
 }

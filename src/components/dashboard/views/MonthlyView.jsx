@@ -1,14 +1,28 @@
 import ArcRing from '../../ui/ArcRing'
 import { Link } from 'react-router-dom'
 import { SortableCard, DraggableCardList } from '../DraggableCard'
+import AddWidgetMenu from '../AddWidgetMenu'
 
-const DEFAULT_ORDER = ['habit-rings', 'goal-rings', 'finance-summary', 'content-progress']
+export const CARD_LABELS = {
+  'habit-rings': 'Habit completion',
+  'goal-rings': 'Goal progress',
+  'finance-summary': 'Finances',
+  'content-progress': 'Content batches',
+}
+
+export const DEFAULT_ORDER = [
+  { id: 'habit-rings', size: 'wide' },
+  { id: 'goal-rings', size: 'wide' },
+  { id: 'finance-summary', size: 'wide' },
+  { id: 'content-progress', size: 'wide' },
+]
 
 export default function MonthlyView({
   habits, monthHabitLogs, goals, weekTasks,
   income, fixed, variable,
   contentBatches,
   onOpenPanel, cardOrder, onReorder,
+  editing, onResize, onRemoveCard, onAddCard,
 }) {
   const order = cardOrder?.length ? cardOrder : DEFAULT_ORDER
 
@@ -148,13 +162,26 @@ export default function MonthlyView({
     ),
   }
 
+  const available = Object.entries(CARD_LABELS)
+    .filter(([id]) => !order.some(o => o.id === id))
+    .map(([id, label]) => ({ id, label }))
+
   return (
-    <DraggableCardList cardOrder={order} onReorder={onReorder}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        {order.map(id => (
+    <div>
+      {editing && (
+        <div className="mb-4">
+          <AddWidgetMenu available={available} onAdd={onAddCard} />
+        </div>
+      )}
+      <DraggableCardList cardOrder={order} onReorder={onReorder}>
+        {order.map(({ id, size }) => (
           <SortableCard
             key={id}
             id={id}
+            size={size}
+            editing={editing}
+            onResize={s => onResize(id, s)}
+            onRemove={() => onRemoveCard(id)}
             onClick={() => openPanel(
               id === 'finance-summary' ? 'finance-summary' :
               id === 'goal-rings'      ? 'goals'           : id,
@@ -165,7 +192,7 @@ export default function MonthlyView({
             {CARDS[id] || null}
           </SortableCard>
         ))}
-      </div>
-    </DraggableCardList>
+      </DraggableCardList>
+    </div>
   )
 }

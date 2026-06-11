@@ -1,20 +1,22 @@
 import { useState, useEffect, useRef } from 'react'
-import { format, startOfWeek, startOfMonth, subDays } from 'date-fns'
+import { format, startOfWeek, endOfWeek, startOfMonth, addDays, addWeeks, addMonths } from 'date-fns'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
-import { getCurrentQuarter, getQuarterYear } from '../lib/constants'
+import { getQuarterFromDate, getQuarterYear } from '../lib/constants'
 
 import Confetti from '../components/ui/Confetti'
 import ImageHeader from '../components/dashboard/ImageHeader'
 import DetailPanel from '../components/dashboard/DetailPanel'
-import DailyView from '../components/dashboard/views/DailyView'
-import WeeklyView from '../components/dashboard/views/WeeklyView'
-import MonthlyView from '../components/dashboard/views/MonthlyView'
-import QuarterlyView from '../components/dashboard/views/QuarterlyView'
+import DailyView, { DEFAULT_ORDER as DAILY_DEFAULT } from '../components/dashboard/views/DailyView'
+import WeeklyView, { DEFAULT_ORDER as WEEKLY_DEFAULT } from '../components/dashboard/views/WeeklyView'
+import MonthlyView, { DEFAULT_ORDER as MONTHLY_DEFAULT } from '../components/dashboard/views/MonthlyView'
+import QuarterlyView, { DEFAULT_ORDER as QUARTERLY_DEFAULT } from '../components/dashboard/views/QuarterlyView'
 import { Link } from 'react-router-dom'
+import { ChevronLeft, ChevronRight, Pencil, Check as CheckIcon } from 'lucide-react'
 
 const VIEWS = ['Daily', 'Weekly', 'Monthly', 'Quarterly']
 const VIEW_KEYS = ['daily', 'weekly', 'monthly', 'quarterly']
+const DEFAULTS = { daily: DAILY_DEFAULT, weekly: WEEKLY_DEFAULT, monthly: MONTHLY_DEFAULT, quarterly: QUARTERLY_DEFAULT }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 function greeting(name) {
@@ -23,31 +25,50 @@ function greeting(name) {
   return name ? `${time}, ${name.split(' ')[0]}` : time
 }
 
+function shiftRefDate(date, view, dir) {
+  if (view === 'daily')     return addDays(date, dir)
+  if (view === 'weekly')    return addWeeks(date, dir)
+  if (view === 'monthly')   return addMonths(date, dir)
+  if (view === 'quarterly') return addMonths(date, dir * 3)
+  return date
+}
+
+function normalizeOrder(order, view) {
+  if (!order?.length) return DEFAULTS[view]
+  return order.map(item => typeof item === 'string' ? { id: item, size: 'wide' } : item)
+}
+
 export default function DashboardPage() {
   const { user } = useAuth()
 
-  const today      = format(new Date(), 'yyyy-MM-dd')
-  const weekStart  = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
-  const monthStart = format(startOfMonth(new Date()), 'yyyy-MM-dd')
-  const quarter    = getCurrentQuarter()
-  // rough quarter start — use 90 days back for mood trend
-  const quarterStart = format(subDays(new Date(), 90), 'yyyy-MM-dd')
-  const isFriday   = new Date().getDay() === 5
-
   // ── state ──────────────────────────────────────────────────────────────────
   const [activeView, setActiveView] = useState('daily')
+  const [refDate, setRefDate] = useState(new Date())
+  const realToday  = format(new Date(), 'yyyy-MM-dd')
+  const isFriday   = new Date().getDay() === 5
 
-  // Core data
-  const [habits,    setHabits]    = useState([])
-  const [weekTasks, setWeekTasks] = useState([])
+  // Derived dates from refDate
+  const today      = format(refDate, 'yyyy-MM-dd')
+  const weekStart  = format(startOfWeek(refDate, { weekStartsOn: 1 }), 'yyyy-MM-dd')
+  const weekEnd    = format(endOfWeek(refDate, { weekStartsOn: 1 }), 'yyyy-MM-dd')
+  const monthStart = format(startOfMonth(refDate), 'yyyy-MM-dd')
+  const quarter    = getQuarterFromDate(refDate)
+  const year       = refDate.getFullYear()
+  const quarterStart = format(addMonths(refDate, -3), 'yyyy-MM-dd')
+
+  // Static data (loaded once)
+  const [allHabits, setAllHabits] = useState([])
   const [goals,     setGoals]     = useState([])
+  const [imageUrl,  setImageUrl]  = useState(null)
+  const [staticLoading, setStaticLoading] = useState(true)
+
+  // Period data (reloaded when refDate changes)
+  const [habitLogs, setHabitLogs] = useState([])
+  const [weekTasks, setWeekTasks] = useState([])
   const [moodWeek,  setMoodWeek]  = useState([])
   const [hydration, setHydration] = useState(0)
-  const [imageUrl,  setImageUrl]  = useState(null)
-  const [loading,   setLoading]   = useState(true)
-
-  // Weekly view extra
   const [savedQuote, setSavedQuote] = useState(null)
+  const [periodLoading, setPeriodLoading] = useState(true)
 
   // Monthly view extra
   const [monthHabitLogs,  setMonthHabitLogs]  = useState([])
@@ -55,15 +76,14 @@ export default function DashboardPage() {
   const [fixed,           setFixed]           = useState([])
   const [variable,        setVariable]        = useState([])
   const [contentBatches,  setContentBatches]  = useState([])
-  const [monthlyLoaded,   setMonthlyLoaded]   = useState(false)
 
   // Quarterly view extra
   const [moodTrend,       setMoodTrend]       = useState([])
   const [quarterlyNotes,  setQuarterlyNotes]  = useState(null)
-  const [quarterlyLoaded, setQuarterlyLoaded] = useState(false)
 
   // Card orders
   const [cardOrders, setCardOrders] = useState({})
+  const [editing, setEditing] = useState(false)
 
   // Panel
   const [panel, setPanel] = useState(null)
@@ -73,57 +93,47 @@ export default function DashboardPage() {
   const prevMomentum = useRef(0)
 
   // ── data loading ───────────────────────────────────────────────────────────
-  useEffect(() => { if (user) loadCore() }, [user])
+  useEffect(() => { if (user) loadStatic() }, [user])
+  useEffect(() => { if (user) loadPeriod() }, [user, today, weekStart])
+  useEffect(() => { if (user && activeView === 'monthly')   loadMonthly() },   [user, activeView, monthStart])
+  useEffect(() => { if (user && activeView === 'quarterly') loadQuarterly() }, [user, activeView, quarter, year])
 
-  async function loadCore() {
-    setLoading(true)
-    const [habitsRes, logsRes, tasksRes, goalsRes, moodRes, wellnessRes, profileRes, layoutRes, quoteRes] = await Promise.all([
+  async function loadStatic() {
+    setStaticLoading(true)
+    const [habitsRes, goalsRes, profileRes, layoutRes] = await Promise.all([
       supabase.from('habits').select('*').eq('user_id', user.id),
-      supabase.from('habit_logs').select('habit_id,log_date').eq('user_id', user.id).gte('log_date', weekStart),
-      supabase.from('weekly_tasks').select('*').eq('user_id', user.id).eq('week_start', weekStart),
       supabase.from('goals').select('*').eq('user_id', user.id),
-      supabase.from('mood_logs').select('mood_score,log_date').eq('user_id', user.id).gte('log_date', weekStart),
-      supabase.from('wellness_logs').select('hydration_ml').eq('user_id', user.id).eq('log_date', today).maybeSingle(),
       supabase.from('profiles').select('image_url').eq('id', user.id).maybeSingle(),
       supabase.from('dashboard_layout').select('view,card_order').eq('user_id', user.id),
-      supabase.from('weekly_quotes').select('quote').eq('user_id', user.id).eq('week_start', weekStart).maybeSingle(),
     ])
-
-    // Habits with done flag + week logs
-    const allHabits = habitsRes.data || []
-    const logRows   = logsRes.data || []
-    const todaySet  = new Set(logRows.filter(l => l.log_date === today).map(l => l.habit_id))
-    const weekLogsByHabit = {}
-    logRows.forEach(l => {
-      if (!weekLogsByHabit[l.habit_id]) weekLogsByHabit[l.habit_id] = new Set()
-      weekLogsByHabit[l.habit_id].add(l.log_date)
-    })
-    const habitsWithMeta = allHabits.map(h => ({
-      ...h,
-      done: todaySet.has(h.id),
-      weekLogs: weekLogsByHabit[h.id] || new Set(),
-    }))
-
-    setHabits(habitsWithMeta)
-    setWeekTasks(tasksRes.data || [])
+    setAllHabits(habitsRes.data || [])
     setGoals(goalsRes.data || [])
-    setMoodWeek(moodRes.data || [])
-    setHydration(wellnessRes.data?.hydration_ml || 0)
     setImageUrl(profileRes.data?.image_url || null)
-    setSavedQuote(quoteRes.data?.quote || null)
 
-    // Card orders
     const orders = {}
     ;(layoutRes.data || []).forEach(row => { orders[row.view] = row.card_order })
     setCardOrders(orders)
-
-    setLoading(false)
+    setStaticLoading(false)
   }
 
-  // Lazy load Monthly data
+  async function loadPeriod() {
+    setPeriodLoading(true)
+    const [logsRes, tasksRes, moodRes, wellnessRes, quoteRes] = await Promise.all([
+      supabase.from('habit_logs').select('habit_id,log_date').eq('user_id', user.id).gte('log_date', weekStart).lte('log_date', weekEnd),
+      supabase.from('weekly_tasks').select('*').eq('user_id', user.id).eq('week_start', weekStart),
+      supabase.from('mood_logs').select('mood_score,log_date').eq('user_id', user.id).gte('log_date', weekStart).lte('log_date', weekEnd),
+      supabase.from('wellness_logs').select('hydration_ml').eq('user_id', user.id).eq('log_date', today).maybeSingle(),
+      supabase.from('weekly_quotes').select('quote').eq('user_id', user.id).eq('week_start', weekStart).maybeSingle(),
+    ])
+    setHabitLogs(logsRes.data || [])
+    setWeekTasks(tasksRes.data || [])
+    setMoodWeek(moodRes.data || [])
+    setHydration(wellnessRes.data?.hydration_ml || 0)
+    setSavedQuote(quoteRes.data?.quote || null)
+    setPeriodLoading(false)
+  }
+
   async function loadMonthly() {
-    if (monthlyLoaded) return
-    const thisMonth = format(new Date(), 'yyyy-MM')
     const [mhRes, incRes, fixRes, varRes, batchRes] = await Promise.all([
       supabase.from('habit_logs').select('habit_id,log_date').eq('user_id', user.id).gte('log_date', monthStart),
       supabase.from('income_sources').select('*').eq('user_id', user.id),
@@ -136,26 +146,31 @@ export default function DashboardPage() {
     setFixed(fixRes.data || [])
     setVariable(varRes.data || [])
     setContentBatches(batchRes.data || [])
-    setMonthlyLoaded(true)
   }
 
-  // Lazy load Quarterly data
   async function loadQuarterly() {
-    if (quarterlyLoaded) return
     const [mtRes, qnRes] = await Promise.all([
       supabase.from('mood_logs').select('mood_score,log_date').eq('user_id', user.id).gte('log_date', quarterStart).order('log_date'),
       supabase.from('quarterly_notes').select('*').eq('user_id', user.id).eq('quarter', quarter).maybeSingle(),
     ])
     setMoodTrend(mtRes.data || [])
     setQuarterlyNotes(qnRes.data || { wins: [], books: [], parking_lot: [] })
-    setQuarterlyLoaded(true)
   }
 
-  // On view switch — lazy load if needed
-  useEffect(() => {
-    if (activeView === 'monthly') loadMonthly()
-    if (activeView === 'quarterly') loadQuarterly()
-  }, [activeView])
+  const loading = staticLoading || periodLoading
+
+  // Habits with done flag + week logs, derived from static habits + period logs
+  const todaySet = new Set(habitLogs.filter(l => l.log_date === today).map(l => l.habit_id))
+  const weekLogsByHabit = {}
+  habitLogs.forEach(l => {
+    if (!weekLogsByHabit[l.habit_id]) weekLogsByHabit[l.habit_id] = new Set()
+    weekLogsByHabit[l.habit_id].add(l.log_date)
+  })
+  const habits = allHabits.map(h => ({
+    ...h,
+    done: todaySet.has(h.id),
+    weekLogs: weekLogsByHabit[h.id] || new Set(),
+  }))
 
   // ── momentum ───────────────────────────────────────────────────────────────
   const habitScore = habits.length  ? (habits.filter(h => h.done).length  / habits.length)  * 40 : 0
@@ -175,7 +190,7 @@ export default function DashboardPage() {
   // ── actions ────────────────────────────────────────────────────────────────
   function toggleHabit(habit) {
     supabase.from('habit_logs').insert({ user_id: user.id, habit_id: habit.id, log_date: today })
-    setHabits(prev => prev.map(h => h.id === habit.id ? { ...h, done: true } : h))
+    setHabitLogs(prev => [...prev, { habit_id: habit.id, log_date: today }])
   }
 
   function toggleTask(task) {
@@ -203,11 +218,50 @@ export default function DashboardPage() {
     )
   }
 
+  function resizeCard(view, id, size) {
+    const order = normalizeOrder(cardOrders[view], view).map(c => c.id === id ? { ...c, size } : c)
+    saveCardOrder(view, order)
+  }
+
+  function removeCard(view, id) {
+    const order = normalizeOrder(cardOrders[view], view).filter(c => c.id !== id)
+    saveCardOrder(view, order)
+  }
+
+  function addCard(view, id) {
+    const order = [...normalizeOrder(cardOrders[view], view), { id, size: 'wide' }]
+    saveCardOrder(view, order)
+  }
+
   // ── render ─────────────────────────────────────────────────────────────────
   const name = user?.user_metadata?.full_name || user?.email?.split('@')[0] || ''
   const greetText = !loading && momentum >= 70
     ? `Strong week, ${name.split(' ')[0]} — ${habits.filter(h=>h.done).length} habits, ${weekTasks.filter(t=>t.complete).length} tasks.`
     : greeting(name)
+
+  // Period label + "is current" check, per view
+  let periodLabel = ''
+  let isCurrentPeriod = false
+  if (activeView === 'daily') {
+    periodLabel = format(refDate, 'EEEE, d MMMM yyyy')
+    isCurrentPeriod = today === realToday
+  } else if (activeView === 'weekly') {
+    periodLabel = `${format(new Date(weekStart), 'MMM d')} – ${format(new Date(weekEnd), 'MMM d, yyyy')}`
+    isCurrentPeriod = weekStart === format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
+  } else if (activeView === 'monthly') {
+    periodLabel = format(refDate, 'MMMM yyyy')
+    isCurrentPeriod = monthStart === format(startOfMonth(new Date()), 'yyyy-MM-dd')
+  } else if (activeView === 'quarterly') {
+    periodLabel = `${quarter} ${year}`
+    isCurrentPeriod = quarter === getQuarterFromDate(new Date()) && year === new Date().getFullYear()
+  }
+
+  const viewProps = {
+    editing,
+    onResize: (id, size) => resizeCard(activeView, id, size),
+    onRemoveCard: id => removeCard(activeView, id),
+    onAddCard: id => addCard(activeView, id),
+  }
 
   if (loading) {
     return (
@@ -246,33 +300,60 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* View switcher — pill toggle */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 24, background: 'var(--bg-2)', borderRadius: 'var(--radius-lg)', padding: 4, width: 'fit-content' }}>
-        {VIEWS.map((label, i) => {
-          const key = VIEW_KEYS[i]
-          const active = activeView === key
-          return (
-            <button
-              key={key}
-              onClick={() => setActiveView(key)}
-              style={{
-                padding: '7px 18px',
-                borderRadius: 10,
-                fontSize: 13,
-                fontWeight: active ? 600 : 400,
-                background: active ? 'var(--card-bg)' : 'transparent',
-                color: active ? 'var(--career)' : 'var(--text-3)',
-                border: active ? '1px solid var(--border)' : 'none',
-                boxShadow: active ? 'var(--shadow)' : 'none',
-                cursor: 'pointer',
-                transition: 'all 0.15s',
-                fontFamily: 'var(--font-body)',
-              }}
-            >
-              {label}
-            </button>
-          )
-        })}
+      {/* View switcher + period nav + edit toggle */}
+      <div className="flex items-center justify-between gap-3 mb-6 wrap">
+        <div style={{ display: 'flex', gap: 4, background: 'var(--bg-2)', borderRadius: 'var(--radius-lg)', padding: 4, width: 'fit-content' }}>
+          {VIEWS.map((label, i) => {
+            const key = VIEW_KEYS[i]
+            const active = activeView === key
+            return (
+              <button
+                key={key}
+                onClick={() => setActiveView(key)}
+                style={{
+                  padding: '7px 18px',
+                  borderRadius: 10,
+                  fontSize: 13,
+                  fontWeight: active ? 600 : 400,
+                  background: active ? 'var(--card-bg)' : 'transparent',
+                  color: active ? 'var(--career)' : 'var(--text-3)',
+                  border: active ? '1px solid var(--border)' : 'none',
+                  boxShadow: active ? 'var(--shadow)' : 'none',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                  fontFamily: 'var(--font-body)',
+                }}
+              >
+                {label}
+              </button>
+            )
+          })}
+        </div>
+
+        <div className="flex items-center gap-2 wrap">
+          {/* Period navigation */}
+          <button className="btn-icon btn" onClick={() => setRefDate(d => shiftRefDate(d, activeView, -1))} title="Previous">
+            <ChevronLeft size={15} />
+          </button>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-2)', minWidth: 150, textAlign: 'center' }}>
+            {periodLabel}
+          </span>
+          <button className="btn-icon btn" onClick={() => setRefDate(d => shiftRefDate(d, activeView, 1))} title="Next">
+            <ChevronRight size={15} />
+          </button>
+          {!isCurrentPeriod && (
+            <button className="btn btn-xs btn-ghost" onClick={() => setRefDate(new Date())}>Today</button>
+          )}
+
+          {/* Edit layout toggle */}
+          <button
+            className={`btn btn-sm ${editing ? 'btn-career' : 'btn-ghost'}`}
+            style={editing ? { color: '#fff' } : {}}
+            onClick={() => setEditing(v => !v)}
+          >
+            {editing ? <><CheckIcon size={13} /> Done</> : <><Pencil size={13} /> Edit layout</>}
+          </button>
+        </div>
       </div>
 
       {/* Active view */}
@@ -284,9 +365,10 @@ export default function DashboardPage() {
           user={user}
           today={today}
           onOpenPanel={setPanel}
-          cardOrder={cardOrders.daily}
+          cardOrder={normalizeOrder(cardOrders.daily, 'daily')}
           onReorder={order => saveCardOrder('daily', order)}
           onHydrationAdd={addHydration}
+          {...viewProps}
         />
       )}
 
@@ -305,9 +387,10 @@ export default function DashboardPage() {
           userId={user.id}
           onSaveQuote={setSavedQuote}
           onOpenPanel={setPanel}
-          cardOrder={cardOrders.weekly}
+          cardOrder={normalizeOrder(cardOrders.weekly, 'weekly')}
           onReorder={order => saveCardOrder('weekly', order)}
           onToggleTask={toggleTask}
+          {...viewProps}
         />
       )}
 
@@ -322,8 +405,9 @@ export default function DashboardPage() {
           variable={variable}
           contentBatches={contentBatches}
           onOpenPanel={setPanel}
-          cardOrder={cardOrders.monthly}
+          cardOrder={normalizeOrder(cardOrders.monthly, 'monthly')}
           onReorder={order => saveCardOrder('monthly', order)}
+          {...viewProps}
         />
       )}
 
@@ -336,9 +420,10 @@ export default function DashboardPage() {
           userId={user.id}
           quarter={quarter}
           onOpenPanel={setPanel}
-          cardOrder={cardOrders.quarterly}
+          cardOrder={normalizeOrder(cardOrders.quarterly, 'quarterly')}
           onReorder={order => saveCardOrder('quarterly', order)}
           onNotesUpdate={setQuarterlyNotes}
+          {...viewProps}
         />
       )}
 

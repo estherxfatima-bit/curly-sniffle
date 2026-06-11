@@ -6,14 +6,32 @@ import DailyTodos from '../DailyTodos'
 import MoodWidget from '../MoodWidget'
 import CurrentlyReading from '../CurrentlyReading'
 import { SortableCard, DraggableCardList } from '../DraggableCard'
+import AddWidgetMenu from '../AddWidgetMenu'
 
-const DEFAULT_ORDER = ['priority', 'todos', 'habits', 'mood', 'water', 'reading']
+export const CARD_LABELS = {
+  priority: 'One priority',
+  todos: "Today's to-dos",
+  habits: 'Habits',
+  mood: 'Mood',
+  water: 'Hydration',
+  reading: 'Currently reading',
+}
+
+export const DEFAULT_ORDER = [
+  { id: 'priority', size: 'square' },
+  { id: 'todos', size: 'wide' },
+  { id: 'habits', size: 'wide' },
+  { id: 'mood', size: 'square' },
+  { id: 'water', size: 'square' },
+  { id: 'reading', size: 'square' },
+]
 const HYDRATION_GOAL = 2500
 
 export default function DailyView({
   habits, weekTasks, hydration, onOpenPanel,
   cardOrder, onReorder, user, today,
   onHydrationAdd,
+  editing, onResize, onRemoveCard, onAddCard,
 }) {
   const order = (cardOrder?.length ? cardOrder : DEFAULT_ORDER)
 
@@ -108,19 +126,32 @@ export default function DailyView({
     reading: <CurrentlyReading />,
   }
 
+  const available = Object.entries(CARD_LABELS)
+    .filter(([id]) => !order.some(o => o.id === id))
+    .map(([id, label]) => ({ id, label }))
+
   return (
-    <DraggableCardList cardOrder={order} onReorder={onReorder}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        {order.map(id => (
+    <div>
+      {editing && (
+        <div className="mb-4">
+          <AddWidgetMenu available={available} onAdd={onAddCard} />
+        </div>
+      )}
+      <DraggableCardList cardOrder={order} onReorder={onReorder}>
+        {order.map(({ id, size }) => (
           <SortableCard
             key={id}
             id={id}
+            size={size}
+            editing={editing}
+            onResize={s => onResize(id, s)}
+            onRemove={() => onRemoveCard(id)}
             onClick={id !== 'todos' && id !== 'mood' && id !== 'reading' ? () => openPanel(id === 'habits' ? 'habits' : id === 'water' ? 'water' : id === 'priority' ? 'tasks' : id, { habits, tasks: weekTasks, hydration }) : undefined}
           >
             {CARDS[id] || null}
           </SortableCard>
         ))}
-      </div>
-    </DraggableCardList>
+      </DraggableCardList>
+    </div>
   )
 }

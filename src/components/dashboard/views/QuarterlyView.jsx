@@ -2,11 +2,26 @@ import { useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import ArcRing from '../../ui/ArcRing'
 import { SortableCard, DraggableCardList } from '../DraggableCard'
+import AddWidgetMenu from '../AddWidgetMenu'
 import { Plus, Trash2 } from 'lucide-react'
 import { supabase } from '../../../lib/supabase'
 import { Link } from 'react-router-dom'
 
-const DEFAULT_ORDER = ['q-goals', 'quarterly-wins', 'books', 'parking-lot', 'mood-trend']
+export const CARD_LABELS = {
+  'q-goals': 'Quarterly goals',
+  'quarterly-wins': 'Quarterly wins',
+  books: 'Books this quarter',
+  'parking-lot': 'Idea parking lot',
+  'mood-trend': 'Mood trend',
+}
+
+export const DEFAULT_ORDER = [
+  { id: 'q-goals', size: 'wide' },
+  { id: 'quarterly-wins', size: 'square' },
+  { id: 'books', size: 'square' },
+  { id: 'parking-lot', size: 'square' },
+  { id: 'mood-trend', size: 'wide' },
+]
 
 function EditableList({ items, onAdd, onRemove, placeholder, color = 'var(--career)' }) {
   const [input, setInput] = useState('')
@@ -49,6 +64,7 @@ export default function QuarterlyView({
   quarterlyNotes, userId, quarter,
   onOpenPanel, cardOrder, onReorder,
   onNotesUpdate,
+  editing, onResize, onRemoveCard, onAddCard,
 }) {
   const order = cardOrder?.length ? cardOrder : DEFAULT_ORDER
   const notes = quarterlyNotes || { wins: [], books: [], parking_lot: [] }
@@ -183,19 +199,32 @@ export default function QuarterlyView({
     ),
   }
 
+  const available = Object.entries(CARD_LABELS)
+    .filter(([id]) => !order.some(o => o.id === id))
+    .map(([id, label]) => ({ id, label }))
+
   return (
-    <DraggableCardList cardOrder={order} onReorder={onReorder}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        {order.map(id => (
+    <div>
+      {editing && (
+        <div className="mb-4">
+          <AddWidgetMenu available={available} onAdd={onAddCard} />
+        </div>
+      )}
+      <DraggableCardList cardOrder={order} onReorder={onReorder}>
+        {order.map(({ id, size }) => (
           <SortableCard
             key={id}
             id={id}
+            size={size}
+            editing={editing}
+            onResize={s => onResize(id, s)}
+            onRemove={() => onRemoveCard(id)}
             onClick={['quarterly-wins', 'books', 'parking-lot'].includes(id) ? () => openPanel(id === 'quarterly-wins' ? 'quarterly-wins' : id === 'books' ? 'books' : 'parking-lot', { items: notes[id === 'quarterly-wins' ? 'wins' : id === 'books' ? 'books' : 'parking_lot'] }) : undefined}
           >
             {CARDS[id] || null}
           </SortableCard>
         ))}
-      </div>
-    </DraggableCardList>
+      </DraggableCardList>
+    </div>
   )
 }

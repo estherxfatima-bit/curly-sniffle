@@ -6,12 +6,12 @@ import {
   useSensor, useSensors,
 } from '@dnd-kit/core'
 import {
-  SortableContext, verticalListSortingStrategy, arrayMove,
+  SortableContext, rectSortingStrategy, arrayMove,
 } from '@dnd-kit/sortable'
-import { GripVertical } from 'lucide-react'
+import { GripVertical, Square, RectangleHorizontal, X } from 'lucide-react'
 
 // Individual sortable card wrapper
-export function SortableCard({ id, onClick, children }) {
+export function SortableCard({ id, size = 'wide', onClick, onResize, onRemove, editing, children }) {
   const {
     attributes, listeners, setNodeRef,
     transform, transition, isDragging,
@@ -20,14 +20,41 @@ export function SortableCard({ id, onClick, children }) {
   return (
     <div
       ref={setNodeRef}
+      className={size === 'wide' ? 'span-2' : ''}
       style={{
         transform: CSS.Transform.toString(transform),
         transition,
         opacity: isDragging ? 0.38 : 1,
         position: 'relative',
         zIndex: isDragging ? 10 : 'auto',
+        height: '100%',
+        outline: editing ? '1px dashed var(--border)' : 'none',
+        outlineOffset: 4,
+        borderRadius: 'var(--radius-lg)',
       }}
     >
+      {/* Edit-mode toolbar: resize + remove */}
+      {editing && (
+        <div style={{ position: 'absolute', top: 12, left: 12, zIndex: 4, display: 'flex', gap: 4 }}>
+          <button
+            className="btn-icon"
+            title={size === 'wide' ? 'Make square' : 'Make wide'}
+            onClick={() => onResize?.(size === 'wide' ? 'square' : 'wide')}
+            style={{ background: 'var(--card-bg)', border: '1px solid var(--border)' }}
+          >
+            {size === 'wide' ? <Square size={12} /> : <RectangleHorizontal size={12} />}
+          </button>
+          <button
+            className="btn-icon"
+            title="Remove widget"
+            onClick={() => onRemove?.()}
+            style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', color: 'var(--danger, #c44)' }}
+          >
+            <X size={12} />
+          </button>
+        </div>
+      )}
+
       {/* Grip handle — touch-safe drag zone */}
       <div
         {...attributes}
@@ -51,8 +78,8 @@ export function SortableCard({ id, onClick, children }) {
 
       {/* Clickable card body */}
       <div
-        onClick={onClick}
-        style={{ cursor: onClick ? 'pointer' : 'default' }}
+        onClick={editing ? undefined : onClick}
+        style={{ cursor: !editing && onClick ? 'pointer' : 'default', height: '100%' }}
       >
         {children}
       </div>
@@ -60,17 +87,20 @@ export function SortableCard({ id, onClick, children }) {
   )
 }
 
-// Container — provides DnD context + sortable context for a view's card list
+// Container — provides DnD context + sortable context for a view's card grid
+// cardOrder: array of { id, size }
 export function DraggableCardList({ cardOrder, onReorder, children }) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor),
   )
 
+  const ids = cardOrder.map(c => c.id)
+
   function handleDragEnd({ active, over }) {
     if (!over || active.id === over.id) return
-    const oldIdx = cardOrder.indexOf(active.id)
-    const newIdx = cardOrder.indexOf(over.id)
+    const oldIdx = ids.indexOf(active.id)
+    const newIdx = ids.indexOf(over.id)
     if (oldIdx !== -1 && newIdx !== -1) {
       onReorder(arrayMove(cardOrder, oldIdx, newIdx))
     }
@@ -78,8 +108,10 @@ export function DraggableCardList({ cardOrder, onReorder, children }) {
 
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-      <SortableContext items={cardOrder} strategy={verticalListSortingStrategy}>
-        {children}
+      <SortableContext items={ids} strategy={rectSortingStrategy}>
+        <div className="dashboard-grid">
+          {children}
+        </div>
       </SortableContext>
     </DndContext>
   )

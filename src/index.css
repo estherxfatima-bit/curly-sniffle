@@ -614,6 +614,20 @@ input[type="range"]::-webkit-slider-thumb {
   .grid-4, .grid-3, .grid-2 { grid-template-columns: 1fr; }
 }
 
+/* ── Dashboard widget grid ── */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.dashboard-grid .span-2 { grid-column: span 2; }
+@media (max-width: 860px) {
+  .dashboard-grid { grid-template-columns: 1fr; }
+  .dashboard-grid .span-2 { grid-column: span 1; }
+}
+
+
 /* ── Spacing ── */
 .mt-1{margin-top:4px}  .mt-2{margin-top:8px}  .mt-3{margin-top:12px}
 .mt-4{margin-top:16px} .mt-6{margin-top:24px} .mt-8{margin-top:32px}
