@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
-import { format, subDays, eachDayOfInterval } from 'date-fns'
-import { Plus, Trash2, X, AlertTriangle, Check } from 'lucide-react'
+import { format, startOfWeek, addDays, subDays, startOfMonth, addMonths, subMonths } from 'date-fns'
+import { Plus, X } from 'lucide-react'
 import ArcRing from '../components/ui/ArcRing'
-
-const EMOJI_OPTIONS = ['💪','📚','🧘','🏃','✍️','🎯','💧','🌿','🎨','🧠','😴','🥗','💊','🎵','🌅','🛁','🧴','🫧']
+import HabitModal from '../components/habits/HabitModal'
+import HabitRow from '../components/habits/HabitRow'
+import HabitMonthView from '../components/habits/HabitMonthView'
+import { isExpectedDay } from '../lib/habitUtils'
 
 function HabitsDecoration() {
   return (
@@ -21,53 +23,72 @@ function HabitsDecoration() {
 export default function HabitsPage() {
   const { user } = useAuth()
   const [habits, setHabits] = useState([])
-  const [logs, setLogs] = useState({})
-  const [streaks, setStreaks] = useState({})
+  const [logsByHabit, setLogsByHabit] = useState({})
+  const [freezesByHabit, setFreezesByHabit] = useState({})
   const [loading, setLoading] = useState(true)
-  const [showAdd, setShowAdd] = useState(false)
-  const [newHabit, setNewHabit] = useState({ name: '', emoji: '💪' })
+  const [showModal, setShowModal] = useState(false)
+  const [editing, setEditing] = useState(null)
+  const [monthHabit, setMonthHabit] = useState(null)
+  const [monthDate, setMonthDate] = useState(() => startOfMonth(new Date()))
+  const [dismissedBanners, setDismissedBanners] = useState(new Set())
 
-  const today = format(new Date(), 'yyyy-MM-dd')
-  const days = eachDayOfInterval({ start: subDays(new Date(), 13), end: new Date() })
-  const dayStrs = days.map(d => format(d, 'yyyy-MM-dd'))
+  const today = new Date()
+  const todayStr = format(today, 'yyyy-MM-dd')
+  const weekStart = startOfWeek(today, { weekStartsOn: 1 })
+  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
+  const yesterdayStr = format(subDays(today, 1), 'yyyy-MM-dd')
 
   useEffect(() => { if (user) loadAll() }, [user])
 
   async function loadAll() {
     setLoading(true)
-    const [habitsRes, logsRes] = await Promise.all([
+    const [habitsRes, logsRes, freezesRes] = await Promise.all([
       supabase.from('habits').select('*').eq('user_id', user.id).order('created_at'),
-      supabase.from('habit_logs').select('habit_id, log_date').eq('user_id', user.id).gte('log_date', dayStrs[0]),
+      supabase.from('habit_logs').select('habit_id, log_date').eq('user_id', user.id),
+      supabase.from('habit_freezes').select('habit_id, freeze_date').eq('user_id', user.id),
     ])
-    const habitsData = habitsRes.data || []
-    const logsData   = logsRes.data || []
+    let habitsData = habitsRes.data || []
+    const logsData = logsRes.data || []
+    const freezesData = freezesRes.data || []
+
+    // Reset monthly streak freeze if a new month has started
+    const firstOfMonth = format(startOfMonth(today), 'yyyy-MM-dd')
+    const toReset = habitsData.filter(h => h.streak_freeze_used && h.streak_freeze_reset_date < firstOfMonth)
+    if (toReset.length) {
+      await Promise.all(toReset.map(h =>
+        supabase.from('habits').update({ streak_freeze_used: false, streak_freeze_reset_date: firstOfMonth }).eq('id', h.id)
+      ))
+      habitsData = habitsData.map(h => toReset.some(r => r.id === h.id) ? { ...h, streak_freeze_used: false, streak_freeze_reset_date: firstOfMonth } : h)
+    }
+
     const logMap = {}
     habitsData.forEach(h => { logMap[h.id] = new Set() })
     logsData.forEach(l => { if (logMap[l.habit_id]) logMap[l.habit_id].add(l.log_date) })
 
-    // Calculate streaks
-    const streakMap = {}
-    habitsData.forEach(h => {
-      let streak = 0
-      for (let i = dayStrs.length - 1; i >= 0; i--) {
-        if (logMap[h.id]?.has(dayStrs[i])) streak++
-        else break
-      }
-      streakMap[h.id] = streak
-    })
+    const freezeMap = {}
+    habitsData.forEach(h => { freezeMap[h.id] = new Set() })
+    freezesData.forEach(f => { if (freezeMap[f.habit_id]) freezeMap[f.habit_id].add(f.freeze_date) })
 
     setHabits(habitsData)
-    setLogs(logMap)
-    setStreaks(streakMap)
+    setLogsByHabit(logMap)
+    setFreezesByHabit(freezeMap)
     setLoading(false)
   }
 
-  async function addHabit() {
-    if (!newHabit.name.trim()) return
-    const { data } = await supabase.from('habits').insert({ user_id: user.id, name: newHabit.name, emoji: newHabit.emoji }).select().single()
-    if (data) { setHabits(prev => [...prev, data]); setLogs(prev => ({ ...prev, [data.id]: new Set() })); setStreaks(prev => ({ ...prev, [data.id]: 0 })) }
-    setNewHabit({ name: '', emoji: '💪' })
-    setShowAdd(false)
+  async function saveHabit(form) {
+    if (editing?.id) {
+      const { data } = await supabase.from('habits').update(form).eq('id', editing.id).select().single()
+      if (data) setHabits(prev => prev.map(h => h.id === data.id ? data : h))
+    } else {
+      const { data } = await supabase.from('habits').insert({ user_id: user.id, ...form }).select().single()
+      if (data) {
+        setHabits(prev => [...prev, data])
+        setLogsByHabit(prev => ({ ...prev, [data.id]: new Set() }))
+        setFreezesByHabit(prev => ({ ...prev, [data.id]: new Set() }))
+      }
+    }
+    setShowModal(false)
+    setEditing(null)
   }
 
   async function deleteHabit(id) {
@@ -76,29 +97,41 @@ export default function HabitsPage() {
     setHabits(prev => prev.filter(h => h.id !== id))
   }
 
-  async function toggleLog(habitId, dateStr) {
-    const isDone = logs[habitId]?.has(dateStr)
+  async function toggleLog(habit, dateStr) {
+    const isDone = logsByHabit[habit.id]?.has(dateStr)
     if (isDone) {
-      await supabase.from('habit_logs').delete().eq('user_id', user.id).eq('habit_id', habitId).eq('log_date', dateStr)
-      setLogs(prev => { const next = new Set(prev[habitId]); next.delete(dateStr); return { ...prev, [habitId]: next } })
+      await supabase.from('habit_logs').delete().eq('user_id', user.id).eq('habit_id', habit.id).eq('log_date', dateStr)
+      setLogsByHabit(prev => { const next = new Set(prev[habit.id]); next.delete(dateStr); return { ...prev, [habit.id]: next } })
     } else {
-      await supabase.from('habit_logs').insert({ user_id: user.id, habit_id: habitId, log_date: dateStr })
-      setLogs(prev => { const next = new Set(prev[habitId]); next.add(dateStr); return { ...prev, [habitId]: next } })
+      await supabase.from('habit_logs').insert({ user_id: user.id, habit_id: habit.id, log_date: dateStr })
+      setLogsByHabit(prev => { const next = new Set(prev[habit.id]); next.add(dateStr); return { ...prev, [habit.id]: next } })
     }
-    // Recalculate streak for this habit
-    setStreaks(prev => {
-      const logSet = new Set(logs[habitId])
-      if (!isDone) logSet.add(dateStr); else logSet.delete(dateStr)
-      let streak = 0
-      for (let i = dayStrs.length - 1; i >= 0; i--) {
-        if (logSet.has(dayStrs[i])) streak++; else break
-      }
-      return { ...prev, [habitId]: streak }
-    })
   }
 
-  const todayDoneCount = habits.filter(h => logs[h.id]?.has(today)).length
+  async function freezeDay(habit, dateStr) {
+    const { data } = await supabase.from('habit_freezes').insert({ user_id: user.id, habit_id: habit.id, freeze_date: dateStr }).select().single()
+    if (!data) return
+    setFreezesByHabit(prev => { const next = new Set(prev[habit.id]); next.add(dateStr); return { ...prev, [habit.id]: next } })
+    const firstOfMonth = format(startOfMonth(today), 'yyyy-MM-dd')
+    await supabase.from('habits').update({ streak_freeze_used: true, streak_freeze_reset_date: firstOfMonth }).eq('id', habit.id)
+    setHabits(prev => prev.map(h => h.id === habit.id ? { ...h, streak_freeze_used: true, streak_freeze_reset_date: firstOfMonth } : h))
+  }
+
+  function openMonth(habit) {
+    setMonthHabit(habit)
+    setMonthDate(startOfMonth(new Date()))
+  }
+
+  const todayDoneCount = habits.filter(h => logsByHabit[h.id]?.has(todayStr)).length
   const overallPct = habits.length ? Math.round((todayDoneCount / habits.length) * 100) : 0
+
+  // Habits that missed an expected day yesterday (and weren't frozen)
+  const missedYesterday = habits.filter(h =>
+    !dismissedBanners.has(h.id) &&
+    isExpectedDay(h, subDays(today, 1)) &&
+    !logsByHabit[h.id]?.has(yesterdayStr) &&
+    !freezesByHabit[h.id]?.has(yesterdayStr)
+  )
 
   return (
     <div>
@@ -106,14 +139,14 @@ export default function HabitsPage() {
         <div className="flex items-start justify-between gap-4">
           <div>
             <h1>Habit Tracker</h1>
-            <p>14-day history — click a dot to log</p>
+            <p>This week — tap a dot to log</p>
             <div className="flex items-center gap-3 mt-3">
               <span className="badge badge-personal">{todayDoneCount}/{habits.length} today</span>
             </div>
           </div>
           <div className="flex items-center gap-3" style={{ flexShrink: 0 }}>
             <ArcRing value={overallPct} max={100} size={64} strokeWidth={6} color="var(--personal)" label={`${overallPct}%`} sublabel="today" />
-            <button className="btn btn-personal btn-sm" style={{ color: '#fff' }} onClick={() => setShowAdd(v => !v)}>
+            <button className="btn btn-personal btn-sm" style={{ color: '#fff' }} onClick={() => { setEditing(null); setShowModal(true) }}>
               <Plus size={14} /> Add
             </button>
           </div>
@@ -121,16 +154,15 @@ export default function HabitsPage() {
         <div className="page-header-decoration" style={{ color: 'var(--personal)' }}><HabitsDecoration /></div>
       </div>
 
-      {showAdd && (
-        <div className="card mb-4 card-personal" style={{ padding: '16px 20px' }}>
-          <div className="flex items-center gap-3">
-            <select value={newHabit.emoji} onChange={e => setNewHabit(p => ({ ...p, emoji: e.target.value }))} style={{ padding: '7px 10px', width: 'auto', fontSize: 18 }}>
-              {EMOJI_OPTIONS.map(e => <option key={e} value={e}>{e}</option>)}
-            </select>
-            <input value={newHabit.name} onChange={e => setNewHabit(p => ({ ...p, name: e.target.value }))} placeholder="Habit name…" style={{ flex: 1 }} onKeyDown={e => e.key === 'Enter' && addHabit()} autoFocus />
-            <button className="btn btn-personal btn-sm" style={{ color: '#fff' }} onClick={addHabit}>Add</button>
-            <button className="btn-icon btn" onClick={() => setShowAdd(false)}><X size={14} /></button>
-          </div>
+      {/* Don't-break-the-chain banners */}
+      {missedYesterday.length > 0 && (
+        <div className="mb-4" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {missedYesterday.map(h => (
+            <div key={h.id} className="card card-personal" style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <p style={{ fontSize: 13 }}>{h.emoji} <strong>{h.name}</strong> — don't break the chain. Log it today.</p>
+              <button className="btn-icon btn" onClick={() => setDismissedBanners(prev => new Set(prev).add(h.id))}><X size={13} /></button>
+            </div>
+          ))}
         </div>
       )}
 
@@ -141,12 +173,12 @@ export default function HabitsPage() {
       ) : (
         <div className="card" style={{ padding: 0, overflow: 'auto' }}>
           {/* Day headers */}
-          <div style={{ display: 'grid', gridTemplateColumns: '200px 100px 1fr 52px', padding: '12px 20px', borderBottom: '1px solid var(--border)', background: 'var(--bg-2)', minWidth: 700 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '220px 110px 1fr 56px', padding: '12px 20px', borderBottom: '1px solid var(--border)', background: 'var(--bg-2)', minWidth: 700 }}>
             <span className="mono">Habit</span>
             <span className="mono">Streak</span>
-            <div style={{ display: 'grid', gridTemplateColumns: `repeat(14, 1fr)`, gap: 4 }}>
-              {days.map(d => (
-                <div key={format(d, 'yyyy-MM-dd')} style={{ textAlign: 'center', fontSize: 9, fontFamily: 'var(--font-mono)', color: format(d, 'yyyy-MM-dd') === today ? 'var(--personal)' : 'var(--text-3)', letterSpacing: '0.02em' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
+              {weekDays.map(d => (
+                <div key={format(d, 'yyyy-MM-dd')} style={{ textAlign: 'center', fontSize: 9, fontFamily: 'var(--font-mono)', color: format(d, 'yyyy-MM-dd') === todayStr ? 'var(--personal)' : 'var(--text-3)', letterSpacing: '0.02em' }}>
                   {format(d, 'EEE').slice(0,1)}<br/>{format(d, 'd')}
                 </div>
               ))}
@@ -154,48 +186,39 @@ export default function HabitsPage() {
             <span />
           </div>
 
-          {habits.map(habit => {
-            const streak = streaks[habit.id] || 0
-            const warn = dayStrs.slice(-2).every(d => !logs[habit.id]?.has(d))
-            return (
-              <div key={habit.id} style={{ display: 'grid', gridTemplateColumns: '200px 100px 1fr 52px', padding: '13px 20px', borderBottom: '1px solid var(--border)', alignItems: 'center', minWidth: 700 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  {warn && <AlertTriangle size={13} color="var(--warning)" title="2-day rule: haven't logged in 2 days" />}
-                  <span style={{ fontSize: 16 }}>{habit.emoji}</span>
-                  <span style={{ fontSize: 13, fontWeight: 500 }}>{habit.name}</span>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <span style={{ fontSize: 22, fontFamily: 'var(--font-serif)', fontWeight: 700, color: streak > 0 ? 'var(--personal)' : 'var(--text-3)' }}>{streak}</span>
-                  <span className="mono">days</span>
-                  {streak >= 3 && <span style={{ fontSize: 14 }}>🔥</span>}
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: `repeat(14, 1fr)`, gap: 4 }}>
-                  {dayStrs.map(dateStr => {
-                    const done = logs[habit.id]?.has(dateStr)
-                    const isToday = dateStr === today
-                    return (
-                      <div key={dateStr} onClick={() => toggleLog(habit.id, dateStr)} style={{
-                        width: 20, height: 20, borderRadius: '50%', margin: '0 auto',
-                        background: done ? 'var(--personal)' : 'var(--bg-3)',
-                        border: `2px solid ${isToday ? 'var(--personal)' : 'transparent'}`,
-                        cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        transition: 'all 0.15s', boxShadow: done ? '0 0 0 2px var(--personal-tint)' : 'none',
-                      }}>
-                        {done && <Check size={10} color="white" strokeWidth={3} />}
-                      </div>
-                    )
-                  })}
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                  <button className="btn-icon btn" onClick={() => deleteHabit(habit.id)}><Trash2 size={13} /></button>
-                </div>
-              </div>
-            )
-          })}
+          {habits.map(habit => (
+            <HabitRow
+              key={habit.id}
+              habit={habit}
+              weekDays={weekDays}
+              logSet={logsByHabit[habit.id] || new Set()}
+              freezeSet={freezesByHabit[habit.id] || new Set()}
+              freezeAvailable={!habit.streak_freeze_used}
+              onToggleLog={toggleLog}
+              onFreeze={freezeDay}
+              onOpenMonth={openMonth}
+              onEdit={h => { setEditing(h); setShowModal(true) }}
+              onDelete={deleteHabit}
+            />
+          ))}
         </div>
+      )}
+
+      {showModal && (
+        <HabitModal habit={editing} onClose={() => { setShowModal(false); setEditing(null) }} onSave={saveHabit} />
+      )}
+
+      {monthHabit && (
+        <HabitMonthView
+          habit={monthHabit}
+          logSet={logsByHabit[monthHabit.id] || new Set()}
+          freezeSet={freezesByHabit[monthHabit.id] || new Set()}
+          monthDate={monthDate}
+          onPrevMonth={() => setMonthDate(prev => subMonths(prev, 1))}
+          onNextMonth={() => setMonthDate(prev => addMonths(prev, 1))}
+          onClose={() => setMonthHabit(null)}
+          onToggleLog={ds => toggleLog(monthHabit, ds)}
+        />
       )}
     </div>
   )
