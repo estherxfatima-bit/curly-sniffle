@@ -53,11 +53,14 @@ Write 2-3 sentences. Capture the honest reality, name the pattern if there is on
   return response
 }
 
-// AI planning with full user context — saves to ai_log
-export async function generatePlan(userId, { goals, tasks, habits, habitLogs, moodAvg, todayTodos, question }) {
-  const system = `You are a direct, thoughtful planning assistant. Your job is to give specific, actionable advice based on this person's actual data.
+// Base persona system prompt — applied to every AI call
+export const BASE_SYSTEM_PROMPT = `You are a personal planning assistant for her. Be direct, specific, and grounded. Reference her actual goals and tasks. Never give generic productivity advice. Her tone is considered and non-performative — match it.`
 
-Be direct and specific. Not motivational. Not generic. Respond like a smart colleague who has seen the data and has a clear point of view. If something looks off, say so plainly. If priorities are unclear, name that.
+// AI planning with full user context — saves to ai_log
+export async function generatePlan(userId, { goals, tasks, habits, moodAvg, todayTodos, question }) {
+  const system = `${BASE_SYSTEM_PROMPT}
+
+Respond like a smart colleague who has seen the data and has a clear point of view. If something looks off, say so plainly. If priorities are unclear, name that.
 
 Never say "great job" or "you're doing amazing". Never suggest "scheduling time for self-care". Give real observations and specific next steps.`
 
@@ -66,14 +69,14 @@ Never say "great job" or "you're doing amazing". Never suggest "scheduling time 
 
   const prompt = `Here is my current context:
 
-QUARTERLY GOALS:
+THIS QUARTER'S GOALS:
 ${goals.map(g => `- [${g.category}] ${g.primary_goal}`).join('\n') || 'None set'}
 
 THIS WEEK'S TASKS (${tasks.filter(t => !t.complete).length} incomplete, ${tasks.filter(t => t.complete).length} done):
 ${recentTasks.map(t => `- [${t.area}] ${t.specific_task} — ${t.complete ? '✓ done' : 'incomplete'}${t.carried_forward ? ' (carried)' : ''}`).join('\n') || 'None'}
 
-HABITS (${habitLogs} logged today out of ${habits.length}):
-${habits.map(h => h.name).join(', ') || 'None'}
+HABIT STREAKS:
+${habits.map(h => `- ${h.name}: ${h.streak} day${h.streak === 1 ? '' : 's'}`).join('\n') || 'None'}
 
 MOOD AVERAGE THIS WEEK: ${moodAvg ? `${moodAvg.toFixed(1)}/5` : 'Not logged'}
 

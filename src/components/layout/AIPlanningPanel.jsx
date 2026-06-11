@@ -2,8 +2,9 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
 import { generatePlan } from '../../lib/aiLog'
-import { format, startOfWeek, subWeeks } from 'date-fns'
+import { format, startOfWeek, subWeeks, subDays } from 'date-fns'
 import { X, Send, Sparkles, Plus, ChevronDown } from 'lucide-react'
+import { getCurrentQuarter } from '../../lib/constants'
 
 export default function AIPlanningPanel({ onClose }) {
   const { user } = useAuth()
@@ -29,25 +30,41 @@ export default function AIPlanningPanel({ onClose }) {
     const weekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
     const twoWeeksAgo = format(startOfWeek(subWeeks(new Date(), 2), { weekStartsOn: 1 }), 'yyyy-MM-dd')
     const today = format(new Date(), 'yyyy-MM-dd')
+    const quarter = getCurrentQuarter()
+    const year = new Date().getFullYear()
+
+    // Last 14 days, for habit streak calculation
+    const days = Array.from({ length: 14 }, (_, i) => format(subDays(new Date(), 13 - i), 'yyyy-MM-dd'))
 
     const [goalsRes, tasksRes, habitsRes, logsRes, moodRes, todosRes] = await Promise.all([
-      supabase.from('goals').select('category, primary_goal').eq('user_id', user.id),
+      supabase.from('goals').select('category, primary_goal').eq('user_id', user.id).eq('quarter', quarter).eq('year', year),
       supabase.from('weekly_tasks').select('area, specific_task, complete, carried_forward').eq('user_id', user.id).gte('week_start', twoWeeksAgo),
       supabase.from('habits').select('id, name').eq('user_id', user.id),
-      supabase.from('habit_logs').select('habit_id').eq('user_id', user.id).eq('log_date', today),
+      supabase.from('habit_logs').select('habit_id, log_date').eq('user_id', user.id).gte('log_date', days[0]),
       supabase.from('mood_logs').select('mood_score').eq('user_id', user.id).gte('log_date', weekStart),
       supabase.from('daily_todos').select('text, category, complete').eq('user_id', user.id).eq('date', today),
     ])
 
     const moods = moodRes.data || []
     const moodAvg = moods.length ? moods.reduce((s, m) => s + m.mood_score, 0) / moods.length : null
-    const loggedIds = new Set((logsRes.data || []).map(l => l.habit_id))
+
+    const habitsData = habitsRes.data || []
+    const logsByHabit = {}
+    habitsData.forEach(h => { logsByHabit[h.id] = new Set() })
+    ;(logsRes.data || []).forEach(l => { logsByHabit[l.habit_id]?.add(l.log_date) })
+    const habitsWithStreaks = habitsData.map(h => {
+      let streak = 0
+      for (let i = days.length - 1; i >= 0; i--) {
+        if (logsByHabit[h.id]?.has(days[i])) streak++
+        else break
+      }
+      return { name: h.name, streak }
+    })
 
     setContext({
       goals: goalsRes.data || [],
       tasks: tasksRes.data || [],
-      habits: habitsRes.data || [],
-      habitLogs: loggedIds.size,
+      habits: habitsWithStreaks,
       moodAvg,
       todayTodos: todosRes.data || [],
     })
