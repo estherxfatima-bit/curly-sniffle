@@ -2,22 +2,25 @@ import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, CalendarDays, Target, CheckSquare, Film,
   TrendingUp, Users, LogOut, Sun, Moon, Sparkles, PiggyBank, Heart, Settings,
+  BookOpen, ListChecks,
 } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { useTheme } from '../../hooks/useTheme'
 
 const navItems = [
-  { to: '/',         label: 'Dashboard',  icon: LayoutDashboard, section: 'career'   },
-  { to: '/weekly',   label: 'Weekly',     icon: CalendarDays,    section: 'career'   },
-  { to: '/goals',    label: 'Goals',      icon: Target,          section: 'career'   },
-  { to: '/habits',   label: 'Habits',     icon: CheckSquare,     section: 'personal' },
-  { to: '/content',  label: 'Content',    icon: Film,            section: 'creative' },
-  { to: '/finance',  label: 'Finance',    icon: PiggyBank,       section: 'finance'  },
-  { to: '/wellness', label: 'Wellness',   icon: Heart,           section: 'wellness' },
-  { to: '/insights', label: 'Insights',   icon: TrendingUp,      section: 'career'   },
-  { to: '/partners', label: 'Partners',   icon: Users,           section: 'personal' },
-  { to: '/ai-log',   label: 'AI Log',     icon: Sparkles,        section: 'career'   },
-  { to: '/settings', label: 'Settings',   icon: Settings,        section: 'career'   },
+  { to: '/',          label: 'Dashboard',   icon: LayoutDashboard, section: 'career'   },
+  { to: '/weekly',    label: 'Weekly',      icon: CalendarDays,    section: 'career'   },
+  { to: '/goals',     label: 'Goals',       icon: Target,          section: 'career'   },
+  { to: '/habits',    label: 'Habits',      icon: CheckSquare,     section: 'personal' },
+  { to: '/content',   label: 'Content',     icon: Film,            section: 'creative' },
+  { to: '/finance',   label: 'Finance',     icon: PiggyBank,       section: 'finance'  },
+  { to: '/wellness',  label: 'Wellness',    icon: Heart,           section: 'wellness' },
+  { to: '/books',     label: 'Books',       icon: BookOpen,        section: 'creative' },
+  { to: '/bucket-list', label: 'Bucket List', icon: ListChecks,    section: 'personal' },
+  { to: '/insights',  label: 'Insights',    icon: TrendingUp,      section: 'career'   },
+  { to: '/partners',  label: 'Partners',    icon: Users,           section: 'personal' },
+  { to: '/ai-log',    label: 'AI Log',      icon: Sparkles,        section: 'career'   },
+  { to: '/settings',  label: 'Settings',    icon: Settings,        section: 'career'   },
 ]
 
 const SECTION_COLORS = {

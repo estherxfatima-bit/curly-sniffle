@@ -14,6 +14,8 @@ import AILogPage from './pages/AILogPage'
 import FinancePage from './pages/FinancePage'
 import WellnessPage from './pages/WellnessPage'
 import SettingsPage from './pages/SettingsPage'
+import BooksPage from './pages/BooksPage'
+import BucketListPage from './pages/BucketListPage'
 
 function AppRoutes() {
   const { session, loading } = useAuth()
@@ -43,6 +45,8 @@ function AppRoutes() {
         <Route path="/ai-log"   element={<AILogPage />} />
         <Route path="/finance"  element={<FinancePage />} />
         <Route path="/wellness" element={<WellnessPage />} />
+        <Route path="/books" element={<BooksPage />} />
+        <Route path="/bucket-list" element={<BucketListPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="*"         element={<Navigate to="/" replace />} />
       </Routes>

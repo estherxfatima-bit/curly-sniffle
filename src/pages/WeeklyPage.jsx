@@ -6,6 +6,7 @@ import { TASK_AREAS } from '../lib/constants'
 import { ChevronLeft, ChevronRight, Plus, Trash2, RotateCcw, MessageSquare, Check } from 'lucide-react'
 import WeeklyReviewModal from '../components/weekly/WeeklyReviewModal'
 import PastReviews from '../components/weekly/PastReviews'
+import WeeklyQuote from '../components/dashboard/WeeklyQuote'
 
 const FREQUENCIES = ['Daily', 'Weekly', '2x/week', '3x/week', 'One-off']
 
@@ -32,13 +33,19 @@ export default function WeeklyPage() {
   const [showPastReviews, setShowPastReviews] = useState(false)
   const [editingNote, setEditingNote] = useState(null)
   const [newTask, setNewTask] = useState({ area: 'Career', action: '', frequency: 'Weekly', specific_task: '', goal_id: '' })
+  const [savedQuote, setSavedQuote] = useState(null)
 
   const weekStart = startOfWeek(currentWeek, { weekStartsOn: 1 })
   const weekEnd   = endOfWeek(currentWeek, { weekStartsOn: 1 })
   const weekStartStr = format(weekStart, 'yyyy-MM-dd')
 
-  useEffect(() => { if (user) { loadTasks(); loadGoals() } }, [user, currentWeek])
+  useEffect(() => { if (user) { loadTasks(); loadGoals(); loadQuote() } }, [user, currentWeek])
   useEffect(() => { if (window.location.search.includes('review=1')) setShowReview(true) }, [])
+
+  async function loadQuote() {
+    const { data } = await supabase.from('weekly_quotes').select('quote').eq('user_id', user.id).eq('week_start', weekStartStr).maybeSingle()
+    setSavedQuote(data?.quote || null)
+  }
 
   async function loadTasks() {
     setLoading(true)
@@ -96,6 +103,10 @@ export default function WeeklyPage() {
 
   return (
     <div>
+      <div className="card mb-5">
+        <WeeklyQuote userId={user.id} weekStart={weekStartStr} savedQuote={savedQuote} onSave={setSavedQuote} />
+      </div>
+
       {/* Header */}
       <div className="page-header header-career mb-6">
         <div className="flex items-start justify-between gap-4">

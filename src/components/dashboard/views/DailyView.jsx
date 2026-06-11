@@ -4,9 +4,10 @@ import { supabase } from '../../../lib/supabase'
 import ArcRing from '../../ui/ArcRing'
 import DailyTodos from '../DailyTodos'
 import MoodWidget from '../MoodWidget'
+import CurrentlyReading from '../CurrentlyReading'
 import { SortableCard, DraggableCardList } from '../DraggableCard'
 
-const DEFAULT_ORDER = ['priority', 'todos', 'habits', 'mood', 'water']
+const DEFAULT_ORDER = ['priority', 'todos', 'habits', 'mood', 'water', 'reading']
 const HYDRATION_GOAL = 2500
 
 export default function DailyView({
@@ -103,6 +104,8 @@ export default function DailyView({
         </div>
       </div>
     ),
+
+    reading: <CurrentlyReading />,
   }
 
   return (
@@ -112,7 +115,7 @@ export default function DailyView({
           <SortableCard
             key={id}
             id={id}
-            onClick={id !== 'todos' && id !== 'mood' ? () => openPanel(id === 'habits' ? 'habits' : id === 'water' ? 'water' : id === 'priority' ? 'tasks' : id, { habits, tasks: weekTasks, hydration }) : undefined}
+            onClick={id !== 'todos' && id !== 'mood' && id !== 'reading' ? () => openPanel(id === 'habits' ? 'habits' : id === 'water' ? 'water' : id === 'priority' ? 'tasks' : id, { habits, tasks: weekTasks, hydration }) : undefined}
           >
             {CARDS[id] || null}
           </SortableCard>

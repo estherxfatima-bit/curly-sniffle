@@ -4,6 +4,8 @@ import { useAuth } from '../hooks/useAuth'
 import { GOAL_CATEGORIES, QUARTERS, getCurrentQuarter } from '../lib/constants'
 import { Plus, Edit2, Trash2, X } from 'lucide-react'
 import ArcRing from '../components/ui/ArcRing'
+import QuarterlyWins from '../components/goals/QuarterlyWins'
+import IdeaParkingLot from '../components/goals/IdeaParkingLot'
 
 const CATEGORY_COLORS = {
   Career:    'var(--career)',
@@ -150,6 +152,11 @@ export default function GoalsPage() {
           })}
         </div>
       )}
+
+      <div className="grid-2 mt-6">
+        <QuarterlyWins quarter={`${quarter} ${year}`} />
+        <IdeaParkingLot />
+      </div>
 
       {showModal && (
         <GoalModal goal={editing} quarter={quarter} year={year} onClose={() => setShowModal(false)}
