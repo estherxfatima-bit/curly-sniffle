@@ -4,7 +4,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { format, subDays } from 'date-fns'
 import { Plus, Trash2, ChevronDown, ChevronRight, Check, Clock } from 'lucide-react'
 
-const DEFAULT_CATS = ['Work', 'Personal', 'Errands', 'Creative', 'Health']
+const DEFAULT_CATS = ['Work', 'Personal', 'Errands', 'Creative', 'Sanctum', 'Health']
 const TIME_OPTS = ['15 min', '30 min', '45 min', '1 hr', '1.5 hr', '2 hr', '3 hr']
 
 const CAT_COLOR = {
@@ -12,6 +12,7 @@ const CAT_COLOR = {
   Personal: 'var(--personal)',
   Errands: 'var(--creative)',
   Creative: 'var(--creative)',
+  Sanctum: 'var(--finance)',
   Health: 'var(--wellness)',
 }
 function catColor(c) { return CAT_COLOR[c] || 'var(--career)' }
@@ -140,6 +141,8 @@ export default function DailyTodos({ compact = false }) {
     setShowAddCat(false)
   }
 
+  const allCategories = [...new Set([...categories, ...todos.map(t => t.category).filter(Boolean)])]
+
   const filtered = todos.filter(t => {
     if (statusFilter === 'active' && t.complete) return false
     if (statusFilter === 'done'   && !t.complete) return false
@@ -195,7 +198,7 @@ export default function DailyTodos({ compact = false }) {
           className={`btn btn-xs ${!categoryFilter ? 'btn-career' : 'btn-ghost'}`}
           style={!categoryFilter ? { color: '#fff' } : {}}
         >All</button>
-        {categories.map(c => (
+        {allCategories.map(c => (
           <button key={c} onClick={() => setCategoryFilter(categoryFilter === c ? '' : c)}
             className={`btn btn-xs ${categoryFilter === c ? '' : 'btn-ghost'}`}
             style={categoryFilter === c ? { background: catColor(c), color: '#fff', border: 'none' } : {}}
@@ -230,7 +233,7 @@ export default function DailyTodos({ compact = false }) {
             <TodoItem
               key={todo.id}
               todo={todo}
-              categories={categories}
+              categories={allCategories}
               onToggle={() => toggle(todo)}
               onRemove={() => remove(todo.id)}
               onUpdateField={(f, v) => updateField(todo.id, f, v)}
