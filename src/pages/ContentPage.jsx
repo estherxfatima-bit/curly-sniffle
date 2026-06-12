@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import PillarsTab from '../components/content/PillarsTab'
 import InspirationTab from '../components/content/InspirationTab'
 import AIAnalysisTab from '../components/content/AIAnalysisTab'
@@ -21,7 +22,9 @@ function ContentDecoration() {
 }
 
 export default function ContentPage() {
-  const [tab, setTab] = useState('Pillars')
+  const [searchParams] = useSearchParams()
+  const initialTab = TABS.includes(searchParams.get('tab')) ? searchParams.get('tab') : 'Pillars'
+  const [tab, setTab] = useState(initialTab)
   const [ideaDumpRefresh, setIdeaDumpRefresh] = useState(0)
 
   return (
