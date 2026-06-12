@@ -1,11 +1,10 @@
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addDays, isSameMonth, isAfter } from 'date-fns'
 import { ChevronLeft, ChevronRight, X, Check, Snowflake } from 'lucide-react'
 import ArcRing from '../ui/ArcRing'
-import { DAY_NAMES, isExpectedDay, computeCurrentStreak, computeBestStreak } from '../../lib/habitUtils'
+import { DAY_NAMES, isExpectedDay, computeBestStreak } from '../../lib/habitUtils'
 
-export default function HabitMonthView({ habit, logSet, freezeSet, monthDate, onPrevMonth, onNextMonth, onClose, onToggleLog }) {
+export default function HabitMonthView({ habit, logSet, frozenSet, streak, banked, monthDate, onPrevMonth, onNextMonth, onClose, onToggleLog }) {
   const today = new Date()
-  const todayStr = format(today, 'yyyy-MM-dd')
   const monthStart = startOfMonth(monthDate)
   const monthEnd = endOfMonth(monthDate)
   const gridStart = startOfWeek(monthStart, { weekStartsOn: 1 })
@@ -24,11 +23,10 @@ export default function HabitMonthView({ habit, logSet, freezeSet, monthDate, on
   }
   const completionPct = expectedCount ? Math.round((loggedCount / expectedCount) * 100) : 0
 
-  const currentStreak = computeCurrentStreak(habit, logSet, freezeSet, today)
-  const bestStreak = computeBestStreak(habit, logSet, freezeSet, habit.created_at ? new Date(habit.created_at) : monthStart, today)
+  const bestStreak = computeBestStreak(habit, logSet, frozenSet, habit.created_at ? new Date(habit.created_at) : monthStart, today)
 
   const monthKey = format(monthDate, 'yyyy-MM')
-  const freezeUsedThisMonth = [...freezeSet].some(d => d.startsWith(monthKey))
+  const freezeUsedThisMonth = [...frozenSet].some(d => d.startsWith(monthKey))
 
   const isCurrentMonth = isSameMonth(monthDate, today)
 
@@ -51,7 +49,7 @@ export default function HabitMonthView({ habit, logSet, freezeSet, monthDate, on
         <div className="flex items-center gap-4 mb-5 wrap">
           <ArcRing value={completionPct} max={100} size={64} strokeWidth={6} color="var(--personal)" label={`${completionPct}%`} sublabel="this month" />
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <p style={{ fontSize: 12, color: 'var(--text-2)' }}>Current streak: <strong>{currentStreak}</strong>{currentStreak >= 3 ? ' 🔥' : ''}</p>
+            <p style={{ fontSize: 12, color: 'var(--text-2)' }}>Current streak: <strong>{streak}</strong>{streak >= 3 ? ' 🔥' : ''}{banked > 0 ? ` ❄️×${banked}` : ''}</p>
             <p style={{ fontSize: 12, color: 'var(--text-2)' }}>Best streak ever: <strong>{bestStreak}</strong></p>
             <p style={{ fontSize: 12, color: 'var(--text-2)' }}>Logged this month: <strong>{loggedCount}</strong> day{loggedCount === 1 ? '' : 's'}</p>
             <p style={{ fontSize: 12, color: 'var(--text-2)' }}>Freeze used this month: <strong>{freezeUsedThisMonth ? 'Yes' : 'No'}</strong></p>
@@ -69,7 +67,7 @@ export default function HabitMonthView({ habit, logSet, freezeSet, monthDate, on
             const future = isAfter(d, today)
             const expected = isExpectedDay(habit, d)
             const logged = logSet.has(ds)
-            const frozen = freezeSet.has(ds)
+            const frozen = frozenSet.has(ds)
             let bg = 'var(--bg-3)'
             if (inMonth && !future) {
               if (logged || frozen) bg = 'var(--personal)'

@@ -1,10 +1,9 @@
 import { format, isAfter, isToday } from 'date-fns'
 import { Check, Trash2, Snowflake, Edit2 } from 'lucide-react'
-import { isExpectedDay, frequencyLabel, computeCurrentStreak, weekCount } from '../../lib/habitUtils'
+import { isExpectedDay, frequencyLabel, weekCount } from '../../lib/habitUtils'
 
-export default function HabitRow({ habit, weekDays, logSet, freezeSet, freezeAvailable, onToggleLog, onFreeze, onOpenMonth, onEdit, onDelete }) {
+export default function HabitRow({ habit, weekDays, logSet, frozenSet, streak, banked, onToggleLog, onOpenMonth, onEdit, onDelete }) {
   const today = new Date()
-  const streak = computeCurrentStreak(habit, logSet, freezeSet, today)
   const isTimesPerWeek = habit.frequency_type === 'times_per_week'
   const cnt = isTimesPerWeek ? weekCount(logSet, weekDays[0]) : 0
 
@@ -28,13 +27,13 @@ export default function HabitRow({ habit, weekDays, logSet, freezeSet, freezeAva
         </div>
       </div>
 
-      {/* Streak + freeze */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      {/* Streak + banked freezes */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        {streak > 0 && <span style={{ fontSize: 14 }}>🔥</span>}
         <span style={{ fontSize: 22, fontFamily: 'var(--font-serif)', fontWeight: 700, color: streak > 0 ? 'var(--personal)' : 'var(--text-3)' }}>{streak}</span>
-        {streak >= 3 && <span style={{ fontSize: 14 }}>🔥</span>}
-        {streak > 0 && (
-          <span title={freezeAvailable ? 'Streak freeze available this month' : 'Freeze used this month'}>
-            <Snowflake size={13} color={freezeAvailable ? 'var(--finance)' : 'var(--border)'} />
+        {banked > 0 && (
+          <span title={`${banked} banked freeze${banked === 1 ? '' : 's'}`} style={{ display: 'flex', alignItems: 'center', gap: 1, fontSize: 12, color: 'var(--finance)', fontFamily: 'var(--font-mono)' }}>
+            <Snowflake size={12} />×{banked}
           </span>
         )}
       </div>
@@ -45,22 +44,26 @@ export default function HabitRow({ habit, weekDays, logSet, freezeSet, freezeAva
           const ds = format(d, 'yyyy-MM-dd')
           const expected = isExpectedDay(habit, d)
           const logged = logSet.has(ds)
-          const frozen = freezeSet.has(ds)
+          const frozen = frozenSet.has(ds)
           const future = isAfter(d, today) && !isToday(d)
           const todayDot = isToday(d)
 
-          let bg = 'var(--bg-3)'
+          // Future days render blank — no background, no icons, not clickable
+          if (future) {
+            return <div key={ds} style={{ display: 'flex', justifyContent: 'center' }}><div style={{ width: 22, height: 22 }} /></div>
+          }
+
+          let bg
           let border = 'transparent'
           if (logged || frozen) bg = 'var(--personal)'
           else if (!expected) bg = 'var(--bg-3)'
           else bg = 'var(--card-bg)'
           if (todayDot) border = 'var(--personal)'
 
-          const canFreeze = expected && !logged && !frozen && !future && !todayDot && freezeAvailable
-          const clickable = expected && !future
+          const clickable = expected
 
           return (
-            <div key={ds} style={{ position: 'relative', display: 'flex', justifyContent: 'center' }}>
+            <div key={ds} style={{ display: 'flex', justifyContent: 'center' }}>
               <div
                 onClick={() => clickable && onToggleLog(habit, ds)}
                 title={!expected ? 'Not scheduled' : ds}
@@ -78,16 +81,6 @@ export default function HabitRow({ habit, weekDays, logSet, freezeSet, freezeAva
                 {logged && <Check size={10} color="white" strokeWidth={3} />}
                 {!logged && frozen && <Snowflake size={10} color="white" />}
               </div>
-              {canFreeze && (
-                <button
-                  onClick={() => onFreeze(habit, ds)}
-                  title="Freeze this missed day"
-                  className="btn-icon"
-                  style={{ position: 'absolute', top: -8, right: -2, padding: 0, width: 14, height: 14, color: 'var(--finance)', background: 'var(--card-bg)', borderRadius: '50%' }}
-                >
-                  <Snowflake size={10} />
-                </button>
-              )}
             </div>
           )
         })}

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
-import { CONTENT_PILLARS } from '../../lib/constants'
+import { useContentPillars } from '../../hooks/useContentPillars'
 import { Plus, Trash2, X, ExternalLink } from 'lucide-react'
 
 function detectPlatform(url) {
@@ -25,6 +25,7 @@ const PLATFORM_COLORS = {
 
 export default function InspirationTab() {
   const { user } = useAuth()
+  const CONTENT_PILLARS = useContentPillars(user?.id)
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [showAdd, setShowAdd] = useState(false)

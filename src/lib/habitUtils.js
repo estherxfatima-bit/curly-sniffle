@@ -19,9 +19,9 @@ export function frequencyLabel(habit) {
     return (habit.frequency_days || []).length ? (habit.frequency_days || []).join(' ') : 'Specific days'
   }
   if (habit.frequency_type === 'times_per_week') {
-    return `${habit.frequency_count || 1}x/week`
+    return `${habit.frequency_count || 1}x per week`
   }
-  return 'Daily'
+  return 'DAILY'
 }
 
 // Count of logged days within the given week (Mon-Sun) for a habit
@@ -33,54 +33,74 @@ export function weekCount(logSet, weekStart) {
   return count
 }
 
-function dailyOrSpecificStreak(habit, logSet, freezeSet, today) {
+// Walk a habit's history from creation to today, applying the streak-freeze rules:
+// - every 5 consecutive completed occurrences earns a banked freeze
+// - a missed occurrence consumes a banked freeze (streak continues, day shown frozen)
+// - a missed occurrence with no banked freeze resets the streak to 0
+//
+// Returns:
+//   streak        - current streak count
+//   banked        - banked freezes remaining
+//   frozenDates   - Set of 'yyyy-MM-dd' occurrence dates that were auto-frozen
+//   lastOccurrence- { dateStr, status: 'completed' | 'frozen' | 'missed' } | null
+//   pending       - true if today's (or this week's) occurrence is still open
+export function simulateHabit(habit, logSet, today = new Date()) {
+  const startDate = habit.created_at ? new Date(habit.created_at) : today
   let streak = 0
-  let d = new Date(today)
-  const todayStr = format(d, 'yyyy-MM-dd')
-  // Today not yet logged doesn't break the streak — start counting from yesterday
-  if (isExpectedDay(habit, d) && !logSet.has(todayStr) && !freezeSet.has(todayStr)) {
-    d = addDays(d, -1)
-  }
-  while (true) {
-    if (!isExpectedDay(habit, d)) { d = addDays(d, -1); continue }
-    const ds = format(d, 'yyyy-MM-dd')
-    if (logSet.has(ds) || freezeSet.has(ds)) {
+  let banked = 0
+  const frozenDates = new Set()
+  let lastOccurrence = null
+  let pending = false
+
+  function processOccurrence(dateStr, completed) {
+    if (completed) {
       streak++
-      d = addDays(d, -1)
+      if (streak % 5 === 0) banked++
+      lastOccurrence = { dateStr, status: 'completed' }
+    } else if (banked > 0) {
+      banked--
+      frozenDates.add(dateStr)
+      lastOccurrence = { dateStr, status: 'frozen' }
     } else {
-      break
+      streak = 0
+      lastOccurrence = { dateStr, status: 'missed' }
     }
   }
-  return streak
-}
 
-function weeklyStreak(habit, logSet, today) {
-  const target = habit.frequency_count || 1
-  let streak = 0
-  let ws = startOfWeek(today, { weekStartsOn: 1 })
-  let isCurrentWeek = true
-  while (streak < 520) {
-    const count = weekCount(logSet, ws)
-    if (count >= target) {
-      streak++
-    } else if (!isCurrentWeek) {
-      break
+  if (habit.frequency_type === 'times_per_week') {
+    const target = habit.frequency_count || 1
+    let ws = startOfWeek(startDate, { weekStartsOn: 1 })
+    const currentWeekStart = startOfWeek(today, { weekStartsOn: 1 })
+    while (ws <= currentWeekStart) {
+      const count = weekCount(logSet, ws)
+      const isCurrentWeek = ws.getTime() === currentWeekStart.getTime()
+      const completed = count >= target
+      if (isCurrentWeek) {
+        if (!completed) { pending = true; break }
+      }
+      const occDate = format(addDays(ws, 6), 'yyyy-MM-dd')
+      processOccurrence(occDate, completed)
+      ws = addDays(ws, 7)
     }
-    // current week not yet hitting target doesn't break the streak — it isn't over yet
-    isCurrentWeek = false
-    ws = addDays(ws, -7)
+    return { streak, banked, frozenDates, lastOccurrence, pending }
   }
-  return streak
+
+  let d = new Date(startDate)
+  const todayStr = format(today, 'yyyy-MM-dd')
+  while (d <= today) {
+    if (!isExpectedDay(habit, d)) { d = addDays(d, 1); continue }
+    const ds = format(d, 'yyyy-MM-dd')
+    const logged = logSet.has(ds)
+    if (ds === todayStr && !logged) { pending = true; break }
+    processOccurrence(ds, logged)
+    d = addDays(d, 1)
+  }
+  return { streak, banked, frozenDates, lastOccurrence, pending }
 }
 
-// Current streak, respecting the habit's frequency type
-export function computeCurrentStreak(habit, logSet, freezeSet, today = new Date()) {
-  if (habit.frequency_type === 'times_per_week') return weeklyStreak(habit, logSet, today)
-  return dailyOrSpecificStreak(habit, logSet, freezeSet, today)
-}
-
-// Best-ever streak, scanning forward across the habit's full log history
-export function computeBestStreak(habit, logSet, freezeSet, startDate, endDate) {
+// Best-ever streak, scanning forward across the habit's full log history.
+// `frozenSet` should be the frozenDates set from simulateHabit.
+export function computeBestStreak(habit, logSet, frozenSet, startDate, endDate) {
   if (habit.frequency_type === 'times_per_week') {
     const target = habit.frequency_count || 1
     let best = 0, current = 0
@@ -89,7 +109,6 @@ export function computeBestStreak(habit, logSet, freezeSet, startDate, endDate) 
     while (ws <= lastWeekStart) {
       const count = weekCount(logSet, ws)
       if (ws.getTime() === lastWeekStart.getTime()) {
-        // current week may still be in progress — only count if already hit
         if (count >= target) { current++; best = Math.max(best, current) }
         break
       }
@@ -106,8 +125,8 @@ export function computeBestStreak(habit, logSet, freezeSet, startDate, endDate) 
   while (d <= endDate) {
     if (!isExpectedDay(habit, d)) { d = addDays(d, 1); continue }
     const ds = format(d, 'yyyy-MM-dd')
-    if (ds === todayStr && !logSet.has(ds) && !freezeSet.has(ds)) break // today not done yet
-    if (logSet.has(ds) || freezeSet.has(ds)) { current++; best = Math.max(best, current) }
+    if (ds === todayStr && !logSet.has(ds) && !frozenSet.has(ds)) break // today not done yet
+    if (logSet.has(ds) || frozenSet.has(ds)) { current++; best = Math.max(best, current) }
     else current = 0
     d = addDays(d, 1)
   }

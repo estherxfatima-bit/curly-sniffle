@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
-import { CONTENT_PILLARS, CONTENT_FORMATS, CONTENT_STATUSES } from '../../lib/constants'
+import { useContentPillars } from '../../hooks/useContentPillars'
+import { CONTENT_FORMATS, CONTENT_STATUSES } from '../../lib/constants'
 import { Plus, Trash2 } from 'lucide-react'
 
 const STATUS_COLORS = {
@@ -63,6 +64,7 @@ function InlineCell({ value, onChange, type = 'text', options, renderDisplay }) 
 
 export default function IdeaDumpTab({ refreshKey = 0 }) {
   const { user } = useAuth()
+  const CONTENT_PILLARS = useContentPillars(user?.id)
   const [ideas, setIdeas] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)

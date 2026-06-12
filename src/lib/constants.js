@@ -34,19 +34,40 @@ export const CONTENT_STATUSES = [
   'Posted',
 ]
 
-export const PILLAR_COLORS = {
-  'Work & Becoming': 'var(--career)',
-  'Taste & Expression': 'var(--creative)',
-  'Life Design': 'var(--wellness)',
-  'Creative Direct Your Life': 'var(--personal)',
-}
+export const PILLAR_COLOR_PALETTE = [
+  'var(--career)',
+  'var(--creative)',
+  'var(--wellness)',
+  'var(--personal)',
+  'var(--finance)',
+]
 
-export const PILLAR_DESCRIPTIONS = {
-  'Work & Becoming': 'Career, portfolio life, business building, and the work of becoming who you\'re growing into.',
-  'Taste & Expression': 'Style, beauty, taste, and personal expression — the things that shape how you show up.',
-  'Life Design': 'How you design your days, money, routines, and the bigger-picture choices behind your life.',
-  'Creative Direct Your Life': 'Creative direction applied to everyday life — experiments, aesthetics, and intentional living.',
-}
+export const DEFAULT_PILLARS = [
+  {
+    name: 'Work & Becoming',
+    description: 'Career, portfolio life, business building, and the work of becoming who you\'re growing into.',
+    examples: 'Career updates, portfolio career breakdowns, business lessons, income streams, freelance life.',
+    color: 'var(--career)',
+  },
+  {
+    name: 'Taste & Expression',
+    description: 'Style, beauty, taste, and personal expression — the things that shape how you show up.',
+    examples: 'GRWM, outfit breakdowns, makeup, product hauls, aesthetic experiments.',
+    color: 'var(--creative)',
+  },
+  {
+    name: 'Life Design',
+    description: 'How you design your days, money, routines, and the bigger-picture choices behind your life.',
+    examples: 'Day-in-the-life, routines, money mindset, habit and goal systems.',
+    color: 'var(--wellness)',
+  },
+  {
+    name: 'Creative Direct Your Life',
+    description: 'Creative direction applied to everyday life — experiments, aesthetics, and intentional living.',
+    examples: 'Creative direction series, experimental looks, intentional-living vignettes.',
+    color: 'var(--personal)',
+  },
+]
 
 export const PRODUCTION_STAGES = [
   'Idea',

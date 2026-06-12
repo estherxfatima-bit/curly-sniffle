@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
-import { PRODUCTION_STAGES, CONTENT_PILLARS, CONTENT_FORMATS } from '../../lib/constants'
+import { useContentPillars } from '../../hooks/useContentPillars'
+import { PRODUCTION_STAGES, CONTENT_FORMATS } from '../../lib/constants'
 import { smartBatchIdeas } from '../../lib/claude'
 import { Sparkles, X, ChevronRight } from 'lucide-react'
 
@@ -35,6 +36,7 @@ function ProgressRing({ label, value, total, color = 'var(--accent)' }) {
 
 export default function ProductionPipelineTab() {
   const { user } = useAuth()
+  const CONTENT_PILLARS = useContentPillars(user?.id)
   const [ideas, setIdeas] = useState([])
   const [loading, setLoading] = useState(true)
   const [filters, setFilters] = useState({ pillar: '', format: '' })

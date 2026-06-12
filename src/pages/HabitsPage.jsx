@@ -1,13 +1,13 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
-import { format, startOfWeek, addDays, subDays, startOfMonth, addMonths, subMonths } from 'date-fns'
+import { format, startOfWeek, addDays, startOfMonth, addMonths, subMonths } from 'date-fns'
 import { Plus, X } from 'lucide-react'
 import ArcRing from '../components/ui/ArcRing'
 import HabitModal from '../components/habits/HabitModal'
 import HabitRow from '../components/habits/HabitRow'
 import HabitMonthView from '../components/habits/HabitMonthView'
-import { isExpectedDay } from '../lib/habitUtils'
+import { simulateHabit } from '../lib/habitUtils'
 
 function HabitsDecoration() {
   return (
@@ -20,58 +20,71 @@ function HabitsDecoration() {
   )
 }
 
+const DISMISS_KEY = 'habitBannerDismissed'
+
+function loadDismissed(todayStr) {
+  try {
+    const raw = JSON.parse(localStorage.getItem(DISMISS_KEY) || '[]')
+    return new Set(raw.filter(k => k.endsWith(todayStr)))
+  } catch {
+    return new Set()
+  }
+}
+
+function saveDismissed(set) {
+  try { localStorage.setItem(DISMISS_KEY, JSON.stringify([...set])) } catch { /* ignore */ }
+}
+
 export default function HabitsPage() {
   const { user } = useAuth()
   const [habits, setHabits] = useState([])
   const [logsByHabit, setLogsByHabit] = useState({})
-  const [freezesByHabit, setFreezesByHabit] = useState({})
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [editing, setEditing] = useState(null)
   const [monthHabit, setMonthHabit] = useState(null)
   const [monthDate, setMonthDate] = useState(() => startOfMonth(new Date()))
-  const [dismissedBanners, setDismissedBanners] = useState(new Set())
 
   const today = new Date()
   const todayStr = format(today, 'yyyy-MM-dd')
   const weekStart = startOfWeek(today, { weekStartsOn: 1 })
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
-  const yesterdayStr = format(subDays(today, 1), 'yyyy-MM-dd')
+
+  const [dismissedBanners, setDismissedBanners] = useState(() => loadDismissed(todayStr))
 
   useEffect(() => { if (user) loadAll() }, [user])
 
   async function loadAll() {
     setLoading(true)
-    const [habitsRes, logsRes, freezesRes] = await Promise.all([
+    const [habitsRes, logsRes] = await Promise.all([
       supabase.from('habits').select('*').eq('user_id', user.id).order('created_at'),
       supabase.from('habit_logs').select('habit_id, log_date').eq('user_id', user.id),
-      supabase.from('habit_freezes').select('habit_id, freeze_date').eq('user_id', user.id),
     ])
-    let habitsData = habitsRes.data || []
+    const habitsData = habitsRes.data || []
     const logsData = logsRes.data || []
-    const freezesData = freezesRes.data || []
-
-    // Reset monthly streak freeze if a new month has started
-    const firstOfMonth = format(startOfMonth(today), 'yyyy-MM-dd')
-    const toReset = habitsData.filter(h => h.streak_freeze_used && h.streak_freeze_reset_date < firstOfMonth)
-    if (toReset.length) {
-      await Promise.all(toReset.map(h =>
-        supabase.from('habits').update({ streak_freeze_used: false, streak_freeze_reset_date: firstOfMonth }).eq('id', h.id)
-      ))
-      habitsData = habitsData.map(h => toReset.some(r => r.id === h.id) ? { ...h, streak_freeze_used: false, streak_freeze_reset_date: firstOfMonth } : h)
-    }
 
     const logMap = {}
     habitsData.forEach(h => { logMap[h.id] = new Set() })
     logsData.forEach(l => { if (logMap[l.habit_id]) logMap[l.habit_id].add(l.log_date) })
 
-    const freezeMap = {}
-    habitsData.forEach(h => { freezeMap[h.id] = new Set() })
-    freezesData.forEach(f => { if (freezeMap[f.habit_id]) freezeMap[f.habit_id].add(f.freeze_date) })
+    // Sync banked_freezes / consecutive_days_count from the computed simulation
+    const toUpdate = []
+    for (const h of habitsData) {
+      const sim = simulateHabit(h, logMap[h.id], today)
+      if (h.banked_freezes !== sim.banked || h.consecutive_days_count !== sim.streak) {
+        toUpdate.push({ id: h.id, banked_freezes: sim.banked, consecutive_days_count: sim.streak })
+      }
+    }
+    if (toUpdate.length) {
+      await Promise.all(toUpdate.map(u =>
+        supabase.from('habits').update({ banked_freezes: u.banked_freezes, consecutive_days_count: u.consecutive_days_count }).eq('id', u.id)
+      ))
+    }
+    const updateMap = Object.fromEntries(toUpdate.map(u => [u.id, u]))
+    const syncedHabits = habitsData.map(h => updateMap[h.id] ? { ...h, ...updateMap[h.id] } : h)
 
-    setHabits(habitsData)
+    setHabits(syncedHabits)
     setLogsByHabit(logMap)
-    setFreezesByHabit(freezeMap)
     setLoading(false)
   }
 
@@ -84,7 +97,6 @@ export default function HabitsPage() {
       if (data) {
         setHabits(prev => [...prev, data])
         setLogsByHabit(prev => ({ ...prev, [data.id]: new Set() }))
-        setFreezesByHabit(prev => ({ ...prev, [data.id]: new Set() }))
       }
     }
     setShowModal(false)
@@ -108,30 +120,63 @@ export default function HabitsPage() {
     }
   }
 
-  async function freezeDay(habit, dateStr) {
-    const { data } = await supabase.from('habit_freezes').insert({ user_id: user.id, habit_id: habit.id, freeze_date: dateStr }).select().single()
-    if (!data) return
-    setFreezesByHabit(prev => { const next = new Set(prev[habit.id]); next.add(dateStr); return { ...prev, [habit.id]: next } })
-    const firstOfMonth = format(startOfMonth(today), 'yyyy-MM-dd')
-    await supabase.from('habits').update({ streak_freeze_used: true, streak_freeze_reset_date: firstOfMonth }).eq('id', habit.id)
-    setHabits(prev => prev.map(h => h.id === habit.id ? { ...h, streak_freeze_used: true, streak_freeze_reset_date: firstOfMonth } : h))
-  }
-
   function openMonth(habit) {
     setMonthHabit(habit)
     setMonthDate(startOfMonth(new Date()))
   }
 
+  function dismissBanner(habitId, type) {
+    const key = `${habitId}:${type}:${todayStr}`
+    setDismissedBanners(prev => {
+      const next = new Set(prev).add(key)
+      saveDismissed(next)
+      return next
+    })
+  }
+
+  const sims = useMemo(() => {
+    const map = {}
+    for (const h of habits) map[h.id] = simulateHabit(h, logsByHabit[h.id] || new Set(), today)
+    return map
+  }, [habits, logsByHabit])
+
   const todayDoneCount = habits.filter(h => logsByHabit[h.id]?.has(todayStr)).length
   const overallPct = habits.length ? Math.round((todayDoneCount / habits.length) * 100) : 0
 
-  // Habits that missed an expected day yesterday (and weren't frozen)
-  const missedYesterday = habits.filter(h =>
-    !dismissedBanners.has(h.id) &&
-    isExpectedDay(h, subDays(today, 1)) &&
-    !logsByHabit[h.id]?.has(yesterdayStr) &&
-    !freezesByHabit[h.id]?.has(yesterdayStr)
-  )
+  // Build reminder banners — one per habit, prioritised: fresh start > freeze used > don't break the chain
+  const allBanners = []
+  for (const h of habits) {
+    const sim = sims[h.id]
+    const hasHistory = (logsByHabit[h.id]?.size || 0) > 0
+    if (!hasHistory) continue
+
+    let type = null
+    if (sim.streak === 0 && sim.lastOccurrence?.status === 'missed') {
+      type = 'fresh'
+    } else if (sim.lastOccurrence?.status === 'frozen') {
+      type = 'frozen'
+    } else if (sim.streak > 0 && sim.pending) {
+      type = 'chain'
+    }
+    if (!type) continue
+
+    const key = `${h.id}:${type}:${todayStr}`
+    if (dismissedBanners.has(key)) continue
+
+    let message
+    if (type === 'fresh') {
+      message = <>{h.emoji} <strong>{h.name}</strong> — fresh start. Log it today and begin again.</>
+    } else if (type === 'frozen') {
+      message = <>{h.emoji} <strong>{h.name}</strong> — yesterday got away from you, but your streak's safe (❄️ used). Back on it today?</>
+    } else {
+      message = <>{h.emoji} <strong>{h.name}</strong> — don't break the chain. Log it today.</>
+    }
+
+    allBanners.push({ key, habitId: h.id, type, message })
+  }
+
+  const visibleBanners = allBanners.slice(0, 3)
+  const extraCount = allBanners.length - visibleBanners.length
 
   return (
     <div>
@@ -154,15 +199,18 @@ export default function HabitsPage() {
         <div className="page-header-decoration" style={{ color: 'var(--personal)' }}><HabitsDecoration /></div>
       </div>
 
-      {/* Don't-break-the-chain banners */}
-      {missedYesterday.length > 0 && (
+      {/* Reminder banners */}
+      {visibleBanners.length > 0 && (
         <div className="mb-4" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {missedYesterday.map(h => (
-            <div key={h.id} className="card card-personal" style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <p style={{ fontSize: 13 }}>{h.emoji} <strong>{h.name}</strong> — don't break the chain. Log it today.</p>
-              <button className="btn-icon btn" onClick={() => setDismissedBanners(prev => new Set(prev).add(h.id))}><X size={13} /></button>
+          {visibleBanners.map(b => (
+            <div key={b.key} className="card card-personal" style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <p style={{ fontSize: 13 }}>{b.message}</p>
+              <button className="btn-icon btn" onClick={() => dismissBanner(b.habitId, b.type)}><X size={13} /></button>
             </div>
           ))}
+          {extraCount > 0 && (
+            <p style={{ fontSize: 12, color: 'var(--text-3)', textAlign: 'center' }}>+{extraCount} more</p>
+          )}
         </div>
       )}
 
@@ -192,10 +240,10 @@ export default function HabitsPage() {
               habit={habit}
               weekDays={weekDays}
               logSet={logsByHabit[habit.id] || new Set()}
-              freezeSet={freezesByHabit[habit.id] || new Set()}
-              freezeAvailable={!habit.streak_freeze_used}
+              frozenSet={sims[habit.id]?.frozenDates || new Set()}
+              streak={sims[habit.id]?.streak ?? 0}
+              banked={sims[habit.id]?.banked ?? 0}
               onToggleLog={toggleLog}
-              onFreeze={freezeDay}
               onOpenMonth={openMonth}
               onEdit={h => { setEditing(h); setShowModal(true) }}
               onDelete={deleteHabit}
@@ -212,7 +260,9 @@ export default function HabitsPage() {
         <HabitMonthView
           habit={monthHabit}
           logSet={logsByHabit[monthHabit.id] || new Set()}
-          freezeSet={freezesByHabit[monthHabit.id] || new Set()}
+          frozenSet={sims[monthHabit.id]?.frozenDates || new Set()}
+          streak={sims[monthHabit.id]?.streak ?? 0}
+          banked={sims[monthHabit.id]?.banked ?? 0}
           monthDate={monthDate}
           onPrevMonth={() => setMonthDate(prev => subMonths(prev, 1))}
           onNextMonth={() => setMonthDate(prev => addMonths(prev, 1))}
