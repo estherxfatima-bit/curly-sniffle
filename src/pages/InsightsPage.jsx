@@ -11,7 +11,8 @@ import { SortableCard, DraggableCardList } from '../components/dashboard/Draggab
 import AddWidgetMenu from '../components/dashboard/AddWidgetMenu'
 import ArcRing from '../components/ui/ArcRing'
 import { Pencil, Check as CheckIcon } from 'lucide-react'
-import { DATE_RANGE_OPTIONS, getRangeDates, longestStreak, bestDayOfWeek, DAY_NAMES } from '../lib/insightsUtils'
+import { DATE_RANGE_OPTIONS, getRangeDates, longestStreak, bestDayOfWeek, DAY_NAMES, getBuckets } from '../lib/insightsUtils'
+import PeriodToggle from '../components/ui/PeriodToggle'
 import { VARIABLE_CATS, toMonthly } from '../lib/financeUtils'
 import { getQuarterFromDate } from '../lib/constants'
 
@@ -106,6 +107,7 @@ export default function InsightsPage() {
   const [rangeKey, setRangeKey] = useState('30')
   const [customStart, setCustomStart] = useState(() => format(subDays(new Date(), 29), 'yyyy-MM-dd'))
   const [customEnd, setCustomEnd] = useState(() => format(new Date(), 'yyyy-MM-dd'))
+  const [period, setPeriod] = useState('daily')
 
   // Raw data
   const [habits, setHabits] = useState([])
@@ -200,10 +202,14 @@ export default function InsightsPage() {
   const rangeStartStr = format(rangeStart, 'yyyy-MM-dd')
   const rangeEndStr   = format(rangeEnd, 'yyyy-MM-dd')
   const rangeDayStrs  = eachDayOfInterval({ start: rangeStart, end: rangeEnd }).map(d => format(d, 'yyyy-MM-dd'))
+  const buckets = getBuckets(rangeStart, rangeEnd, period)
 
   // ── Mood ───────────────────────────────────────────────────────────────────
   const moodInRange = moodLogs.filter(m => m.log_date >= rangeStartStr && m.log_date <= rangeEndStr).sort((a, b) => a.log_date.localeCompare(b.log_date))
-  const moodTrendData = moodInRange.map(m => ({ date: format(parseISO(m.log_date), 'MMM d'), mood: m.mood_score }))
+  const moodTrendData = buckets.map(b => {
+    const vals = moodInRange.filter(m => m.log_date >= b.startStr && m.log_date <= b.endStr).map(m => m.mood_score)
+    return { date: b.label, mood: vals.length ? vals.reduce((a, c) => a + c, 0) / vals.length : null }
+  }).filter(d => d.mood !== null)
 
   const dowMap = {}
   moodInRange.forEach(m => { const dow = parseISO(m.log_date).getDay(); (dowMap[dow] ||= []).push(m.mood_score) })
@@ -318,43 +324,48 @@ export default function InsightsPage() {
   const lastPosted = contentIdeas.filter(i => i.status === 'Posted' && i.posted_date).sort((a, b) => b.posted_date.localeCompare(a.posted_date))[0] || null
 
   // ── Finance ────────────────────────────────────────────────────────────────
-  const months6 = []
-  for (let i = 5; i >= 0; i--) {
-    const d = subMonths(new Date(), i)
-    months6.push({ key: format(d, 'yyyy-MM'), label: format(d, 'MMM yy') })
-  }
-  const spendByCategoryData = months6.map(({ key, label }) => {
-    const row = { month: label }
+  const DAYS_PER_MONTH = 30.44
+  const bucketDays = (b) => differenceInCalendarDays(parseISO(b.endStr), parseISO(b.startStr)) + 1
+
+  const spendByCategoryData = buckets.map(b => {
+    const row = { month: b.label }
     VARIABLE_CATS.forEach(cat => {
-      row[cat] = variableExpenses.filter(v => v.date.startsWith(key) && v.category === cat).reduce((s, v) => s + v.amount, 0)
+      row[cat] = variableExpenses.filter(v => v.date >= b.startStr && v.date <= b.endStr && v.category === cat).reduce((s, v) => s + v.amount, 0)
     })
     return row
   })
 
   const totalIncomeMonthly = incomeSources.reduce((s, i) => s + toMonthly(i.amount, i.frequency), 0)
-  const incomeTrendData = months6.map(({ label }) => ({ month: label, income: Math.round(totalIncomeMonthly) }))
+  const incomeTrendData = buckets.map(b => ({ month: b.label, income: Math.round(totalIncomeMonthly * bucketDays(b) / DAYS_PER_MONTH) }))
 
   const selfEmpIncome = incomeSources.filter(i => i.is_self_employed).reduce((s, i) => s + toMonthly(i.amount, i.frequency), 0)
   const monthlyTaxPot = selfEmpIncome * 0.25
-  const taxPotData = months6.map(({ label }, idx) => ({ month: label, taxPot: Math.round(monthlyTaxPot * (idx + 1)) }))
+  const taxPotData = buckets.reduce((acc, b) => {
+    const cumulative = (acc.length ? acc[acc.length - 1].taxPot : 0) + monthlyTaxPot * bucketDays(b) / DAYS_PER_MONTH
+    acc.push({ month: b.label, taxPot: Math.round(cumulative) })
+    return acc
+  }, [])
 
   const totalFixedMonthly = fixedExpenses.reduce((s, f) => s + f.amount, 0)
-  const savingsRateData = months6.map(({ key, label }) => {
-    const varSpend = variableExpenses.filter(v => v.date.startsWith(key)).reduce((s, v) => s + v.amount, 0)
-    const rate = totalIncomeMonthly > 0 ? Math.round(((totalIncomeMonthly - totalFixedMonthly - varSpend) / totalIncomeMonthly) * 100) : 0
-    return { month: label, rate }
+  const savingsRateData = buckets.map(b => {
+    const days = bucketDays(b)
+    const varSpend = variableExpenses.filter(v => v.date >= b.startStr && v.date <= b.endStr).reduce((s, v) => s + v.amount, 0)
+    const incomeForBucket = totalIncomeMonthly * days / DAYS_PER_MONTH
+    const fixedForBucket = totalFixedMonthly * days / DAYS_PER_MONTH
+    const rate = incomeForBucket > 0 ? Math.round(((incomeForBucket - fixedForBucket - varSpend) / incomeForBucket) * 100) : 0
+    return { month: b.label, rate }
   })
 
-  const budgetAdherenceData = months6.map(({ key, label }) => {
-    const monthBudgets = budgets.filter(b => b.month_year === key && b.category !== null)
-    if (!monthBudgets.length) return { month: label, pct: 0, noData: true }
+  const budgetAdherenceData = period === 'monthly' ? buckets.map(b => {
+    const monthBudgets = budgets.filter(bu => bu.month_year === b.key && bu.category !== null)
+    if (!monthBudgets.length) return { month: b.label, pct: 0, noData: true }
     let within = 0
-    monthBudgets.forEach(b => {
-      const spend = variableExpenses.filter(v => v.date.startsWith(key) && v.category === b.category).reduce((s, v) => s + v.amount, 0)
-      if (spend <= b.amount) within++
+    monthBudgets.forEach(bu => {
+      const spend = variableExpenses.filter(v => v.date.startsWith(b.key) && v.category === bu.category).reduce((s, v) => s + v.amount, 0)
+      if (spend <= bu.amount) within++
     })
-    return { month: label, pct: Math.round((within / monthBudgets.length) * 100) }
-  })
+    return { month: b.label, pct: Math.round((within / monthBudgets.length) * 100) }
+  }) : []
   const hasBudgetAdherenceData = budgetAdherenceData.some(d => !d.noData)
 
   // ── Card content ──────────────────────────────────────────────────────────
@@ -646,7 +657,7 @@ export default function InsightsPage() {
 
     'finance-spend-category': (
       <div className="card card-finance">
-        <h3 className="mb-4">Monthly spend by category — last 6 months</h3>
+        <h3 className="mb-4">Spend by category</h3>
         {variableExpenses.length === 0 ? <Empty>No variable expenses logged yet.</Empty> : (
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={spendByCategoryData}>
@@ -666,7 +677,7 @@ export default function InsightsPage() {
 
     'finance-income-trend': (
       <div className="card card-finance">
-        <h3 className="mb-4">Income trend — last 6 months</h3>
+        <h3 className="mb-4">Income trend</h3>
         {totalIncomeMonthly === 0 ? <Empty>Add income sources to see this chart.</Empty> : (
           <ResponsiveContainer width="100%" height={180}>
             <LineChart data={incomeTrendData}>
@@ -683,7 +694,7 @@ export default function InsightsPage() {
 
     'finance-tax-pot': (
       <div className="card card-finance">
-        <h3 className="mb-4">Tax pot growth — last 6 months</h3>
+        <h3 className="mb-4">Tax pot growth</h3>
         {monthlyTaxPot === 0 ? <Empty>No self-employed income set — tax pot doesn't apply.</Empty> : (
           <ResponsiveContainer width="100%" height={180}>
             <LineChart data={taxPotData}>
@@ -700,7 +711,7 @@ export default function InsightsPage() {
 
     'finance-savings-rate': (
       <div className="card card-finance">
-        <h3 className="mb-4">Savings rate — last 6 months</h3>
+        <h3 className="mb-4">Savings rate</h3>
         {totalIncomeMonthly === 0 ? <Empty>Add income sources to see this chart.</Empty> : (
           <ResponsiveContainer width="100%" height={180}>
             <LineChart data={savingsRateData}>
@@ -717,8 +728,10 @@ export default function InsightsPage() {
 
     'finance-budget-adherence': (
       <div className="card card-finance">
-        <h3 className="mb-4">Budget adherence — last 6 months</h3>
-        {!hasBudgetAdherenceData ? (
+        <h3 className="mb-4">Budget adherence</h3>
+        {period !== 'monthly' ? (
+          <Empty>Budget adherence is tracked monthly — switch the period toggle to Monthly to see this chart.</Empty>
+        ) : !hasBudgetAdherenceData ? (
           <Empty>Set category budgets on the Finance page to track adherence over time.</Empty>
         ) : (
           <ResponsiveContainer width="100%" height={180}>
@@ -774,6 +787,8 @@ export default function InsightsPage() {
             <input type="date" value={customEnd} min={customStart} onChange={e => setCustomEnd(e.target.value)} style={{ fontSize: 12 }} />
           </div>
         )}
+        <span className="mono" style={{ fontSize: 11, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.07em', marginLeft: 'auto' }}>Granularity</span>
+        <PeriodToggle value={period} onChange={setPeriod} activeClass="btn-career" />
       </div>
 
       {editing && (

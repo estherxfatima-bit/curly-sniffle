@@ -1,5 +1,5 @@
 // Shared helpers for the Insights page — date ranges, streaks, day-of-week stats.
-import { subDays, startOfQuarter, parseISO, differenceInCalendarDays, format } from 'date-fns'
+import { subDays, startOfQuarter, parseISO, differenceInCalendarDays, format, eachDayOfInterval, eachWeekOfInterval, eachMonthOfInterval, endOfWeek, endOfMonth } from 'date-fns'
 
 export const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
@@ -53,4 +53,29 @@ export function bestDayOfWeek(dateStrings) {
 
 export function fmtDay(date) {
   return format(date, 'yyyy-MM-dd')
+}
+
+export const PERIOD_OPTIONS = [
+  { id: 'daily', label: 'Daily' },
+  { id: 'weekly', label: 'Weekly' },
+  { id: 'monthly', label: 'Monthly' },
+]
+
+// Splits [start, end] into day/week/month buckets for chart aggregation.
+// Each bucket: { label, key, startStr, endStr }.
+export function getBuckets(start, end, period) {
+  const endStr = fmtDay(end)
+  if (period === 'monthly') {
+    return eachMonthOfInterval({ start, end }).map(m => {
+      const me = endOfMonth(m)
+      return { label: format(m, 'MMM yy'), key: format(m, 'yyyy-MM'), startStr: fmtDay(m), endStr: me > end ? endStr : fmtDay(me) }
+    })
+  }
+  if (period === 'weekly') {
+    return eachWeekOfInterval({ start, end }, { weekStartsOn: 1 }).map(w => {
+      const we = endOfWeek(w, { weekStartsOn: 1 })
+      return { label: format(w, 'd MMM'), key: fmtDay(w), startStr: fmtDay(w), endStr: we > end ? endStr : fmtDay(we) }
+    })
+  }
+  return eachDayOfInterval({ start, end }).map(d => ({ label: format(d, 'd MMM'), key: fmtDay(d), startStr: fmtDay(d), endStr: fmtDay(d) }))
 }

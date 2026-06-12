@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { format, subWeeks, startOfWeek, endOfWeek } from 'date-fns'
+import { format, subWeeks, subDays, subMonths, startOfWeek, endOfWeek } from 'date-fns'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
@@ -11,6 +11,7 @@ import SpendingReminderBanner from '../components/finance/SpendingReminderBanner
 import { SortableCard, DraggableCardList } from '../components/dashboard/DraggableCard'
 import AddWidgetMenu from '../components/dashboard/AddWidgetMenu'
 import { VARIABLE_CATS, CAT_COLORS, CAT_EMOJI, toMonthly, shouldShowSpendingReminder, isReminderDismissedToday, dismissReminderToday } from '../lib/financeUtils'
+import PeriodToggle from '../components/ui/PeriodToggle'
 import { Plus, Trash2, Sparkles, Pencil, Check as CheckIcon, X as XIcon } from 'lucide-react'
 
 const TAX_RATE = 0.25 // 25% tax pot estimate for self-employed
@@ -24,7 +25,7 @@ const CARD_LABELS = {
   fixed: 'Fixed expenses',
   'variable-list': 'Variable expenses',
   'tax-pot': 'Tax pot & take-home',
-  'weekly-chart': '4-week spending',
+  'weekly-chart': 'Spending trend',
   'ai-summary': 'AI summary',
 }
 
@@ -82,6 +83,9 @@ export default function FinancePage() {
 
   // Spending reminder banner
   const [reminderDismissed, setReminderDismissed] = useState(isReminderDismissedToday())
+
+  // Daily / weekly / monthly view of spend vs budget
+  const [period, setPeriod] = useState('monthly')
 
   const thisMonth = new Date().toISOString().slice(0, 7)
 
@@ -228,15 +232,53 @@ export default function FinancePage() {
   // Reminder banner
   const reminderDays = shouldShowSpendingReminder(variable)
 
-  // 4-week spending chart
-  const weeklyChartData = []
-  for (let i = 3; i >= 0; i--) {
-    const ws = startOfWeek(subWeeks(new Date(), i), { weekStartsOn: 1 })
-    const we = endOfWeek(ws, { weekStartsOn: 1 })
-    const wsStr = format(ws, 'yyyy-MM-dd')
-    const weStr = format(we, 'yyyy-MM-dd')
-    const total = variable.filter(v => v.date >= wsStr && v.date <= weStr).reduce((s, v) => s + v.amount, 0)
-    weeklyChartData.push({ week: format(ws, 'd MMM'), total })
+  // Daily / weekly / monthly period scaling — budgets are stored as monthly amounts
+  const BUDGET_SCALE = { daily: 12 / 365, weekly: 12 / 52, monthly: 1 }
+  const PERIOD_LABEL = { daily: 'today', weekly: 'this week', monthly: 'this month' }
+  const todayStr = format(new Date(), 'yyyy-MM-dd')
+  const thisWeekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
+  const thisWeekEnd = format(endOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
+
+  const periodVariable = period === 'daily' ? variable.filter(v => v.date === todayStr)
+    : period === 'weekly' ? variable.filter(v => v.date >= thisWeekStart && v.date <= thisWeekEnd)
+    : varThisMonth
+  const periodTotal = periodVariable.reduce((s, i) => s + i.amount, 0)
+  const periodOverallBudget = overallBudget * BUDGET_SCALE[period]
+  const periodCategorySpend = {}
+  VARIABLE_CATS.forEach(c => { periodCategorySpend[c] = periodVariable.filter(v => v.category === c).reduce((s, v) => s + v.amount, 0) })
+  const periodCategoryBudget = {}
+  VARIABLE_CATS.forEach(c => { periodCategoryBudget[c] = categoryBudget[c] * BUDGET_SCALE[period] })
+  const periodLabel = PERIOD_LABEL[period]
+
+  // Spending chart — granularity follows the period toggle
+  const spendChartData = []
+  let spendChartTitle
+  if (period === 'daily') {
+    spendChartTitle = 'Daily spending — last 14 days'
+    for (let i = 13; i >= 0; i--) {
+      const d = subDays(new Date(), i)
+      const dStr = format(d, 'yyyy-MM-dd')
+      const total = variable.filter(v => v.date === dStr).reduce((s, v) => s + v.amount, 0)
+      spendChartData.push({ week: format(d, 'd MMM'), total })
+    }
+  } else if (period === 'weekly') {
+    spendChartTitle = 'Weekly spending — last 4 weeks'
+    for (let i = 3; i >= 0; i--) {
+      const ws = startOfWeek(subWeeks(new Date(), i), { weekStartsOn: 1 })
+      const we = endOfWeek(ws, { weekStartsOn: 1 })
+      const wsStr = format(ws, 'yyyy-MM-dd')
+      const weStr = format(we, 'yyyy-MM-dd')
+      const total = variable.filter(v => v.date >= wsStr && v.date <= weStr).reduce((s, v) => s + v.amount, 0)
+      spendChartData.push({ week: format(ws, 'd MMM'), total })
+    }
+  } else {
+    spendChartTitle = 'Monthly spending — last 6 months'
+    for (let i = 5; i >= 0; i--) {
+      const d = subMonths(new Date(), i)
+      const key = format(d, 'yyyy-MM')
+      const total = variable.filter(v => v.date.startsWith(key)).reduce((s, v) => s + v.amount, 0)
+      spendChartData.push({ week: format(d, 'MMM yy'), total })
+    }
   }
 
   if (loading) return <p style={{ padding: 40, color: 'var(--text-3)', textAlign: 'center' }}>Loading…</p>
@@ -252,7 +294,7 @@ export default function FinancePage() {
     'category-budgets': (
       <div className="card card-finance">
         <div className="flex items-center justify-between mb-4">
-          <h3>Category budgets</h3>
+          <h3>Category budgets <span className="mono" style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 400 }}>({periodLabel})</span></h3>
           {editingBudgets ? (
             <div className="flex items-center gap-2">
               <button className="btn btn-sm btn-finance" style={{ color: '#fff' }} onClick={e => { e.stopPropagation(); saveBudgets() }}><CheckIcon size={12} /> Save</button>
@@ -279,7 +321,7 @@ export default function FinancePage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 12 }}>
             {VARIABLE_CATS.map(cat => (
               <div key={cat} onClick={e => { e.stopPropagation(); setFilterCat(filterCat === cat ? null : cat) }} style={{ outline: filterCat === cat ? `2px solid ${CAT_COLORS[cat]}` : 'none', borderRadius: 'var(--radius)' }}>
-                <BudgetRing label={`${CAT_EMOJI[cat]} ${cat}`} spent={categorySpend[cat]} budget={categoryBudget[cat]} size={84} />
+                <BudgetRing label={`${CAT_EMOJI[cat]} ${cat}`} spent={periodCategorySpend[cat]} budget={periodCategoryBudget[cat]} size={84} />
               </div>
             ))}
           </div>
@@ -412,9 +454,9 @@ export default function FinancePage() {
 
     'weekly-chart': (
       <div className="card">
-        <h3 style={{ fontSize: '0.9rem', marginBottom: 12 }}>4-week spending</h3>
+        <h3 style={{ fontSize: '0.9rem', marginBottom: 12 }}>{spendChartTitle}</h3>
         <ResponsiveContainer width="100%" height={170}>
-          <BarChart data={weeklyChartData}>
+          <BarChart data={spendChartData}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
             <XAxis dataKey="week" tick={{ fontFamily: 'var(--font-mono)', fontSize: 9, fill: 'var(--text-3)' }} />
             <YAxis tick={{ fontFamily: 'var(--font-mono)', fontSize: 9, fill: 'var(--text-3)' }} width={30} />
@@ -478,18 +520,22 @@ export default function FinancePage() {
       {/* Hero section */}
       <div className="card card-finance mb-6" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 28, padding: '24px 28px' }}>
         <div>
-          <p className="mono" style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 6 }}>Total spent this month</p>
-          <p style={{ fontFamily: 'var(--font-serif)', fontSize: '2.6rem', fontWeight: 700, letterSpacing: '-0.02em' }}>£{totalVariable.toFixed(0)}</p>
+          <p className="mono" style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 6 }}>Total spent {periodLabel}</p>
+          <p style={{ fontFamily: 'var(--font-serif)', fontSize: '2.6rem', fontWeight: 700, letterSpacing: '-0.02em' }}>£{periodTotal.toFixed(0)}</p>
         </div>
-        <BudgetRing label="Overall budget" spent={totalVariable} budget={overallBudget} size={120} />
+        <BudgetRing label="Budget" spent={periodTotal} budget={periodOverallBudget} size={120} />
         <div>
           <p className="mono" style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 6 }}>Disposable income remaining</p>
           <p style={{ fontFamily: 'var(--font-serif)', fontSize: '2.2rem', fontWeight: 700, letterSpacing: '-0.02em', color: disposableColor }}>£{takeHome.toFixed(0)}</p>
           <p className="mono" style={{ fontSize: 11, color: disposableColor, marginTop: 4 }}>
-            {overallBudget > 0
-              ? (totalVariable <= overallBudget ? `£${(overallBudget - totalVariable).toFixed(0)} left of variable budget` : `£${(totalVariable - overallBudget).toFixed(0)} over budget this month`)
+            {periodOverallBudget > 0
+              ? (periodTotal <= periodOverallBudget ? `£${(periodOverallBudget - periodTotal).toFixed(0)} left of ${periodLabel}'s budget` : `£${(periodTotal - periodOverallBudget).toFixed(0)} over budget ${periodLabel}`)
               : (takeHome >= 0 ? `£${takeHome.toFixed(0)} left this month` : `£${Math.abs(takeHome).toFixed(0)} over budget this month`)}
           </p>
+        </div>
+        <div style={{ marginLeft: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+          <span className="mono" style={{ fontSize: 10, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>View</span>
+          <PeriodToggle value={period} onChange={setPeriod} activeClass="btn-finance" />
         </div>
       </div>
 
