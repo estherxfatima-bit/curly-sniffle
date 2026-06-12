@@ -7,6 +7,7 @@ import { Plus, Trash2, Check, Droplets, Dumbbell, ChevronDown, ChevronRight, Arc
 import ArcRing from '../components/ui/ArcRing'
 import GoalModal from '../components/goals/GoalModal'
 import SavedMealModal from '../components/wellness/SavedMealModal'
+import WellnessDashboard from '../components/wellness/WellnessDashboard'
 
 const WORKOUT_TYPES = ['Gym', 'Run', 'Yoga', 'Swim', 'Cycle', 'Walk', 'HIIT', 'Other']
 const HYDRATION_GOAL = 2500
@@ -53,9 +54,11 @@ export default function WellnessPage() {
   const today = format(new Date(), 'yyyy-MM-dd')
   const weekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
 
-  const [tab, setTab]                 = useState('workouts')
+  const [tab, setTab]                 = useState('dashboard')
   const [mealTab, setMealTab]         = useState('plan')
   const [workouts, setWorkouts]       = useState([])
+  const [scheduledWorkouts, setScheduledWorkouts] = useState([])
+  const [hydrationHistory, setHydrationHistory]   = useState([])
   const [mealPlan, setMealPlan]       = useState({ id: null, plan_text: '', prep_notes: '' })
   const [groceryList, setGroceryList] = useState({ id: null, items: [] })
   const [savedMeals, setSavedMeals]   = useState([])
@@ -81,11 +84,14 @@ export default function WellnessPage() {
 
   async function load() {
     setLoading(true)
-    const [wRes, mpRes, glRes, wlRes, goalsRes, weeklyRes, dailyRes, metricsRes, mpaRes, glaRes, smRes] = await Promise.all([
-      supabase.from('workout_logs').select('*').eq('user_id', user.id).order('log_date', { ascending: false }).limit(30),
+    const sevenDaysAgo = format(subDays(new Date(), 6), 'yyyy-MM-dd')
+    const [wRes, swRes, mpRes, glRes, wlRes, hhRes, goalsRes, weeklyRes, dailyRes, metricsRes, mpaRes, glaRes, smRes] = await Promise.all([
+      supabase.from('workout_logs').select('*').eq('user_id', user.id).eq('planned', false).order('log_date', { ascending: false }).limit(30),
+      supabase.from('workout_logs').select('*').eq('user_id', user.id).eq('planned', true).order('log_date'),
       supabase.from('meal_plans').select('*').eq('user_id', user.id).eq('week_start', weekStart).maybeSingle(),
       supabase.from('grocery_lists').select('*').eq('user_id', user.id).eq('week_start', weekStart).maybeSingle(),
       supabase.from('wellness_logs').select('*').eq('user_id', user.id).eq('log_date', today).maybeSingle(),
+      supabase.from('wellness_logs').select('log_date, hydration_ml').eq('user_id', user.id).gte('log_date', sevenDaysAgo),
       supabase.from('goals').select('*').eq('user_id', user.id).eq('category', 'Wellness'),
       supabase.from('weekly_tasks').select('id, goal_id, complete').eq('user_id', user.id).not('goal_id', 'is', null),
       supabase.from('daily_todos').select('id, goal_id, complete').eq('user_id', user.id).not('goal_id', 'is', null),
@@ -95,9 +101,11 @@ export default function WellnessPage() {
       supabase.from('saved_meals').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
     ])
     setWorkouts(wRes.data || [])
+    setScheduledWorkouts(swRes.data || [])
     setMealPlan(mpRes.data ? { id: mpRes.data.id, plan_text: mpRes.data.plan_text || '', prep_notes: mpRes.data.prep_notes || '' } : { id: null, plan_text: '', prep_notes: '' })
     setGroceryList(glRes.data ? { id: glRes.data.id, items: glRes.data.items || [] } : { id: null, items: [] })
     setWellnessLog(wlRes.data)
+    setHydrationHistory(hhRes.data || [])
     setWellnessGoals(goalsRes.data || [])
     setWeeklyTasks(weeklyRes.data || [])
     setDailyTodos(dailyRes.data || [])
@@ -132,6 +140,24 @@ export default function WellnessPage() {
   async function deleteWorkout(id) {
     await supabase.from('workout_logs').delete().eq('id', id)
     setWorkouts(prev => prev.filter(w => w.id !== id))
+  }
+
+  async function addScheduledWorkout({ type, log_date, notes }) {
+    const { data } = await supabase.from('workout_logs').insert({
+      user_id: user.id, log_date, type, notes: notes || null, planned: true,
+    }).select().single()
+    if (data) setScheduledWorkouts(prev => [...prev, data].sort((a, b) => a.log_date.localeCompare(b.log_date)))
+  }
+
+  async function completeScheduledWorkout(id) {
+    const { data } = await supabase.from('workout_logs').update({ planned: false }).eq('id', id).select().single()
+    setScheduledWorkouts(prev => prev.filter(w => w.id !== id))
+    if (data) setWorkouts(prev => [data, ...prev])
+  }
+
+  async function deleteScheduledWorkout(id) {
+    await supabase.from('workout_logs').delete().eq('id', id)
+    setScheduledWorkouts(prev => prev.filter(w => w.id !== id))
   }
 
   async function logHydration() {
@@ -293,13 +319,33 @@ export default function WellnessPage() {
 
       {/* Tabs */}
       <div className="flex gap-2 mb-5" style={{ '--section-tab-color': 'var(--wellness)' }}>
-        {['workouts', 'meals', 'hydration'].map(t => (
+        {['dashboard', 'workouts', 'meals', 'hydration'].map(t => (
           <button key={t} onClick={() => setTab(t)} className={`btn btn-sm tab-item ${tab === t ? 'active' : 'btn-ghost'}`}
             style={tab === t ? { color: '#fff', background: 'var(--wellness)' } : {}}>
             {t.charAt(0).toUpperCase() + t.slice(1)}
           </button>
         ))}
       </div>
+
+      {/* Dashboard tab */}
+      {tab === 'dashboard' && (
+        <WellnessDashboard
+          streak={streak}
+          sessionsThisWeek={workouts.filter(w => w.log_date >= weekStart).length}
+          hydrationToday={wellnessLog?.hydration_ml || 0}
+          hydrationHistory={hydrationHistory}
+          mealPlan={mealPlan}
+          wellnessGoals={wellnessGoals}
+          goalProgress={goalProgress}
+          linkedTasksFor={linkedTasksFor}
+          workouts={workouts}
+          scheduledWorkouts={scheduledWorkouts}
+          today={today}
+          onAddScheduled={addScheduledWorkout}
+          onCompleteScheduled={completeScheduledWorkout}
+          onDeleteScheduled={deleteScheduledWorkout}
+        />
+      )}
 
       {/* Workouts tab */}
       {tab === 'workouts' && (
