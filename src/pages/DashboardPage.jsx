@@ -13,6 +13,8 @@ import MonthlyView, { DEFAULT_ORDER as MONTHLY_DEFAULT } from '../components/das
 import QuarterlyView, { DEFAULT_ORDER as QUARTERLY_DEFAULT } from '../components/dashboard/views/QuarterlyView'
 import { Link } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, Pencil, Check as CheckIcon } from 'lucide-react'
+import SpendingReminderBanner from '../components/finance/SpendingReminderBanner'
+import { shouldShowSpendingReminder, isReminderDismissedToday, dismissReminderToday } from '../lib/financeUtils'
 
 const VIEWS = ['Daily', 'Weekly', 'Monthly', 'Quarterly']
 const VIEW_KEYS = ['daily', 'weekly', 'monthly', 'quarterly']
@@ -81,6 +83,11 @@ export default function DashboardPage() {
   const [moodTrend,       setMoodTrend]       = useState([])
   const [quarterlyNotes,  setQuarterlyNotes]  = useState(null)
 
+  // Finance snapshot (used for the dashboard finance-snapshot / quick-add cards)
+  const [financeVariable, setFinanceVariable] = useState([])
+  const [financeBudgets,  setFinanceBudgets]  = useState([])
+  const [financeReminderDismissed, setFinanceReminderDismissed] = useState(isReminderDismissedToday())
+
   // Card orders
   const [cardOrders, setCardOrders] = useState({})
   const [editing, setEditing] = useState(false)
@@ -95,6 +102,7 @@ export default function DashboardPage() {
   // ── data loading ───────────────────────────────────────────────────────────
   useEffect(() => { if (user) loadStatic() }, [user])
   useEffect(() => { if (user) loadPeriod() }, [user, today, weekStart])
+  useEffect(() => { if (user) loadFinanceSnapshot() }, [user])
   useEffect(() => { if (user && activeView === 'monthly')   loadMonthly() },   [user, activeView, monthStart])
   useEffect(() => { if (user && activeView === 'quarterly') loadQuarterly() }, [user, activeView, quarter, year])
 
@@ -148,6 +156,23 @@ export default function DashboardPage() {
     setContentBatches(batchRes.data || [])
   }
 
+  async function loadFinanceSnapshot() {
+    const monthYear = format(new Date(), 'yyyy-MM')
+    const [varRes, budRes] = await Promise.all([
+      supabase.from('variable_expenses').select('id,amount,category,date,name').eq('user_id', user.id).order('date', { ascending: false }).limit(60),
+      supabase.from('budgets').select('*').eq('user_id', user.id).eq('month_year', monthYear),
+    ])
+    setFinanceVariable(varRes.data || [])
+    setFinanceBudgets(budRes.data || [])
+  }
+
+  async function addFinanceVariable({ amount, category, name }) {
+    const { data } = await supabase.from('variable_expenses').insert({
+      user_id: user.id, name, amount, category, date: realToday,
+    }).select().single()
+    setFinanceVariable(prev => [data, ...prev])
+  }
+
   async function loadQuarterly() {
     const [mtRes, qnRes] = await Promise.all([
       supabase.from('mood_logs').select('mood_score,log_date').eq('user_id', user.id).gte('log_date', quarterStart).order('log_date'),
@@ -158,6 +183,12 @@ export default function DashboardPage() {
   }
 
   const loading = staticLoading || periodLoading
+
+  // Finance snapshot
+  const financeMonth = format(new Date(), 'yyyy-MM')
+  const financeTotalVariable = financeVariable.filter(v => v.date.startsWith(financeMonth)).reduce((s, v) => s + v.amount, 0)
+  const financeOverallBudget = financeBudgets.find(b => b.category === null)?.amount || 0
+  const financeReminderDays = shouldShowSpendingReminder(financeVariable)
 
   // Habits with done flag + week logs, derived from static habits + period logs
   const todaySet = new Set(habitLogs.filter(l => l.log_date === today).map(l => l.habit_id))
@@ -278,6 +309,11 @@ export default function DashboardPage() {
       {/* Moodboard image header with greeting overlaid */}
       <ImageHeader user={user} imageUrl={imageUrl} onUpdate={setImageUrl} greeting={greetText} />
 
+      {/* Spending reminder banner */}
+      {financeReminderDays !== false && !financeReminderDismissed && (
+        <SpendingReminderBanner days={financeReminderDays} onDismiss={() => { dismissReminderToday(); setFinanceReminderDismissed(true) }} />
+      )}
+
       {/* Subline + Friday banner */}
       <div style={{ marginBottom: 20 }}>
         <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: isFriday ? 14 : 0 }}>
@@ -368,6 +404,9 @@ export default function DashboardPage() {
           cardOrder={normalizeOrder(cardOrders.daily, 'daily')}
           onReorder={order => saveCardOrder('daily', order)}
           onHydrationAdd={addHydration}
+          financeTotalVariable={financeTotalVariable}
+          financeOverallBudget={financeOverallBudget}
+          onAddExpense={addFinanceVariable}
           {...viewProps}
         />
       )}

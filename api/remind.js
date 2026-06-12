@@ -28,16 +28,24 @@ export default async function handler(req, res) {
   const today = new Date().toISOString().split('T')[0]
   const weekStart = getMonday(new Date()).toISOString().split('T')[0]
 
-  const [habitsRes, logsRes, tasksRes] = await Promise.all([
+  const [habitsRes, logsRes, tasksRes, variableRes] = await Promise.all([
     supabase.from('habits').select('id, name, emoji').eq('user_id', user_id),
     supabase.from('habit_logs').select('habit_id').eq('user_id', user_id).eq('log_date', today),
     supabase.from('weekly_tasks').select('specific_task, area, complete').eq('user_id', user_id).eq('week_start', weekStart).eq('complete', false),
+    supabase.from('variable_expenses').select('date').eq('user_id', user_id).order('date', { ascending: false }).limit(1),
   ])
 
   const habits = habitsRes.data || []
   const loggedIds = new Set((logsRes.data || []).map(l => l.habit_id))
   const pendingHabits = habits.filter(h => !loggedIds.has(h.id))
   const incompleteTasks = tasksRes.data || []
+
+  // Spending reminder: no variable expense logged in 2+ days
+  const lastExpenseDate = variableRes.data?.[0]?.date || null
+  const daysSinceExpense = lastExpenseDate
+    ? Math.floor((Date.now() - new Date(lastExpenseDate).getTime()) / 86400000)
+    : null
+  const spendingReminder = daysSinceExpense === null || daysSinceExpense >= 2
 
   const lines = [
     `📋 Life OS reminder — ${today}`,
@@ -61,12 +69,21 @@ export default async function handler(req, res) {
     lines.push('✅ No incomplete tasks this week!')
   }
 
+  if (spendingReminder) {
+    lines.push('')
+    lines.push(daysSinceExpense === null
+      ? '💸 No spending logged yet — keep your finance tracker up to date.'
+      : `💸 Haven't logged any spending in ${daysSinceExpense} days — keep it up to date.`)
+  }
+
   return res.status(200).json({
     summary: lines.join('\n'),
     pendingHabitsCount: pendingHabits.length,
     incompleteTasksCount: incompleteTasks.length,
     pendingHabits,
     incompleteTasks,
+    spendingReminder,
+    daysSinceExpense,
   })
 }
 

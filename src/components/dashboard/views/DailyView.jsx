@@ -8,6 +8,8 @@ import CurrentlyReading from '../CurrentlyReading'
 import DailyAgenda from '../../calendar/DailyAgenda'
 import { SortableCard, DraggableCardList } from '../DraggableCard'
 import AddWidgetMenu from '../AddWidgetMenu'
+import BudgetRing from '../../finance/BudgetRing'
+import QuickAddExpense from '../../finance/QuickAddExpense'
 
 export const CARD_LABELS = {
   priority: 'One priority',
@@ -17,6 +19,8 @@ export const CARD_LABELS = {
   water: 'Hydration',
   reading: 'Currently reading',
   calendar: "Today's calendar",
+  'finance-snapshot': 'Finance snapshot',
+  'quick-add-expense': 'Quick add expense',
 }
 
 export const DEFAULT_ORDER = [
@@ -34,6 +38,7 @@ export default function DailyView({
   habits, weekTasks, hydration, onOpenPanel,
   cardOrder, onReorder, user, today,
   onHydrationAdd,
+  financeTotalVariable, financeOverallBudget, onAddExpense,
   editing, onResize, onRemoveCard, onAddCard,
 }) {
   const order = (cardOrder?.length ? cardOrder : DEFAULT_ORDER)
@@ -137,6 +142,34 @@ export default function DailyView({
         <DailyAgenda />
       </div>
     ),
+
+    'finance-snapshot': (
+      <div className="card card-finance">
+        <div className="flex items-center justify-between mb-3">
+          <h3>Finance snapshot</h3>
+          <Link to="/finance" style={{ fontSize: 12, color: 'var(--finance)', textDecoration: 'none' }} onClick={e => e.stopPropagation()}>Open →</Link>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <BudgetRing label="This month" spent={financeTotalVariable || 0} budget={financeOverallBudget || 0} size={84} />
+          <p style={{ fontSize: 13, color: 'var(--text-2)' }}>
+            {financeOverallBudget > 0
+              ? (financeTotalVariable <= financeOverallBudget
+                  ? `£${(financeOverallBudget - financeTotalVariable).toFixed(0)} left this month`
+                  : `£${(financeTotalVariable - financeOverallBudget).toFixed(0)} over budget this month`)
+              : `£${(financeTotalVariable || 0).toFixed(0)} spent this month`}
+          </p>
+        </div>
+      </div>
+    ),
+
+    'quick-add-expense': (
+      <div className="card card-finance">
+        <h3 style={{ marginBottom: 10 }}>Quick add expense</h3>
+        <div onClick={e => e.stopPropagation()}>
+          <QuickAddExpense onAdd={onAddExpense} compact />
+        </div>
+      </div>
+    ),
   }
 
   const available = Object.entries(CARD_LABELS)
@@ -159,7 +192,7 @@ export default function DailyView({
             editing={editing}
             onResize={s => onResize(id, s)}
             onRemove={() => onRemoveCard(id)}
-            onClick={id !== 'todos' && id !== 'mood' && id !== 'reading' && id !== 'calendar' ? () => openPanel(id === 'habits' ? 'habits' : id === 'water' ? 'water' : id === 'priority' ? 'tasks' : id, { habits, tasks: weekTasks, hydration }) : undefined}
+            onClick={id !== 'todos' && id !== 'mood' && id !== 'reading' && id !== 'calendar' && id !== 'finance-snapshot' && id !== 'quick-add-expense' ? () => openPanel(id === 'habits' ? 'habits' : id === 'water' ? 'water' : id === 'priority' ? 'tasks' : id, { habits, tasks: weekTasks, hydration }) : undefined}
           >
             {CARDS[id] || null}
           </SortableCard>
