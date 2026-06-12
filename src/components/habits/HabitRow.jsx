@@ -57,7 +57,7 @@ export default function HabitRow({ habit, weekDays, logSet, frozenSet, streak, b
           let border = 'transparent'
           if (logged || frozen) bg = 'var(--personal)'
           else if (!expected) bg = 'var(--bg-3)'
-          else bg = 'var(--card-bg)'
+          else { bg = 'var(--card-bg)'; border = 'var(--border)' }
           if (todayDot) border = 'var(--personal)'
 
           const clickable = expected
