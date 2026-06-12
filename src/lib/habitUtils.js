@@ -158,6 +158,16 @@ export function weeksInMonth(monthDate) {
   return count
 }
 
+// Status of a single day for a habit: 'done' | 'frozen' | 'missed' | 'na' | 'future'
+export function dayStatus(habit, logSet, frozenSet, date, today) {
+  const ds = format(date, 'yyyy-MM-dd')
+  if (isAfter(date, today)) return 'future'
+  if (!isExpectedDay(habit, date)) return 'na'
+  if (logSet.has(ds)) return 'done'
+  if (frozenSet.has(ds)) return 'frozen'
+  return 'missed'
+}
+
 // Per-day status across a given month, plus completion stats for that month.
 // Returns:
 //   days          - array of { date, ds, status } for status in 'done'|'frozen'|'missed'|'na'|'future'
@@ -175,24 +185,13 @@ export function monthStats(habit, logSet, frozenSet, monthDate, today) {
 
   for (let d = new Date(monthStart); d <= monthEnd; d = addDays(d, 1)) {
     const ds = format(d, 'yyyy-MM-dd')
-    const future = isAfter(d, today)
-    const expected = isExpectedDay(habit, d)
-    const logged = logSet.has(ds)
-    const frozen = frozenSet.has(ds)
-
-    let status
-    if (future) status = 'future'
-    else if (!expected) status = 'na'
-    else if (logged) status = 'done'
-    else if (frozen) status = 'frozen'
-    else status = 'missed'
-
+    const status = dayStatus(habit, logSet, frozenSet, d, today)
     days.push({ date: new Date(d), ds, status })
 
-    if (!future && expected) {
+    if (status !== 'future' && status !== 'na') {
       expectedCount++
-      if (logged) loggedCount++
-      if (logged || frozen) { current++; longest = Math.max(longest, current) }
+      if (status === 'done') loggedCount++
+      if (status === 'done' || status === 'frozen') { current++; longest = Math.max(longest, current) }
       else current = 0
     }
   }
