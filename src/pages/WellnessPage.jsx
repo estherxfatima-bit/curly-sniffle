@@ -2,15 +2,14 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
-import { format, startOfWeek, addDays, subDays, parseISO } from 'date-fns'
-import { Plus, Trash2, Check, Droplets, Dumbbell, ChevronDown, ChevronRight, Archive } from 'lucide-react'
+import { format, startOfWeek, subDays, parseISO } from 'date-fns'
+import { Plus, Trash2, Check, Droplets, Dumbbell, ChevronDown, ChevronRight, Archive, Pencil, Image as ImageIcon } from 'lucide-react'
 import ArcRing from '../components/ui/ArcRing'
 import GoalModal from '../components/goals/GoalModal'
+import SavedMealModal from '../components/wellness/SavedMealModal'
 
 const WORKOUT_TYPES = ['Gym', 'Run', 'Yoga', 'Swim', 'Cycle', 'Walk', 'HIIT', 'Other']
 const HYDRATION_GOAL = 2500
-const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-const emptyDays = () => DAY_NAMES.reduce((acc, d) => ({ ...acc, [d]: '' }), {})
 
 function WellnessDecoration() {
   return (
@@ -55,9 +54,11 @@ export default function WellnessPage() {
   const weekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
 
   const [tab, setTab]                 = useState('workouts')
+  const [mealTab, setMealTab]         = useState('plan')
   const [workouts, setWorkouts]       = useState([])
-  const [mealPlan, setMealPlan]       = useState({ id: null, days: emptyDays(), prep_notes: '' })
+  const [mealPlan, setMealPlan]       = useState({ id: null, plan_text: '', prep_notes: '' })
   const [groceryList, setGroceryList] = useState({ id: null, items: [] })
+  const [savedMeals, setSavedMeals]   = useState([])
   const [mealArchive, setMealArchive]       = useState([])
   const [groceryArchive, setGroceryArchive] = useState([])
   const [expandedArchive, setExpandedArchive] = useState(() => new Set())
@@ -67,6 +68,8 @@ export default function WellnessPage() {
   const [dailyTodos, setDailyTodos]   = useState([])
   const [goalMetrics, setGoalMetrics] = useState([])
   const [editingGoal, setEditingGoal] = useState(null)
+  const [showMealModal, setShowMealModal] = useState(false)
+  const [editingMeal, setEditingMeal] = useState(null)
   const [loading, setLoading]         = useState(true)
 
   // Forms
@@ -78,7 +81,7 @@ export default function WellnessPage() {
 
   async function load() {
     setLoading(true)
-    const [wRes, mpRes, glRes, wlRes, goalsRes, weeklyRes, dailyRes, metricsRes, mpaRes, glaRes] = await Promise.all([
+    const [wRes, mpRes, glRes, wlRes, goalsRes, weeklyRes, dailyRes, metricsRes, mpaRes, glaRes, smRes] = await Promise.all([
       supabase.from('workout_logs').select('*').eq('user_id', user.id).order('log_date', { ascending: false }).limit(30),
       supabase.from('meal_plans').select('*').eq('user_id', user.id).eq('week_start', weekStart).maybeSingle(),
       supabase.from('grocery_lists').select('*').eq('user_id', user.id).eq('week_start', weekStart).maybeSingle(),
@@ -89,9 +92,10 @@ export default function WellnessPage() {
       supabase.from('goal_metrics').select('*').eq('user_id', user.id).order('recorded_at'),
       supabase.from('meal_plan_archive').select('*').eq('user_id', user.id).order('archived_at', { ascending: false }),
       supabase.from('grocery_list_archive').select('*').eq('user_id', user.id).order('archived_at', { ascending: false }),
+      supabase.from('saved_meals').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
     ])
     setWorkouts(wRes.data || [])
-    setMealPlan(mpRes.data ? { id: mpRes.data.id, days: { ...emptyDays(), ...(mpRes.data.days || {}) }, prep_notes: mpRes.data.prep_notes || '' } : { id: null, days: emptyDays(), prep_notes: '' })
+    setMealPlan(mpRes.data ? { id: mpRes.data.id, plan_text: mpRes.data.plan_text || '', prep_notes: mpRes.data.prep_notes || '' } : { id: null, plan_text: '', prep_notes: '' })
     setGroceryList(glRes.data ? { id: glRes.data.id, items: glRes.data.items || [] } : { id: null, items: [] })
     setWellnessLog(wlRes.data)
     setWellnessGoals(goalsRes.data || [])
@@ -100,6 +104,7 @@ export default function WellnessPage() {
     setGoalMetrics(metricsRes.data || [])
     setMealArchive(mpaRes.data || [])
     setGroceryArchive(glaRes.data || [])
+    setSavedMeals(smRes.data || [])
     setLoading(false)
   }
 
@@ -143,14 +148,14 @@ export default function WellnessPage() {
   }
 
   // Meal plan
-  function updateMealDay(day, value) {
-    setMealPlan(prev => ({ ...prev, days: { ...prev.days, [day]: value } }))
+  function updatePlanText(value) {
+    setMealPlan(prev => ({ ...prev, plan_text: value }))
   }
   function updatePrepNotes(value) {
     setMealPlan(prev => ({ ...prev, prep_notes: value }))
   }
   async function persistMealPlan() {
-    const payload = { user_id: user.id, week_start: weekStart, days: mealPlan.days, prep_notes: mealPlan.prep_notes, updated_at: new Date().toISOString() }
+    const payload = { user_id: user.id, week_start: weekStart, plan_text: mealPlan.plan_text, prep_notes: mealPlan.prep_notes, updated_at: new Date().toISOString() }
     const { data } = await supabase.from('meal_plans').upsert(payload, { onConflict: 'user_id,week_start' }).select().single()
     if (data) setMealPlan(prev => ({ ...prev, id: data.id }))
   }
@@ -176,11 +181,41 @@ export default function WellnessPage() {
     persistGroceryList(groceryList.items.filter(it => !it.checked))
   }
 
+  // Saved meals
+  async function saveMeal(form) {
+    if (editingMeal?.id) {
+      const { data } = await supabase.from('saved_meals').update(form).eq('id', editingMeal.id).select().single()
+      if (data) setSavedMeals(prev => prev.map(m => m.id === data.id ? data : m))
+    } else {
+      const { data } = await supabase.from('saved_meals').insert({ user_id: user.id, ...form }).select().single()
+      if (data) setSavedMeals(prev => [data, ...prev])
+    }
+    setShowMealModal(false)
+    setEditingMeal(null)
+  }
+  async function deleteMeal(id) {
+    if (!confirm('Delete this meal?')) return
+    await supabase.from('saved_meals').delete().eq('id', id)
+    setSavedMeals(prev => prev.filter(m => m.id !== id))
+  }
+  function addMealToGroceryList(meal) {
+    const existing = new Set(groceryList.items.map(it => it.text.trim().toLowerCase()))
+    const newItems = []
+    for (const ing of (meal.ingredients || [])) {
+      const key = ing.trim().toLowerCase()
+      if (!key || existing.has(key)) continue
+      existing.add(key)
+      newItems.push({ text: ing.trim(), checked: false })
+    }
+    if (newItems.length === 0) return
+    persistGroceryList([...groceryList.items, ...newItems])
+  }
+
   // Archive
   async function archiveWeek() {
     const name = `Week of ${format(parseISO(weekStart), 'd MMMM yyyy')}`
     const [mpaRes, glaRes] = await Promise.all([
-      supabase.from('meal_plan_archive').insert({ user_id: user.id, name, week_start: weekStart, days: mealPlan.days, prep_notes: mealPlan.prep_notes }).select().single(),
+      supabase.from('meal_plan_archive').insert({ user_id: user.id, name, week_start: weekStart, plan_text: mealPlan.plan_text, prep_notes: mealPlan.prep_notes }).select().single(),
       supabase.from('grocery_list_archive').insert({ user_id: user.id, name, week_start: weekStart, items: groceryList.items }).select().single(),
     ])
     if (mpaRes.data) setMealArchive(prev => [mpaRes.data, ...prev])
@@ -212,8 +247,6 @@ export default function WellnessPage() {
     const done = linked.filter(t => t.complete).length
     return total ? Math.round((done / total) * 100) : 0
   }
-
-  const weekDays = DAY_NAMES.map((name, i) => ({ name, date: addDays(parseISO(weekStart), i) }))
 
   if (loading) return <p style={{ padding: 40, color: 'var(--text-3)', textAlign: 'center' }}>Loading…</p>
 
@@ -316,131 +349,191 @@ export default function WellnessPage() {
       {/* Meals tab */}
       {tab === 'meals' && (
         <div>
-          {/* 7-day meal plan */}
-          <div className="card mb-4">
-            <h3 style={{ fontSize: '0.9rem', marginBottom: 12 }}>Meal plan</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {weekDays.map(({ name, date }) => (
-                <div key={name}>
-                  <label style={{ display: 'block', fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', marginBottom: 4 }}>
-                    {name} <span style={{ opacity: 0.7 }}>· {format(date, 'd MMM')}</span>
-                  </label>
+          {/* Meal sub-tabs */}
+          <div className="flex gap-2 mb-4" style={{ '--section-tab-color': 'var(--wellness)' }}>
+            {[{ key: 'plan', label: 'Plan' }, { key: 'myMeals', label: 'My Meals' }].map(t => (
+              <button key={t.key} onClick={() => setMealTab(t.key)} className={`btn btn-sm tab-item ${mealTab === t.key ? 'active' : 'btn-ghost'}`}
+                style={mealTab === t.key ? { color: '#fff', background: 'var(--wellness)' } : {}}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          {mealTab === 'plan' && (
+            <div>
+              {/* Weekly plan */}
+              <div className="card mb-4">
+                <h3 style={{ fontSize: '0.9rem', marginBottom: 12 }}>This week's plan</h3>
+                <textarea
+                  value={mealPlan.plan_text}
+                  onChange={e => updatePlanText(e.target.value)}
+                  onBlur={persistMealPlan}
+                  placeholder="Jot down what you're eating this week…"
+                  style={{ width: '100%', minHeight: 180, fontSize: 13 }}
+                />
+                <div style={{ marginTop: 14 }}>
+                  <label style={{ display: 'block', fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', marginBottom: 4 }}>Meal prep notes</label>
                   <textarea
-                    value={mealPlan.days[name] || ''}
-                    onChange={e => updateMealDay(name, e.target.value)}
+                    value={mealPlan.prep_notes}
+                    onChange={e => updatePrepNotes(e.target.value)}
                     onBlur={persistMealPlan}
-                    placeholder="What are you eating?"
-                    style={{ width: '100%', minHeight: 50, fontSize: 13 }}
+                    placeholder="Batch prep instructions…"
+                    style={{ width: '100%', minHeight: 70, fontSize: 13 }}
                   />
                 </div>
-              ))}
-            </div>
-            <div style={{ marginTop: 14 }}>
-              <label style={{ display: 'block', fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', marginBottom: 4 }}>Meal prep notes</label>
-              <textarea
-                value={mealPlan.prep_notes}
-                onChange={e => updatePrepNotes(e.target.value)}
-                onBlur={persistMealPlan}
-                placeholder="Batch prep instructions…"
-                style={{ width: '100%', minHeight: 70, fontSize: 13 }}
-              />
-            </div>
-          </div>
+              </div>
 
-          {/* Grocery list */}
-          <div className="card mb-4">
-            <h3 style={{ fontSize: '0.9rem', marginBottom: 12 }}>Grocery list</h3>
-            <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-              <input
-                placeholder="Add item and press Enter…"
-                value={newGroceryItem}
-                onChange={e => setNewGroceryItem(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && addGroceryItem()}
-                style={{ flex: 1, fontSize: 13 }}
-              />
-              {groceryList.items.some(it => it.checked) && (
-                <button className="btn btn-sm btn-ghost" onClick={clearChecked}>Clear checked</button>
-              )}
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {groceryList.items.map((it, idx) => (
-                <div key={idx} className="flex items-center gap-3" style={{ padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
-                  <button
-                    onClick={() => toggleGroceryItem(idx)}
-                    style={{
-                      width: 20, height: 20, borderRadius: 4, border: `2px solid ${it.checked ? 'var(--wellness)' : 'var(--border)'}`,
-                      background: it.checked ? 'var(--wellness)' : 'transparent', flexShrink: 0,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s',
-                    }}
-                  >
-                    {it.checked && <Check size={12} color="#fff" />}
-                  </button>
-                  <span style={{ fontSize: 13, flex: 1, textDecoration: it.checked ? 'line-through' : 'none', color: it.checked ? 'var(--text-3)' : 'var(--text)' }}>
-                    {it.text}
-                  </span>
+              {/* Grocery list */}
+              <div className="card mb-4">
+                <h3 style={{ fontSize: '0.9rem', marginBottom: 12 }}>Grocery list</h3>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+                  <input
+                    placeholder="Add item and press Enter…"
+                    value={newGroceryItem}
+                    onChange={e => setNewGroceryItem(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && addGroceryItem()}
+                    style={{ flex: 1, fontSize: 13 }}
+                  />
+                  {groceryList.items.some(it => it.checked) && (
+                    <button className="btn btn-sm btn-ghost" onClick={clearChecked}>Clear checked</button>
+                  )}
                 </div>
-              ))}
-              {groceryList.items.length === 0 && <p style={{ fontSize: 12, color: 'var(--text-3)', fontStyle: 'italic' }}>List is empty.</p>}
-            </div>
-          </div>
-
-          {/* Archive */}
-          <div className="flex justify-end mb-4">
-            <button className="btn btn-sm btn-wellness" style={{ color: '#fff' }} onClick={archiveWeek}>
-              <Archive size={12} /> Archive this week
-            </button>
-          </div>
-
-          {mealArchive.length > 0 && (
-            <div className="card">
-              <h3 style={{ fontSize: '0.9rem', marginBottom: 12 }}>Archived weeks</h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {mealArchive.map(entry => {
-                  const grocery = groceryArchive.find(g => g.name === entry.name && g.week_start === entry.week_start)
-                  const open = expandedArchive.has(entry.id)
-                  return (
-                    <div key={entry.id} style={{ borderBottom: '1px solid var(--border)', paddingBottom: 8 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {groceryList.items.map((it, idx) => (
+                    <div key={idx} className="flex items-center gap-3" style={{ padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
                       <button
-                        onClick={() => toggleArchiveExpanded(entry.id)}
-                        style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'transparent', border: 'none', padding: '4px 0', cursor: 'pointer' }}
+                        onClick={() => toggleGroceryItem(idx)}
+                        style={{
+                          width: 20, height: 20, borderRadius: 4, border: `2px solid ${it.checked ? 'var(--wellness)' : 'var(--border)'}`,
+                          background: it.checked ? 'var(--wellness)' : 'transparent', flexShrink: 0,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s',
+                        }}
                       >
-                        <span className="flex items-center gap-2" style={{ fontSize: 13, fontWeight: 500 }}>
-                          {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                          {entry.name}
-                        </span>
-                        <span className="mono" style={{ fontSize: 11, color: 'var(--text-3)' }}>{format(new Date(entry.archived_at), 'd MMM yyyy')}</span>
+                        {it.checked && <Check size={12} color="#fff" />}
                       </button>
-                      {open && (
-                        <div style={{ marginTop: 8, paddingLeft: 22, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                          <div>
-                            {DAY_NAMES.map(name => (
-                              <p key={name} style={{ fontSize: 12, marginBottom: 4 }}>
-                                <strong>{name}:</strong> {entry.days?.[name] || <span style={{ color: 'var(--text-3)' }}>—</span>}
-                              </p>
-                            ))}
-                          </div>
-                          {entry.prep_notes && (
-                            <div>
-                              <p style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', marginBottom: 2 }}>Prep notes</p>
-                              <p style={{ fontSize: 12 }}>{entry.prep_notes}</p>
+                      <span style={{ fontSize: 13, flex: 1, textDecoration: it.checked ? 'line-through' : 'none', color: it.checked ? 'var(--text-3)' : 'var(--text)' }}>
+                        {it.text}
+                      </span>
+                    </div>
+                  ))}
+                  {groceryList.items.length === 0 && <p style={{ fontSize: 12, color: 'var(--text-3)', fontStyle: 'italic' }}>List is empty.</p>}
+                </div>
+              </div>
+
+              {/* Archive this week */}
+              <div className="flex justify-end mb-4">
+                <button className="btn btn-sm btn-wellness" style={{ color: '#fff' }} onClick={archiveWeek}>
+                  <Archive size={12} /> Archive this week
+                </button>
+              </div>
+
+              {/* Archive browser */}
+              <div className="card">
+                <button
+                  onClick={() => toggleArchiveExpanded('__archive_section__')}
+                  style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer' }}
+                >
+                  <span className="flex items-center gap-2" style={{ fontSize: '0.9rem', fontWeight: 600 }}>
+                    {expandedArchive.has('__archive_section__') ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                    Archive
+                  </span>
+                  <span className="mono" style={{ fontSize: 11, color: 'var(--text-3)' }}>{mealArchive.length} week{mealArchive.length === 1 ? '' : 's'}</span>
+                </button>
+
+                {expandedArchive.has('__archive_section__') && (
+                  <div style={{ marginTop: 12 }}>
+                    {mealArchive.length === 0 ? (
+                      <p style={{ fontSize: 12, color: 'var(--text-3)', fontStyle: 'italic' }}>No archived weeks yet.</p>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {mealArchive.map(entry => {
+                          const grocery = groceryArchive.find(g => g.name === entry.name && g.week_start === entry.week_start)
+                          const open = expandedArchive.has(entry.id)
+                          return (
+                            <div key={entry.id} style={{ borderBottom: '1px solid var(--border)', paddingBottom: 8 }}>
+                              <button
+                                onClick={() => toggleArchiveExpanded(entry.id)}
+                                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'transparent', border: 'none', padding: '4px 0', cursor: 'pointer' }}
+                              >
+                                <span className="flex items-center gap-2" style={{ fontSize: 13, fontWeight: 500 }}>
+                                  {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                  {entry.name}
+                                </span>
+                                <span className="mono" style={{ fontSize: 11, color: 'var(--text-3)' }}>{format(new Date(entry.archived_at), 'd MMM yyyy')}</span>
+                              </button>
+                              {open && (
+                                <div style={{ marginTop: 8, paddingLeft: 22, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                  <div>
+                                    <p style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', marginBottom: 4 }}>Plan</p>
+                                    <p style={{ fontSize: 12, whiteSpace: 'pre-wrap' }}>{entry.plan_text || <span style={{ color: 'var(--text-3)' }}>—</span>}</p>
+                                  </div>
+                                  {entry.prep_notes && (
+                                    <div>
+                                      <p style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', marginBottom: 2 }}>Prep notes</p>
+                                      <p style={{ fontSize: 12 }}>{entry.prep_notes}</p>
+                                    </div>
+                                  )}
+                                  {grocery && grocery.items?.length > 0 && (
+                                    <div>
+                                      <p style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', marginBottom: 4 }}>Grocery list</p>
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                        {grocery.items.map((it, i) => (
+                                          <p key={i} style={{ fontSize: 12, textDecoration: it.checked ? 'line-through' : 'none', color: it.checked ? 'var(--text-3)' : 'var(--text)' }}>{it.text}</p>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                             </div>
-                          )}
-                          {grocery && grocery.items?.length > 0 && (
-                            <div>
-                              <p style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', marginBottom: 4 }}>Grocery list</p>
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                                {grocery.items.map((it, i) => (
-                                  <p key={i} style={{ fontSize: 12, textDecoration: it.checked ? 'line-through' : 'none', color: it.checked ? 'var(--text-3)' : 'var(--text)' }}>{it.text}</p>
-                                ))}
-                              </div>
-                            </div>
-                          )}
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {mealTab === 'myMeals' && (
+            <div>
+              <div className="flex justify-end mb-4">
+                <button className="btn btn-sm btn-wellness" style={{ color: '#fff' }} onClick={() => { setEditingMeal(null); setShowMealModal(true) }}>
+                  <Plus size={12} /> Add meal
+                </button>
+              </div>
+
+              {savedMeals.length === 0 ? (
+                <div className="empty-state"><p>No saved meals yet. Add your go-to recipes to build a library.</p></div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
+                  {savedMeals.map(meal => (
+                    <div key={meal.id} className="card" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                      {meal.image_url ? (
+                        <img src={meal.image_url} alt={meal.name} style={{ width: '100%', height: 120, objectFit: 'cover' }} />
+                      ) : (
+                        <div style={{ width: '100%', height: 120, background: 'var(--bg-3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <ImageIcon size={28} color="var(--text-3)" />
                         </div>
                       )}
+                      <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
+                        <div>
+                          <p style={{ fontSize: 13, fontWeight: 600 }}>{meal.name}</p>
+                          <p style={{ fontSize: 11, color: 'var(--text-3)' }}>{(meal.ingredients || []).length} ingredient{(meal.ingredients || []).length === 1 ? '' : 's'}</p>
+                        </div>
+                        <div className="flex items-center gap-2 wrap" style={{ marginTop: 'auto' }}>
+                          <button className="btn btn-xs btn-wellness" style={{ color: '#fff' }} onClick={() => addMealToGroceryList(meal)}>
+                            <Plus size={11} /> Add to grocery list
+                          </button>
+                          <button className="btn-icon btn" onClick={() => { setEditingMeal(meal); setShowMealModal(true) }}><Pencil size={12} /></button>
+                          <button className="btn-icon btn" onClick={() => deleteMeal(meal.id)}><Trash2 size={12} /></button>
+                        </div>
+                      </div>
                     </div>
-                  )
-                })}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -481,6 +574,15 @@ export default function WellnessPage() {
               : prev.filter(g => g.id !== goal.id))
             setEditingGoal(null)
           }}
+        />
+      )}
+
+      {showMealModal && (
+        <SavedMealModal
+          meal={editingMeal}
+          userId={user.id}
+          onClose={() => { setShowMealModal(false); setEditingMeal(null) }}
+          onSave={saveMeal}
         />
       )}
     </div>
