@@ -1,11 +1,12 @@
 import { format, isAfter, isToday } from 'date-fns'
 import { Check, Trash2, Snowflake, Edit2 } from 'lucide-react'
-import { isExpectedDay, frequencyLabel, weekCount } from '../../lib/habitUtils'
+import { isExpectedDay, frequencyLabel, weekCount, habitColor } from '../../lib/habitUtils'
 
 export default function HabitRow({ habit, weekDays, logSet, frozenSet, streak, banked, onToggleLog, onOpenMonth, onEdit, onDelete }) {
   const today = new Date()
   const isTimesPerWeek = habit.frequency_type === 'times_per_week'
   const cnt = isTimesPerWeek ? weekCount(logSet, weekDays[0]) : 0
+  const color = habitColor(habit)
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '220px 110px 1fr 56px', padding: '13px 20px', borderBottom: '1px solid var(--border)', alignItems: 'center', minWidth: 700 }}>
@@ -21,20 +22,23 @@ export default function HabitRow({ habit, weekDays, logSet, frozenSet, streak, b
         </button>
         <div className="flex items-center gap-2 wrap">
           <span className="badge badge-muted" style={{ fontSize: 9 }}>{frequencyLabel(habit)}</span>
-          {isTimesPerWeek && (
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-3)' }}>{cnt}/{habit.frequency_count} this week</span>
-          )}
         </div>
       </div>
 
-      {/* Streak + banked freezes */}
+      {/* Streak / weekly counter + banked freezes */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-        {streak > 0 && <span style={{ fontSize: 14 }}>🔥</span>}
-        <span style={{ fontSize: 22, fontFamily: 'var(--font-serif)', fontWeight: 700, color: streak > 0 ? 'var(--personal)' : 'var(--text-3)' }}>{streak}</span>
-        {banked > 0 && (
-          <span title={`${banked} banked freeze${banked === 1 ? '' : 's'}`} style={{ display: 'flex', alignItems: 'center', gap: 1, fontSize: 12, color: 'var(--finance)', fontFamily: 'var(--font-mono)' }}>
-            <Snowflake size={12} />×{banked}
-          </span>
+        {isTimesPerWeek ? (
+          <span style={{ fontSize: 16, fontFamily: 'var(--font-mono)', fontWeight: 600, color }}>{cnt}/{habit.frequency_count} this wk</span>
+        ) : (
+          <>
+            {streak > 0 && <span style={{ fontSize: 14 }}>🔥</span>}
+            <span style={{ fontSize: 22, fontFamily: 'var(--font-serif)', fontWeight: 700, color: streak > 0 ? color : 'var(--text-3)' }}>{streak}</span>
+            {banked > 0 && (
+              <span title={`${banked} banked freeze${banked === 1 ? '' : 's'}`} style={{ display: 'flex', alignItems: 'center', gap: 1, fontSize: 12, color: 'var(--finance)', fontFamily: 'var(--font-mono)' }}>
+                <Snowflake size={12} />×{banked}
+              </span>
+            )}
+          </>
         )}
       </div>
 
@@ -48,17 +52,17 @@ export default function HabitRow({ habit, weekDays, logSet, frozenSet, streak, b
           const future = isAfter(d, today) && !isToday(d)
           const todayDot = isToday(d)
 
-          // Future days render blank — no background, no icons, not clickable
-          if (future) {
+          // Future days, and non-expected days for specific-day habits, render blank
+          if (future || (!expected && habit.frequency_type === 'specific_days')) {
             return <div key={ds} style={{ display: 'flex', justifyContent: 'center' }}><div style={{ width: 22, height: 22 }} /></div>
           }
 
           let bg
           let border = 'transparent'
-          if (logged || frozen) bg = 'var(--personal)'
+          if (logged || frozen) bg = color
           else if (!expected) bg = 'var(--bg-3)'
           else { bg = 'var(--card-bg)'; border = 'var(--border)' }
-          if (todayDot) border = 'var(--personal)'
+          if (todayDot) border = color
 
           const clickable = expected
 
@@ -74,7 +78,7 @@ export default function HabitRow({ habit, weekDays, logSet, frozenSet, streak, b
                   cursor: clickable ? 'pointer' : 'default',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   transition: 'all 0.15s',
-                  boxShadow: logged ? '0 0 0 2px var(--personal-tint)' : 'none',
+                  boxShadow: logged ? `0 0 0 2px ${color}33` : 'none',
                   opacity: !expected ? 0.5 : 1,
                 }}
               >

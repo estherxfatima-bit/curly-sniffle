@@ -4,6 +4,15 @@ import { DAY_NAMES } from '../../lib/habitUtils'
 
 const EMOJI_OPTIONS = ['💪','📚','🧘','🏃','✍️','🎯','💧','🌿','🎨','🧠','😴','🥗','💊','🎵','🌅','🛁','🧴','🫧']
 
+const COLOR_OPTIONS = [
+  { name: 'Rose',   value: '#d4506a' },
+  { name: 'Blue',   value: '#4a7bd4' },
+  { name: 'Pink',   value: '#d4509e' },
+  { name: 'Purple', value: '#8a5cd4' },
+  { name: 'Orange', value: '#d48a40' },
+  { name: 'Green',  value: '#4ba87a' },
+]
+
 export default function HabitModal({ habit, onClose, onSave }) {
   const isNew = !habit?.id
   const [form, setForm] = useState({
@@ -12,6 +21,7 @@ export default function HabitModal({ habit, onClose, onSave }) {
     frequency_type: habit?.frequency_type || 'daily',
     frequency_days: habit?.frequency_days || [],
     frequency_count: habit?.frequency_count || 3,
+    color: habit?.color || '',
   })
   const [saving, setSaving] = useState(false)
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
@@ -32,6 +42,7 @@ export default function HabitModal({ habit, onClose, onSave }) {
       frequency_type: form.frequency_type,
       frequency_days: form.frequency_type === 'specific_days' ? form.frequency_days : [],
       frequency_count: form.frequency_type === 'times_per_week' ? Number(form.frequency_count) : null,
+      color: form.color || null,
     })
     setSaving(false)
   }
@@ -87,6 +98,35 @@ export default function HabitModal({ habit, onClose, onSave }) {
             </select>
           </div>
         )}
+
+        <div className="form-group">
+          <label>Colour</label>
+          <div className="flex items-center gap-2 wrap">
+            {COLOR_OPTIONS.map(c => (
+              <button
+                key={c.value}
+                type="button"
+                title={c.name}
+                onClick={() => set('color', c.value)}
+                style={{
+                  width: 24, height: 24, borderRadius: '50%', background: c.value,
+                  border: form.color === c.value ? '2px solid var(--text)' : '2px solid transparent',
+                  cursor: 'pointer', padding: 0,
+                }}
+              />
+            ))}
+            <button
+              type="button"
+              title="Default"
+              onClick={() => set('color', '')}
+              style={{
+                width: 24, height: 24, borderRadius: '50%', background: 'var(--personal)',
+                border: !form.color ? '2px solid var(--text)' : '2px solid transparent',
+                cursor: 'pointer', padding: 0,
+              }}
+            />
+          </div>
+        </div>
 
         <div className="flex gap-2 justify-end mt-2">
           <button className="btn btn-ghost" onClick={onClose}>Cancel</button>

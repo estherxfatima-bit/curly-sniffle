@@ -5,8 +5,9 @@ import { format, startOfWeek, addDays, startOfMonth, addMonths, subMonths } from
 import { Plus, X } from 'lucide-react'
 import ArcRing from '../components/ui/ArcRing'
 import HabitModal from '../components/habits/HabitModal'
-import HabitRow from '../components/habits/HabitRow'
-import HabitMonthView from '../components/habits/HabitMonthView'
+import TodayView from '../components/habits/TodayView'
+import WeekView from '../components/habits/WeekView'
+import MonthView from '../components/habits/MonthView'
 import { simulateHabit } from '../lib/habitUtils'
 
 function HabitsDecoration() {
@@ -21,6 +22,8 @@ function HabitsDecoration() {
 }
 
 const DISMISS_KEY = 'habitBannerDismissed'
+const VIEWS = ['Today', 'Week', 'Month']
+const VIEW_KEYS = ['today', 'week', 'month']
 
 function loadDismissed(todayStr) {
   try {
@@ -42,7 +45,7 @@ export default function HabitsPage() {
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [editing, setEditing] = useState(null)
-  const [monthHabit, setMonthHabit] = useState(null)
+  const [view, setView] = useState('today')
   const [monthDate, setMonthDate] = useState(() => startOfMonth(new Date()))
 
   const today = new Date()
@@ -120,11 +123,6 @@ export default function HabitsPage() {
     }
   }
 
-  function openMonth(habit) {
-    setMonthHabit(habit)
-    setMonthDate(startOfMonth(new Date()))
-  }
-
   function dismissBanner(habitId, type) {
     const key = `${habitId}:${type}:${todayStr}`
     setDismissedBanners(prev => {
@@ -184,7 +182,7 @@ export default function HabitsPage() {
         <div className="flex items-start justify-between gap-4">
           <div>
             <h1>Habit Tracker</h1>
-            <p>This week — tap a dot to log</p>
+            <p>Today / Week / Month — tap a circle to log</p>
             <div className="flex items-center gap-3 mt-3">
               <span className="badge badge-personal">{todayDoneCount}/{habits.length} today</span>
             </div>
@@ -214,61 +212,75 @@ export default function HabitsPage() {
         </div>
       )}
 
+      {/* View switcher */}
+      <div className="flex items-center mb-5" style={{ display: 'flex', gap: 4, background: 'var(--bg-2)', borderRadius: 'var(--radius-lg)', padding: 4, width: 'fit-content' }}>
+        {VIEWS.map((label, i) => {
+          const key = VIEW_KEYS[i]
+          const active = view === key
+          return (
+            <button
+              key={key}
+              onClick={() => setView(key)}
+              style={{
+                padding: '7px 18px',
+                borderRadius: 10,
+                fontSize: 13,
+                fontWeight: active ? 600 : 400,
+                background: active ? 'var(--card-bg)' : 'transparent',
+                color: active ? 'var(--personal)' : 'var(--text-3)',
+                border: active ? '1px solid var(--border)' : 'none',
+                boxShadow: active ? 'var(--shadow)' : 'none',
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+                fontFamily: 'var(--font-body)',
+              }}
+            >
+              {label}
+            </button>
+          )
+        })}
+      </div>
+
       {loading ? (
         <p style={{ textAlign: 'center', padding: 40, color: 'var(--text-3)' }}>Loading…</p>
       ) : habits.length === 0 ? (
         <div className="empty-state"><p>No habits yet. Add your first habit above to start tracking.</p></div>
+      ) : view === 'today' ? (
+        <TodayView
+          habits={habits}
+          today={today}
+          todayStr={todayStr}
+          logsByHabit={logsByHabit}
+          sims={sims}
+          onToggleLog={toggleLog}
+        />
+      ) : view === 'week' ? (
+        <WeekView
+          habits={habits}
+          weekDays={weekDays}
+          todayStr={todayStr}
+          logsByHabit={logsByHabit}
+          sims={sims}
+          onToggleLog={toggleLog}
+          onOpenMonth={() => setView('month')}
+          onEdit={h => { setEditing(h); setShowModal(true) }}
+          onDelete={deleteHabit}
+        />
       ) : (
-        <div className="card" style={{ padding: 0, overflow: 'auto' }}>
-          {/* Day headers */}
-          <div style={{ display: 'grid', gridTemplateColumns: '220px 110px 1fr 56px', padding: '12px 20px', borderBottom: '1px solid var(--border)', background: 'var(--bg-2)', minWidth: 700 }}>
-            <span className="mono">Habit</span>
-            <span className="mono">Streak</span>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
-              {weekDays.map(d => (
-                <div key={format(d, 'yyyy-MM-dd')} style={{ textAlign: 'center', fontSize: 9, fontFamily: 'var(--font-mono)', color: format(d, 'yyyy-MM-dd') === todayStr ? 'var(--personal)' : 'var(--text-3)', letterSpacing: '0.02em' }}>
-                  {format(d, 'EEE').slice(0,1)}<br/>{format(d, 'd')}
-                </div>
-              ))}
-            </div>
-            <span />
-          </div>
-
-          {habits.map(habit => (
-            <HabitRow
-              key={habit.id}
-              habit={habit}
-              weekDays={weekDays}
-              logSet={logsByHabit[habit.id] || new Set()}
-              frozenSet={sims[habit.id]?.frozenDates || new Set()}
-              streak={sims[habit.id]?.streak ?? 0}
-              banked={sims[habit.id]?.banked ?? 0}
-              onToggleLog={toggleLog}
-              onOpenMonth={openMonth}
-              onEdit={h => { setEditing(h); setShowModal(true) }}
-              onDelete={deleteHabit}
-            />
-          ))}
-        </div>
+        <MonthView
+          habits={habits}
+          logsByHabit={logsByHabit}
+          sims={sims}
+          monthDate={monthDate}
+          today={today}
+          onPrevMonth={() => setMonthDate(prev => subMonths(prev, 1))}
+          onNextMonth={() => setMonthDate(prev => addMonths(prev, 1))}
+          onToggleLog={toggleLog}
+        />
       )}
 
       {showModal && (
         <HabitModal habit={editing} onClose={() => { setShowModal(false); setEditing(null) }} onSave={saveHabit} />
-      )}
-
-      {monthHabit && (
-        <HabitMonthView
-          habit={monthHabit}
-          logSet={logsByHabit[monthHabit.id] || new Set()}
-          frozenSet={sims[monthHabit.id]?.frozenDates || new Set()}
-          streak={sims[monthHabit.id]?.streak ?? 0}
-          banked={sims[monthHabit.id]?.banked ?? 0}
-          monthDate={monthDate}
-          onPrevMonth={() => setMonthDate(prev => subMonths(prev, 1))}
-          onNextMonth={() => setMonthDate(prev => addMonths(prev, 1))}
-          onClose={() => setMonthHabit(null)}
-          onToggleLog={ds => toggleLog(monthHabit, ds)}
-        />
       )}
     </div>
   )

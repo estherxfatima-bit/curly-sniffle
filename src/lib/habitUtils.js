@@ -1,4 +1,4 @@
-import { format, addDays, startOfWeek } from 'date-fns'
+import { format, addDays, startOfWeek, startOfMonth, endOfMonth, isAfter } from 'date-fns'
 
 export const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
@@ -12,6 +12,19 @@ export function isExpectedDay(habit, date) {
     return (habit.frequency_days || []).includes(dayName(date))
   }
   return true
+}
+
+// Whether this habit has at least one expected occurrence in the given week
+export function isExpectedThisWeek(habit) {
+  if (habit.frequency_type === 'specific_days') {
+    return (habit.frequency_days || []).length > 0
+  }
+  return true
+}
+
+// Per-habit accent colour, falling back to the section's rose accent
+export function habitColor(habit) {
+  return habit.color || 'var(--personal)'
 }
 
 export function frequencyLabel(habit) {
@@ -131,4 +144,65 @@ export function computeBestStreak(habit, logSet, frozenSet, startDate, endDate) 
     d = addDays(d, 1)
   }
   return best
+}
+
+// Number of Mon-Sun weeks that overlap with the given month
+export function weeksInMonth(monthDate) {
+  const monthEnd = endOfMonth(monthDate)
+  let count = 0
+  let ws = startOfWeek(startOfMonth(monthDate), { weekStartsOn: 1 })
+  while (ws <= monthEnd) {
+    count++
+    ws = addDays(ws, 7)
+  }
+  return count
+}
+
+// Per-day status across a given month, plus completion stats for that month.
+// Returns:
+//   days          - array of { date, ds, status } for status in 'done'|'frozen'|'missed'|'na'|'future'
+//   completionPct - % of expected (non-future) days completed
+//   loggedCount   - count of logged days in the month
+//   longestStreak - longest run of done/frozen days within the month
+//   monthlyGoal   - { target, current } for times_per_week habits, else null
+export function monthStats(habit, logSet, frozenSet, monthDate, today) {
+  const monthStart = startOfMonth(monthDate)
+  const monthEnd = endOfMonth(monthDate)
+
+  const days = []
+  let loggedCount = 0, expectedCount = 0
+  let longest = 0, current = 0
+
+  for (let d = new Date(monthStart); d <= monthEnd; d = addDays(d, 1)) {
+    const ds = format(d, 'yyyy-MM-dd')
+    const future = isAfter(d, today)
+    const expected = isExpectedDay(habit, d)
+    const logged = logSet.has(ds)
+    const frozen = frozenSet.has(ds)
+
+    let status
+    if (future) status = 'future'
+    else if (!expected) status = 'na'
+    else if (logged) status = 'done'
+    else if (frozen) status = 'frozen'
+    else status = 'missed'
+
+    days.push({ date: new Date(d), ds, status })
+
+    if (!future && expected) {
+      expectedCount++
+      if (logged) loggedCount++
+      if (logged || frozen) { current++; longest = Math.max(longest, current) }
+      else current = 0
+    }
+  }
+
+  const completionPct = expectedCount ? Math.round((loggedCount / expectedCount) * 100) : 0
+
+  let monthlyGoal = null
+  if (habit.frequency_type === 'times_per_week') {
+    monthlyGoal = { target: weeksInMonth(monthDate) * (habit.frequency_count || 1), current: loggedCount }
+  }
+
+  return { days, completionPct, loggedCount, longestStreak: longest, monthlyGoal }
 }
