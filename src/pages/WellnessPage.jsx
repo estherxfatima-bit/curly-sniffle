@@ -1,12 +1,16 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { format, startOfWeek, addDays, subDays, parseISO } from 'date-fns'
-import { Plus, Trash2, Check, Droplets, Moon, Dumbbell, ShoppingCart } from 'lucide-react'
+import { Plus, Trash2, Check, Droplets, Dumbbell, ChevronDown, ChevronRight, Archive } from 'lucide-react'
+import ArcRing from '../components/ui/ArcRing'
+import GoalModal from '../components/goals/GoalModal'
 
 const WORKOUT_TYPES = ['Gym', 'Run', 'Yoga', 'Swim', 'Cycle', 'Walk', 'HIIT', 'Other']
-const SLOTS = ['breakfast', 'lunch', 'dinner']
 const HYDRATION_GOAL = 2500
+const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+const emptyDays = () => DAY_NAMES.reduce((acc, d) => ({ ...acc, [d]: '' }), {})
 
 function WellnessDecoration() {
   return (
@@ -52,34 +56,50 @@ export default function WellnessPage() {
 
   const [tab, setTab]                 = useState('workouts')
   const [workouts, setWorkouts]       = useState([])
-  const [mealPlan, setMealPlan]       = useState({}) // key: `${dayIndex}-${slot}`
-  const [groceries, setGroceries]     = useState([])
+  const [mealPlan, setMealPlan]       = useState({ id: null, days: emptyDays(), prep_notes: '' })
+  const [groceryList, setGroceryList] = useState({ id: null, items: [] })
+  const [mealArchive, setMealArchive]       = useState([])
+  const [groceryArchive, setGroceryArchive] = useState([])
+  const [expandedArchive, setExpandedArchive] = useState(() => new Set())
   const [wellnessLog, setWellnessLog] = useState(null)
+  const [wellnessGoals, setWellnessGoals] = useState([])
+  const [weeklyTasks, setWeeklyTasks] = useState([])
+  const [dailyTodos, setDailyTodos]   = useState([])
+  const [goalMetrics, setGoalMetrics] = useState([])
+  const [editingGoal, setEditingGoal] = useState(null)
   const [loading, setLoading]         = useState(true)
 
   // Forms
   const [newWorkout, setNewWorkout] = useState({ type: 'Gym', duration_min: '', notes: '', log_date: today })
-  const [newGrocery, setNewGrocery] = useState('')
+  const [newGroceryItem, setNewGroceryItem] = useState('')
   const [hydrationInput, setHydrationInput] = useState(250)
-  const [sleepHours, setSleepHours]         = useState('')
-  const [sleepQuality, setSleepQuality]     = useState(3)
 
   useEffect(() => { if (user) load() }, [user])
 
   async function load() {
     setLoading(true)
-    const [wRes, mpRes, grRes, wlRes] = await Promise.all([
+    const [wRes, mpRes, glRes, wlRes, goalsRes, weeklyRes, dailyRes, metricsRes, mpaRes, glaRes] = await Promise.all([
       supabase.from('workout_logs').select('*').eq('user_id', user.id).order('log_date', { ascending: false }).limit(30),
-      supabase.from('meal_plans').select('*').eq('user_id', user.id).eq('week_start', weekStart),
-      supabase.from('grocery_items').select('*').eq('user_id', user.id).eq('archived', false).order('created_at'),
+      supabase.from('meal_plans').select('*').eq('user_id', user.id).eq('week_start', weekStart).maybeSingle(),
+      supabase.from('grocery_lists').select('*').eq('user_id', user.id).eq('week_start', weekStart).maybeSingle(),
       supabase.from('wellness_logs').select('*').eq('user_id', user.id).eq('log_date', today).maybeSingle(),
+      supabase.from('goals').select('*').eq('user_id', user.id).eq('category', 'Wellness'),
+      supabase.from('weekly_tasks').select('id, goal_id, complete').eq('user_id', user.id).not('goal_id', 'is', null),
+      supabase.from('daily_todos').select('id, goal_id, complete').eq('user_id', user.id).not('goal_id', 'is', null),
+      supabase.from('goal_metrics').select('*').eq('user_id', user.id).order('recorded_at'),
+      supabase.from('meal_plan_archive').select('*').eq('user_id', user.id).order('archived_at', { ascending: false }),
+      supabase.from('grocery_list_archive').select('*').eq('user_id', user.id).order('archived_at', { ascending: false }),
     ])
     setWorkouts(wRes.data || [])
-    const mp = {}
-    ;(mpRes.data || []).forEach(r => { mp[`${r.day_index}-${r.slot}`] = r })
-    setMealPlan(mp)
-    setGroceries(grRes.data || [])
+    setMealPlan(mpRes.data ? { id: mpRes.data.id, days: { ...emptyDays(), ...(mpRes.data.days || {}) }, prep_notes: mpRes.data.prep_notes || '' } : { id: null, days: emptyDays(), prep_notes: '' })
+    setGroceryList(glRes.data ? { id: glRes.data.id, items: glRes.data.items || [] } : { id: null, items: [] })
     setWellnessLog(wlRes.data)
+    setWellnessGoals(goalsRes.data || [])
+    setWeeklyTasks(weeklyRes.data || [])
+    setDailyTodos(dailyRes.data || [])
+    setGoalMetrics(metricsRes.data || [])
+    setMealArchive(mpaRes.data || [])
+    setGroceryArchive(glaRes.data || [])
     setLoading(false)
   }
 
@@ -109,39 +129,6 @@ export default function WellnessPage() {
     setWorkouts(prev => prev.filter(w => w.id !== id))
   }
 
-  async function setMeal(dayIndex, slot, meal) {
-    const key = `${dayIndex}-${slot}`
-    const existing = mealPlan[key]
-    if (existing) {
-      await supabase.from('meal_plans').update({ meal }).eq('id', existing.id)
-      setMealPlan(prev => ({ ...prev, [key]: { ...existing, meal } }))
-    } else {
-      const { data } = await supabase.from('meal_plans').insert({
-        user_id: user.id, week_start: weekStart, day_index: dayIndex, slot, meal,
-      }).select().single()
-      setMealPlan(prev => ({ ...prev, [key]: data }))
-    }
-  }
-
-  async function addGrocery() {
-    if (!newGrocery.trim()) return
-    const { data } = await supabase.from('grocery_items').insert({ user_id: user.id, text: newGrocery.trim() }).select().single()
-    setGroceries(prev => [...prev, data])
-    setNewGrocery('')
-  }
-
-  async function toggleGrocery(id, checked) {
-    await supabase.from('grocery_items').update({ checked: !checked }).eq('id', id)
-    setGroceries(prev => prev.map(g => g.id === id ? { ...g, checked: !checked } : g))
-  }
-
-  async function archiveChecked() {
-    const ids = groceries.filter(g => g.checked).map(g => g.id)
-    if (!ids.length) return
-    await supabase.from('grocery_items').update({ archived: true }).in('id', ids)
-    setGroceries(prev => prev.filter(g => !ids.includes(g.id)))
-  }
-
   async function logHydration() {
     const existing = wellnessLog
     const current = existing?.hydration_ml || 0
@@ -155,22 +142,78 @@ export default function WellnessPage() {
     }
   }
 
-  async function logSleep() {
-    const existing = wellnessLog
-    const payload = { sleep_hours: sleepHours ? parseFloat(sleepHours) : null, sleep_quality: sleepQuality }
-    if (existing) {
-      await supabase.from('wellness_logs').update(payload).eq('id', existing.id)
-      setWellnessLog(prev => ({ ...prev, ...payload }))
-    } else {
-      const { data } = await supabase.from('wellness_logs').insert({ user_id: user.id, log_date: today, hydration_ml: 0, ...payload }).select().single()
-      setWellnessLog(data)
-    }
+  // Meal plan
+  function updateMealDay(day, value) {
+    setMealPlan(prev => ({ ...prev, days: { ...prev.days, [day]: value } }))
+  }
+  function updatePrepNotes(value) {
+    setMealPlan(prev => ({ ...prev, prep_notes: value }))
+  }
+  async function persistMealPlan() {
+    const payload = { user_id: user.id, week_start: weekStart, days: mealPlan.days, prep_notes: mealPlan.prep_notes, updated_at: new Date().toISOString() }
+    const { data } = await supabase.from('meal_plans').upsert(payload, { onConflict: 'user_id,week_start' }).select().single()
+    if (data) setMealPlan(prev => ({ ...prev, id: data.id }))
   }
 
-  const weekDays = Array.from({ length: 7 }, (_, i) => {
-    const d = addDays(parseISO(weekStart), i)
-    return { label: format(d, 'EEE'), sub: format(d, 'd'), index: i }
-  })
+  // Grocery list
+  async function persistGroceryList(items) {
+    const payload = { user_id: user.id, week_start: weekStart, items, updated_at: new Date().toISOString() }
+    const { data } = await supabase.from('grocery_lists').upsert(payload, { onConflict: 'user_id,week_start' }).select().single()
+    setGroceryList({ id: data?.id ?? groceryList.id, items })
+  }
+  function addGroceryItem() {
+    if (!newGroceryItem.trim()) return
+    persistGroceryList([...groceryList.items, { text: newGroceryItem.trim(), checked: false }])
+    setNewGroceryItem('')
+  }
+  function toggleGroceryItem(idx) {
+    const items = groceryList.items.map((it, i) => i === idx ? { ...it, checked: !it.checked } : it)
+    const unchecked = items.filter(it => !it.checked)
+    const checked = items.filter(it => it.checked)
+    persistGroceryList([...unchecked, ...checked])
+  }
+  function clearChecked() {
+    persistGroceryList(groceryList.items.filter(it => !it.checked))
+  }
+
+  // Archive
+  async function archiveWeek() {
+    const name = `Week of ${format(parseISO(weekStart), 'd MMMM yyyy')}`
+    const [mpaRes, glaRes] = await Promise.all([
+      supabase.from('meal_plan_archive').insert({ user_id: user.id, name, week_start: weekStart, days: mealPlan.days, prep_notes: mealPlan.prep_notes }).select().single(),
+      supabase.from('grocery_list_archive').insert({ user_id: user.id, name, week_start: weekStart, items: groceryList.items }).select().single(),
+    ])
+    if (mpaRes.data) setMealArchive(prev => [mpaRes.data, ...prev])
+    if (glaRes.data) setGroceryArchive(prev => [glaRes.data, ...prev])
+  }
+  function toggleArchiveExpanded(id) {
+    setExpandedArchive(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  // Wellness goals
+  function linkedTasksFor(goalId) {
+    return [...weeklyTasks.filter(t => t.goal_id === goalId), ...dailyTodos.filter(t => t.goal_id === goalId)]
+  }
+  function goalProgress(goal) {
+    if (goal.tracking_type === 'metric') {
+      const start = Number(goal.metric_start ?? 0)
+      const target = Number(goal.metric_target ?? 0)
+      const history = goalMetrics.filter(m => m.goal_id === goal.id)
+      const current = history.length ? Number(history[history.length - 1].value) : start
+      const span = target - start
+      return span !== 0 ? Math.round(Math.min(Math.max((current - start) / span, 0), 1) * 100) : 0
+    }
+    const linked = linkedTasksFor(goal.id)
+    const total = linked.length
+    const done = linked.filter(t => t.complete).length
+    return total ? Math.round((done / total) * 100) : 0
+  }
+
+  const weekDays = DAY_NAMES.map((name, i) => ({ name, date: addDays(parseISO(weekStart), i) }))
 
   if (loading) return <p style={{ padding: 40, color: 'var(--text-3)', textAlign: 'center' }}>Loading…</p>
 
@@ -179,14 +222,45 @@ export default function WellnessPage() {
       <div className="page-header header-wellness mb-6">
         <div>
           <h1>Wellness</h1>
-          <p>Workouts, meals, hydration, and sleep in one place</p>
+          <p>Workouts, meals, hydration, and goals in one place</p>
         </div>
         <div className="page-header-decoration" style={{ color: 'var(--wellness)' }}><WellnessDecoration /></div>
       </div>
 
+      {/* Wellness goals */}
+      <div className="mb-6">
+        <h3 style={{ fontSize: '0.95rem', marginBottom: 10 }}>Wellness goals</h3>
+        {wellnessGoals.length === 0 ? (
+          <div className="empty-state">
+            <p>No wellness goals yet. <Link to="/goals" style={{ color: 'var(--wellness)' }}>Add one on the Goals page</Link>.</p>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10 }}>
+            {wellnessGoals.map(goal => {
+              const pct = goalProgress(goal)
+              const linkedCount = linkedTasksFor(goal.id).length
+              return (
+                <div
+                  key={goal.id}
+                  className="card card-wellness"
+                  onClick={() => setEditingGoal(goal)}
+                  style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px' }}
+                >
+                  <ArcRing value={pct} max={100} size={44} strokeWidth={4} color="var(--wellness)" label={`${pct}%`} fontSize={9} />
+                  <div style={{ minWidth: 0 }}>
+                    <p style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{goal.primary_goal}</p>
+                    <p style={{ fontSize: 11, color: 'var(--text-3)' }}>{linkedCount} task{linkedCount === 1 ? '' : 's'} linked</p>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
       {/* Tabs */}
       <div className="flex gap-2 mb-5" style={{ '--section-tab-color': 'var(--wellness)' }}>
-        {['workouts', 'meals', 'grocery', 'sleep'].map(t => (
+        {['workouts', 'meals', 'hydration'].map(t => (
           <button key={t} onClick={() => setTab(t)} className={`btn btn-sm tab-item ${tab === t ? 'active' : 'btn-ghost'}`}
             style={tab === t ? { color: '#fff', background: 'var(--wellness)' } : {}}>
             {t.charAt(0).toUpperCase() + t.slice(1)}
@@ -241,87 +315,140 @@ export default function WellnessPage() {
 
       {/* Meals tab */}
       {tab === 'meals' && (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '6px', minWidth: 600 }}>
-            <thead>
-              <tr>
-                <th style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-3)', textAlign: 'left', paddingLeft: 4, width: 80 }}>Day</th>
-                {SLOTS.map(s => <th key={s} style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-3)', textAlign: 'left', paddingLeft: 8 }}>{s}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {weekDays.map(({ label, sub, index }) => (
-                <tr key={index}>
-                  <td style={{ padding: '4px 0', verticalAlign: 'middle' }}>
-                    <div>
-                      <p style={{ fontSize: 12, fontWeight: 500 }}>{label}</p>
-                      <p className="mono" style={{ fontSize: 10, color: 'var(--text-3)' }}>{sub}</p>
-                    </div>
-                  </td>
-                  {SLOTS.map(slot => {
-                    const key = `${index}-${slot}`
-                    const entry = mealPlan[key]
-                    return (
-                      <td key={slot} style={{ verticalAlign: 'top' }}>
-                        <input
-                          value={entry?.meal || ''}
-                          placeholder={`${slot}…`}
-                          onChange={e => setMeal(index, slot, e.target.value)}
-                          style={{ fontSize: 12, padding: '6px 8px', background: 'var(--bg-2)', border: '1px solid var(--border)', borderRadius: 6, width: '100%' }}
-                        />
-                      </td>
-                    )
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* Grocery tab */}
-      {tab === 'grocery' && (
         <div>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-            <input
-              placeholder="Add item…"
-              value={newGrocery}
-              onChange={e => setNewGrocery(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && addGrocery()}
-              style={{ flex: 1, fontSize: 13 }}
-            />
-            <button className="btn btn-sm btn-wellness" style={{ color: '#fff' }} onClick={addGrocery}><Plus size={12} /> Add</button>
-            {groceries.some(g => g.checked) && (
-              <button className="btn btn-sm btn-ghost" onClick={archiveChecked}>Archive checked</button>
-            )}
+          {/* 7-day meal plan */}
+          <div className="card mb-4">
+            <h3 style={{ fontSize: '0.9rem', marginBottom: 12 }}>Meal plan</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {weekDays.map(({ name, date }) => (
+                <div key={name}>
+                  <label style={{ display: 'block', fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', marginBottom: 4 }}>
+                    {name} <span style={{ opacity: 0.7 }}>· {format(date, 'd MMM')}</span>
+                  </label>
+                  <textarea
+                    value={mealPlan.days[name] || ''}
+                    onChange={e => updateMealDay(name, e.target.value)}
+                    onBlur={persistMealPlan}
+                    placeholder="What are you eating?"
+                    style={{ width: '100%', minHeight: 50, fontSize: 13 }}
+                  />
+                </div>
+              ))}
+            </div>
+            <div style={{ marginTop: 14 }}>
+              <label style={{ display: 'block', fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', marginBottom: 4 }}>Meal prep notes</label>
+              <textarea
+                value={mealPlan.prep_notes}
+                onChange={e => updatePrepNotes(e.target.value)}
+                onBlur={persistMealPlan}
+                placeholder="Batch prep instructions…"
+                style={{ width: '100%', minHeight: 70, fontSize: 13 }}
+              />
+            </div>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {groceries.map(g => (
-              <div key={g.id} className="flex items-center gap-3" style={{ padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
-                <button
-                  onClick={() => toggleGrocery(g.id, g.checked)}
-                  style={{
-                    width: 20, height: 20, borderRadius: 4, border: `2px solid ${g.checked ? 'var(--wellness)' : 'var(--border)'}`,
-                    background: g.checked ? 'var(--wellness)' : 'transparent', flexShrink: 0,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s',
-                  }}
-                >
-                  {g.checked && <Check size={12} color="#fff" />}
-                </button>
-                <span style={{ fontSize: 13, flex: 1, textDecoration: g.checked ? 'line-through' : 'none', color: g.checked ? 'var(--text-3)' : 'var(--text)' }}>
-                  {g.text}
-                </span>
+
+          {/* Grocery list */}
+          <div className="card mb-4">
+            <h3 style={{ fontSize: '0.9rem', marginBottom: 12 }}>Grocery list</h3>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+              <input
+                placeholder="Add item and press Enter…"
+                value={newGroceryItem}
+                onChange={e => setNewGroceryItem(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && addGroceryItem()}
+                style={{ flex: 1, fontSize: 13 }}
+              />
+              {groceryList.items.some(it => it.checked) && (
+                <button className="btn btn-sm btn-ghost" onClick={clearChecked}>Clear checked</button>
+              )}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {groceryList.items.map((it, idx) => (
+                <div key={idx} className="flex items-center gap-3" style={{ padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
+                  <button
+                    onClick={() => toggleGroceryItem(idx)}
+                    style={{
+                      width: 20, height: 20, borderRadius: 4, border: `2px solid ${it.checked ? 'var(--wellness)' : 'var(--border)'}`,
+                      background: it.checked ? 'var(--wellness)' : 'transparent', flexShrink: 0,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s',
+                    }}
+                  >
+                    {it.checked && <Check size={12} color="#fff" />}
+                  </button>
+                  <span style={{ fontSize: 13, flex: 1, textDecoration: it.checked ? 'line-through' : 'none', color: it.checked ? 'var(--text-3)' : 'var(--text)' }}>
+                    {it.text}
+                  </span>
+                </div>
+              ))}
+              {groceryList.items.length === 0 && <p style={{ fontSize: 12, color: 'var(--text-3)', fontStyle: 'italic' }}>List is empty.</p>}
+            </div>
+          </div>
+
+          {/* Archive */}
+          <div className="flex justify-end mb-4">
+            <button className="btn btn-sm btn-wellness" style={{ color: '#fff' }} onClick={archiveWeek}>
+              <Archive size={12} /> Archive this week
+            </button>
+          </div>
+
+          {mealArchive.length > 0 && (
+            <div className="card">
+              <h3 style={{ fontSize: '0.9rem', marginBottom: 12 }}>Archived weeks</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {mealArchive.map(entry => {
+                  const grocery = groceryArchive.find(g => g.name === entry.name && g.week_start === entry.week_start)
+                  const open = expandedArchive.has(entry.id)
+                  return (
+                    <div key={entry.id} style={{ borderBottom: '1px solid var(--border)', paddingBottom: 8 }}>
+                      <button
+                        onClick={() => toggleArchiveExpanded(entry.id)}
+                        style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'transparent', border: 'none', padding: '4px 0', cursor: 'pointer' }}
+                      >
+                        <span className="flex items-center gap-2" style={{ fontSize: 13, fontWeight: 500 }}>
+                          {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                          {entry.name}
+                        </span>
+                        <span className="mono" style={{ fontSize: 11, color: 'var(--text-3)' }}>{format(new Date(entry.archived_at), 'd MMM yyyy')}</span>
+                      </button>
+                      {open && (
+                        <div style={{ marginTop: 8, paddingLeft: 22, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                          <div>
+                            {DAY_NAMES.map(name => (
+                              <p key={name} style={{ fontSize: 12, marginBottom: 4 }}>
+                                <strong>{name}:</strong> {entry.days?.[name] || <span style={{ color: 'var(--text-3)' }}>—</span>}
+                              </p>
+                            ))}
+                          </div>
+                          {entry.prep_notes && (
+                            <div>
+                              <p style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', marginBottom: 2 }}>Prep notes</p>
+                              <p style={{ fontSize: 12 }}>{entry.prep_notes}</p>
+                            </div>
+                          )}
+                          {grocery && grocery.items?.length > 0 && (
+                            <div>
+                              <p style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', marginBottom: 4 }}>Grocery list</p>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                {grocery.items.map((it, i) => (
+                                  <p key={i} style={{ fontSize: 12, textDecoration: it.checked ? 'line-through' : 'none', color: it.checked ? 'var(--text-3)' : 'var(--text)' }}>{it.text}</p>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
-            ))}
-            {groceries.length === 0 && <p style={{ fontSize: 12, color: 'var(--text-3)', fontStyle: 'italic' }}>List is empty.</p>}
-          </div>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Sleep + hydration tab */}
-      {tab === 'sleep' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-          {/* Hydration */}
+      {/* Hydration tab */}
+      {tab === 'hydration' && (
+        <div style={{ maxWidth: 360 }}>
           <div className="card">
             <h3 style={{ fontSize: '0.9rem', marginBottom: 16 }}>
               <Droplets size={14} style={{ verticalAlign: 'middle', marginRight: 6, color: 'var(--wellness)' }} />
@@ -340,32 +467,21 @@ export default function WellnessPage() {
               <button className="btn btn-sm btn-wellness" style={{ color: '#fff' }} onClick={logHydration}>+ Log</button>
             </div>
           </div>
-
-          {/* Sleep */}
-          <div className="card">
-            <h3 style={{ fontSize: '0.9rem', marginBottom: 16 }}>
-              <Moon size={14} style={{ verticalAlign: 'middle', marginRight: 6, color: 'var(--wellness)' }} />
-              Sleep log — last night
-            </h3>
-            {wellnessLog?.sleep_hours && (
-              <div style={{ background: 'var(--wellness-tint)', borderRadius: 8, padding: '10px 12px', marginBottom: 14 }}>
-                <p style={{ fontSize: 13 }}>{wellnessLog.sleep_hours}h · quality {wellnessLog.sleep_quality}/5</p>
-              </div>
-            )}
-            <div className="form-group">
-              <label>Hours slept</label>
-              <input type="number" step="0.5" min="0" max="24" placeholder="e.g. 7.5" value={sleepHours} onChange={e => setSleepHours(e.target.value)} style={{ fontSize: 12 }} />
-            </div>
-            <div className="form-group">
-              <label>Sleep quality — {sleepQuality}/5</label>
-              <input type="range" min={1} max={5} value={sleepQuality} onChange={e => setSleepQuality(Number(e.target.value))} />
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>
-                <span>Poor</span><span>Great</span>
-              </div>
-            </div>
-            <button className="btn btn-sm btn-wellness w-full" style={{ color: '#fff', justifyContent: 'center' }} onClick={logSleep}>Save sleep log</button>
-          </div>
         </div>
+      )}
+
+      {editingGoal && (
+        <GoalModal
+          goal={editingGoal}
+          defaults={null}
+          onClose={() => setEditingGoal(null)}
+          onSave={goal => {
+            setWellnessGoals(prev => goal.category === 'Wellness'
+              ? prev.map(g => g.id === goal.id ? goal : g)
+              : prev.filter(g => g.id !== goal.id))
+            setEditingGoal(null)
+          }}
+        />
       )}
     </div>
   )
