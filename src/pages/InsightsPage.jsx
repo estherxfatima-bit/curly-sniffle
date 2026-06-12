@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
-import { format, eachDayOfInterval, subMonths, subDays, parseISO, differenceInCalendarDays } from 'date-fns'
+import { format, eachDayOfInterval, subMonths, parseISO, differenceInCalendarDays } from 'date-fns'
 import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, XAxis, YAxis, Tooltip,
   CartesianGrid, ResponsiveContainer, Cell, Legend,
@@ -11,8 +11,9 @@ import { SortableCard, DraggableCardList } from '../components/dashboard/Draggab
 import AddWidgetMenu from '../components/dashboard/AddWidgetMenu'
 import ArcRing from '../components/ui/ArcRing'
 import { Pencil, Check as CheckIcon } from 'lucide-react'
-import { DATE_RANGE_OPTIONS, getRangeDates, longestStreak, bestDayOfWeek, DAY_NAMES, getBuckets } from '../lib/insightsUtils'
-import PeriodToggle from '../components/ui/PeriodToggle'
+import { longestStreak, bestDayOfWeek, DAY_NAMES, getBuckets } from '../lib/insightsUtils'
+import PeriodNav from '../components/ui/PeriodNav'
+import { getTrailingBounds } from '../lib/periodNav'
 import { VARIABLE_CATS, toMonthly } from '../lib/financeUtils'
 import { getQuarterFromDate } from '../lib/constants'
 
@@ -103,11 +104,9 @@ export default function InsightsPage() {
   const { user } = useAuth()
   const [loading, setLoading] = useState(true)
 
-  // Date range
-  const [rangeKey, setRangeKey] = useState('30')
-  const [customStart, setCustomStart] = useState(() => format(subDays(new Date(), 29), 'yyyy-MM-dd'))
-  const [customEnd, setCustomEnd] = useState(() => format(new Date(), 'yyyy-MM-dd'))
-  const [period, setPeriod] = useState('daily')
+  // Daily / weekly / monthly period navigation — same pattern as the Dashboard
+  const [activeView, setActiveView] = useState('daily')
+  const [refDate, setRefDate] = useState(new Date())
 
   // Raw data
   const [habits, setHabits] = useState([])
@@ -198,11 +197,12 @@ export default function InsightsPage() {
   if (loading) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-3)' }}>Loading insights…</div>
 
   // ── Date range ─────────────────────────────────────────────────────────────
-  const { start: rangeStart, end: rangeEnd } = getRangeDates(rangeKey, customStart, customEnd)
+  // Trailing window (ending at the period currently being viewed) used for trend charts and range stats
+  const { start: rangeStart, end: rangeEnd } = getTrailingBounds(refDate, activeView)
   const rangeStartStr = format(rangeStart, 'yyyy-MM-dd')
   const rangeEndStr   = format(rangeEnd, 'yyyy-MM-dd')
   const rangeDayStrs  = eachDayOfInterval({ start: rangeStart, end: rangeEnd }).map(d => format(d, 'yyyy-MM-dd'))
-  const buckets = getBuckets(rangeStart, rangeEnd, period)
+  const buckets = getBuckets(rangeStart, rangeEnd, activeView)
 
   // ── Mood ───────────────────────────────────────────────────────────────────
   const moodInRange = moodLogs.filter(m => m.log_date >= rangeStartStr && m.log_date <= rangeEndStr).sort((a, b) => a.log_date.localeCompare(b.log_date))
@@ -239,10 +239,10 @@ export default function InsightsPage() {
     streak: longestStreak(habitLogs.filter(l => l.habit_id === h.id).map(l => l.log_date)),
   })).sort((a, b) => b.streak - a.streak)
 
-  const thisMonthStr = format(new Date(), 'yyyy-MM')
-  const lastMonthDate = subMonths(new Date(), 1)
+  const thisMonthStr = format(refDate, 'yyyy-MM')
+  const lastMonthDate = subMonths(refDate, 1)
   const lastMonthStr = format(lastMonthDate, 'yyyy-MM')
-  const daysInThisMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate()
+  const daysInThisMonth = new Date(refDate.getFullYear(), refDate.getMonth() + 1, 0).getDate()
   const daysInLastMonth = new Date(lastMonthDate.getFullYear(), lastMonthDate.getMonth() + 1, 0).getDate()
   const habitMomData = habits.map(h => {
     const logs = habitLogs.filter(l => l.habit_id === h.id)
@@ -356,7 +356,7 @@ export default function InsightsPage() {
     return { month: b.label, rate }
   })
 
-  const budgetAdherenceData = period === 'monthly' ? buckets.map(b => {
+  const budgetAdherenceData = activeView === 'monthly' ? buckets.map(b => {
     const monthBudgets = budgets.filter(bu => bu.month_year === b.key && bu.category !== null)
     if (!monthBudgets.length) return { month: b.label, pct: 0, noData: true }
     let within = 0
@@ -729,8 +729,8 @@ export default function InsightsPage() {
     'finance-budget-adherence': (
       <div className="card card-finance">
         <h3 className="mb-4">Budget adherence</h3>
-        {period !== 'monthly' ? (
-          <Empty>Budget adherence is tracked monthly — switch the period toggle to Monthly to see this chart.</Empty>
+        {activeView !== 'monthly' ? (
+          <Empty>Budget adherence is tracked monthly — switch to Monthly to see this chart.</Empty>
         ) : !hasBudgetAdherenceData ? (
           <Empty>Set category budgets on the Finance page to track adherence over time.</Empty>
         ) : (
@@ -767,28 +767,9 @@ export default function InsightsPage() {
         <div className="page-header-decoration" style={{ color: 'var(--career)' }}><InsightsDecoration /></div>
       </div>
 
-      {/* Date range picker */}
-      <div className="card mb-6" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', padding: '12px 16px' }}>
-        <span className="mono" style={{ fontSize: 11, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Date range</span>
-        {DATE_RANGE_OPTIONS.map(opt => (
-          <button
-            key={opt.id}
-            className={`btn btn-sm ${rangeKey === opt.id ? 'btn-career' : 'btn-ghost'}`}
-            style={rangeKey === opt.id ? { color: '#fff' } : {}}
-            onClick={() => setRangeKey(opt.id)}
-          >
-            {opt.label}
-          </button>
-        ))}
-        {rangeKey === 'custom' && (
-          <div className="flex items-center gap-2">
-            <input type="date" value={customStart} max={customEnd} onChange={e => setCustomStart(e.target.value)} style={{ fontSize: 12 }} />
-            <span className="mono" style={{ color: 'var(--text-3)' }}>to</span>
-            <input type="date" value={customEnd} min={customStart} onChange={e => setCustomEnd(e.target.value)} style={{ fontSize: 12 }} />
-          </div>
-        )}
-        <span className="mono" style={{ fontSize: 11, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.07em', marginLeft: 'auto' }}>Granularity</span>
-        <PeriodToggle value={period} onChange={setPeriod} activeClass="btn-career" />
+      {/* Period view switcher + navigation */}
+      <div className="mb-6">
+        <PeriodNav activeView={activeView} onViewChange={setActiveView} refDate={refDate} onRefDateChange={setRefDate} accentColor="var(--career)" />
       </div>
 
       {editing && (

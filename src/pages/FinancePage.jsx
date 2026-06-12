@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { format, subWeeks, subDays, subMonths, startOfWeek, endOfWeek } from 'date-fns'
+import { format, subWeeks, subDays, subMonths, endOfWeek } from 'date-fns'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
@@ -11,7 +11,8 @@ import SpendingReminderBanner from '../components/finance/SpendingReminderBanner
 import { SortableCard, DraggableCardList } from '../components/dashboard/DraggableCard'
 import AddWidgetMenu from '../components/dashboard/AddWidgetMenu'
 import { VARIABLE_CATS, CAT_COLORS, CAT_EMOJI, toMonthly, shouldShowSpendingReminder, isReminderDismissedToday, dismissReminderToday } from '../lib/financeUtils'
-import PeriodToggle from '../components/ui/PeriodToggle'
+import PeriodNav from '../components/ui/PeriodNav'
+import { getCurrentPeriodBounds, getTrailingBounds } from '../lib/periodNav'
 import { Plus, Trash2, Sparkles, Pencil, Check as CheckIcon, X as XIcon } from 'lucide-react'
 
 const TAX_RATE = 0.25 // 25% tax pot estimate for self-employed
@@ -84,10 +85,12 @@ export default function FinancePage() {
   // Spending reminder banner
   const [reminderDismissed, setReminderDismissed] = useState(isReminderDismissedToday())
 
-  // Daily / weekly / monthly view of spend vs budget
-  const [period, setPeriod] = useState('monthly')
+  // Daily / weekly / monthly period navigation — same pattern as the Dashboard
+  const [activeView, setActiveView] = useState('monthly')
+  const [refDate, setRefDate] = useState(new Date())
 
   const thisMonth = new Date().toISOString().slice(0, 7)
+  const refMonthYear = format(refDate, 'yyyy-MM')
 
   useEffect(() => { if (user) load() }, [user])
 
@@ -97,7 +100,7 @@ export default function FinancePage() {
       supabase.from('income_sources').select('*').eq('user_id', user.id).order('created_at'),
       supabase.from('fixed_expenses').select('*').eq('user_id', user.id).order('created_at'),
       supabase.from('variable_expenses').select('*').eq('user_id', user.id).order('date', { ascending: false }),
-      supabase.from('budgets').select('*').eq('user_id', user.id).eq('month_year', thisMonth),
+      supabase.from('budgets').select('*').eq('user_id', user.id),
       supabase.from('dashboard_layout').select('card_order').eq('user_id', user.id).eq('view', 'finance').maybeSingle(),
     ])
     setIncome(incRes.data || [])
@@ -170,30 +173,32 @@ export default function FinancePage() {
     }
   }
 
-  // Budget settings
+  // Budget settings — apply to the month currently being viewed
   function startEditBudgets() {
-    const inputs = { overall: budgets.find(b => b.category === null)?.amount?.toString() ?? '' }
-    VARIABLE_CATS.forEach(c => { inputs[c] = budgets.find(b => b.category === c)?.amount?.toString() ?? '' })
+    const monthBudgets = budgets.filter(b => b.month_year === refMonthYear)
+    const inputs = { overall: monthBudgets.find(b => b.category === null)?.amount?.toString() ?? '' }
+    VARIABLE_CATS.forEach(c => { inputs[c] = monthBudgets.find(b => b.category === c)?.amount?.toString() ?? '' })
     setBudgetInputs(inputs)
     setEditingBudgets(true)
   }
 
   async function saveBudgets() {
+    const monthBudgets = budgets.filter(b => b.month_year === refMonthYear)
     const entries = [{ category: null, key: 'overall' }, ...VARIABLE_CATS.map(c => ({ category: c, key: c }))]
     for (const { category, key } of entries) {
       const raw = budgetInputs[key]
       if (raw === undefined || raw === '') continue
       const amt = parseFloat(raw) || 0
-      const existing = budgets.find(b => b.category === category)
+      const existing = monthBudgets.find(b => b.category === category)
       if (existing) {
         if (existing.amount !== amt) {
           await supabase.from('budgets').update({ amount: amt }).eq('id', existing.id)
         }
       } else {
-        await supabase.from('budgets').insert({ user_id: user.id, category, amount: amt, month_year: thisMonth })
+        await supabase.from('budgets').insert({ user_id: user.id, category, amount: amt, month_year: refMonthYear })
       }
     }
-    const { data } = await supabase.from('budgets').select('*').eq('user_id', user.id).eq('month_year', thisMonth)
+    const { data } = await supabase.from('budgets').select('*').eq('user_id', user.id)
     setBudgets(data || [])
     setEditingBudgets(false)
   }
@@ -219,11 +224,12 @@ export default function FinancePage() {
   const totalVariable = varThisMonth.reduce((s, i) => s + i.amount, 0)
   const takeHome      = totalIncome - taxPot - totalFixed - totalVariable
 
-  const overallBudget = budgets.find(b => b.category === null)?.amount || 0
+  const monthBudgets = budgets.filter(b => b.month_year === refMonthYear)
+  const overallBudget = monthBudgets.find(b => b.category === null)?.amount || 0
   const categorySpend = {}
   VARIABLE_CATS.forEach(c => { categorySpend[c] = varThisMonth.filter(v => v.category === c).reduce((s, v) => s + v.amount, 0) })
   const categoryBudget = {}
-  VARIABLE_CATS.forEach(c => { categoryBudget[c] = budgets.find(b => b.category === c)?.amount || 0 })
+  VARIABLE_CATS.forEach(c => { categoryBudget[c] = monthBudgets.find(b => b.category === c)?.amount || 0 })
 
   // Disposable income colour: red if overspent, amber if thin margin, else green
   const disposablePct = totalIncome > 0 ? (takeHome / totalIncome) * 100 : (takeHome >= 0 ? 100 : -1)
@@ -234,37 +240,32 @@ export default function FinancePage() {
 
   // Daily / weekly / monthly period scaling — budgets are stored as monthly amounts
   const BUDGET_SCALE = { daily: 12 / 365, weekly: 12 / 52, monthly: 1 }
-  const PERIOD_LABEL = { daily: 'today', weekly: 'this week', monthly: 'this month' }
-  const todayStr = format(new Date(), 'yyyy-MM-dd')
-  const thisWeekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
-  const thisWeekEnd = format(endOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
+  const { start: periodStart, end: periodEnd } = getCurrentPeriodBounds(refDate, activeView)
+  const periodStartStr = format(periodStart, 'yyyy-MM-dd')
+  const periodEndStr = format(periodEnd, 'yyyy-MM-dd')
 
-  const periodVariable = period === 'daily' ? variable.filter(v => v.date === todayStr)
-    : period === 'weekly' ? variable.filter(v => v.date >= thisWeekStart && v.date <= thisWeekEnd)
-    : varThisMonth
+  const periodVariable = variable.filter(v => v.date >= periodStartStr && v.date <= periodEndStr)
   const periodTotal = periodVariable.reduce((s, i) => s + i.amount, 0)
-  const periodOverallBudget = overallBudget * BUDGET_SCALE[period]
+  const periodOverallBudget = overallBudget * BUDGET_SCALE[activeView]
   const periodCategorySpend = {}
   VARIABLE_CATS.forEach(c => { periodCategorySpend[c] = periodVariable.filter(v => v.category === c).reduce((s, v) => s + v.amount, 0) })
   const periodCategoryBudget = {}
-  VARIABLE_CATS.forEach(c => { periodCategoryBudget[c] = categoryBudget[c] * BUDGET_SCALE[period] })
-  const periodLabel = PERIOD_LABEL[period]
+  VARIABLE_CATS.forEach(c => { periodCategoryBudget[c] = categoryBudget[c] * BUDGET_SCALE[activeView] })
 
-  // Spending chart — granularity follows the period toggle
+  // Spending trend chart — trailing window + granularity follow the period view
+  const { start: trailStart, end: trailEnd } = getTrailingBounds(refDate, activeView)
   const spendChartData = []
   let spendChartTitle
-  if (period === 'daily') {
+  if (activeView === 'daily') {
     spendChartTitle = 'Daily spending — last 14 days'
-    for (let i = 13; i >= 0; i--) {
-      const d = subDays(new Date(), i)
+    for (let d = trailStart; d <= trailEnd; d = subDays(d, -1)) {
       const dStr = format(d, 'yyyy-MM-dd')
       const total = variable.filter(v => v.date === dStr).reduce((s, v) => s + v.amount, 0)
       spendChartData.push({ week: format(d, 'd MMM'), total })
     }
-  } else if (period === 'weekly') {
+  } else if (activeView === 'weekly') {
     spendChartTitle = 'Weekly spending — last 4 weeks'
-    for (let i = 3; i >= 0; i--) {
-      const ws = startOfWeek(subWeeks(new Date(), i), { weekStartsOn: 1 })
+    for (let ws = trailStart; ws <= trailEnd; ws = subWeeks(ws, -1)) {
       const we = endOfWeek(ws, { weekStartsOn: 1 })
       const wsStr = format(ws, 'yyyy-MM-dd')
       const weStr = format(we, 'yyyy-MM-dd')
@@ -273,11 +274,10 @@ export default function FinancePage() {
     }
   } else {
     spendChartTitle = 'Monthly spending — last 6 months'
-    for (let i = 5; i >= 0; i--) {
-      const d = subMonths(new Date(), i)
-      const key = format(d, 'yyyy-MM')
+    for (let ms = trailStart; ms <= trailEnd; ms = subMonths(ms, -1)) {
+      const key = format(ms, 'yyyy-MM')
       const total = variable.filter(v => v.date.startsWith(key)).reduce((s, v) => s + v.amount, 0)
-      spendChartData.push({ week: format(d, 'MMM yy'), total })
+      spendChartData.push({ week: format(ms, 'MMM yy'), total })
     }
   }
 
@@ -294,7 +294,7 @@ export default function FinancePage() {
     'category-budgets': (
       <div className="card card-finance">
         <div className="flex items-center justify-between mb-4">
-          <h3>Category budgets <span className="mono" style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 400 }}>({periodLabel})</span></h3>
+          <h3>Category budgets <span className="mono" style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 400 }}>({format(refDate, 'MMM yyyy')})</span></h3>
           {editingBudgets ? (
             <div className="flex items-center gap-2">
               <button className="btn btn-sm btn-finance" style={{ color: '#fff' }} onClick={e => { e.stopPropagation(); saveBudgets() }}><CheckIcon size={12} /> Save</button>
@@ -517,10 +517,15 @@ export default function FinancePage() {
         <SpendingReminderBanner days={reminderDays} onDismiss={() => { dismissReminderToday(); setReminderDismissed(true) }} />
       )}
 
+      {/* Period view switcher + navigation */}
+      <div className="mb-6">
+        <PeriodNav activeView={activeView} onViewChange={setActiveView} refDate={refDate} onRefDateChange={setRefDate} accentColor="var(--finance)" />
+      </div>
+
       {/* Hero section */}
       <div className="card card-finance mb-6" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 28, padding: '24px 28px' }}>
         <div>
-          <p className="mono" style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 6 }}>Total spent {periodLabel}</p>
+          <p className="mono" style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 6 }}>Total spent</p>
           <p style={{ fontFamily: 'var(--font-serif)', fontSize: '2.6rem', fontWeight: 700, letterSpacing: '-0.02em' }}>£{periodTotal.toFixed(0)}</p>
         </div>
         <BudgetRing label="Budget" spent={periodTotal} budget={periodOverallBudget} size={120} />
@@ -529,13 +534,9 @@ export default function FinancePage() {
           <p style={{ fontFamily: 'var(--font-serif)', fontSize: '2.2rem', fontWeight: 700, letterSpacing: '-0.02em', color: disposableColor }}>£{takeHome.toFixed(0)}</p>
           <p className="mono" style={{ fontSize: 11, color: disposableColor, marginTop: 4 }}>
             {periodOverallBudget > 0
-              ? (periodTotal <= periodOverallBudget ? `£${(periodOverallBudget - periodTotal).toFixed(0)} left of ${periodLabel}'s budget` : `£${(periodTotal - periodOverallBudget).toFixed(0)} over budget ${periodLabel}`)
+              ? (periodTotal <= periodOverallBudget ? `£${(periodOverallBudget - periodTotal).toFixed(0)} left of budget` : `£${(periodTotal - periodOverallBudget).toFixed(0)} over budget`)
               : (takeHome >= 0 ? `£${takeHome.toFixed(0)} left this month` : `£${Math.abs(takeHome).toFixed(0)} over budget this month`)}
           </p>
-        </div>
-        <div style={{ marginLeft: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
-          <span className="mono" style={{ fontSize: 10, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>View</span>
-          <PeriodToggle value={period} onChange={setPeriod} activeClass="btn-finance" />
         </div>
       </div>
 

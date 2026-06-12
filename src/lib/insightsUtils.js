@@ -1,28 +1,7 @@
 // Shared helpers for the Insights page — date ranges, streaks, day-of-week stats.
-import { subDays, startOfQuarter, parseISO, differenceInCalendarDays, format, eachDayOfInterval, eachWeekOfInterval, eachMonthOfInterval, endOfWeek, endOfMonth } from 'date-fns'
+import { parseISO, differenceInCalendarDays, format, eachDayOfInterval, eachWeekOfInterval, eachMonthOfInterval, endOfWeek, endOfMonth } from 'date-fns'
 
 export const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-
-export const DATE_RANGE_OPTIONS = [
-  { id: '7', label: 'Last 7 days' },
-  { id: '30', label: 'Last 30 days' },
-  { id: '90', label: 'Last 90 days' },
-  { id: 'quarter', label: 'This quarter' },
-  { id: 'custom', label: 'Custom range' },
-]
-
-// Returns { start: Date, end: Date } for the selected range.
-export function getRangeDates(rangeKey, customStart, customEnd) {
-  const now = new Date()
-  if (rangeKey === '7')  return { start: subDays(now, 6), end: now }
-  if (rangeKey === '30') return { start: subDays(now, 29), end: now }
-  if (rangeKey === '90') return { start: subDays(now, 89), end: now }
-  if (rangeKey === 'quarter') return { start: startOfQuarter(now), end: now }
-  if (rangeKey === 'custom' && customStart && customEnd) {
-    return { start: parseISO(customStart), end: parseISO(customEnd) }
-  }
-  return { start: subDays(now, 29), end: now }
-}
 
 // Longest run of consecutive calendar days in a list of 'yyyy-MM-dd' date strings.
 export function longestStreak(dateStrings) {
@@ -54,12 +33,6 @@ export function bestDayOfWeek(dateStrings) {
 export function fmtDay(date) {
   return format(date, 'yyyy-MM-dd')
 }
-
-export const PERIOD_OPTIONS = [
-  { id: 'daily', label: 'Daily' },
-  { id: 'weekly', label: 'Weekly' },
-  { id: 'monthly', label: 'Monthly' },
-]
 
 // Splits [start, end] into day/week/month buckets for chart aggregation.
 // Each bucket: { label, key, startStr, endStr }.
