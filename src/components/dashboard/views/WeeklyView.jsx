@@ -2,6 +2,7 @@ import { Check } from 'lucide-react'
 import { format, addDays } from 'date-fns'
 import ArcRing from '../../ui/ArcRing'
 import WeeklyQuote from '../WeeklyQuote'
+import WeeklyAgenda from '../../calendar/WeeklyAgenda'
 import { SortableCard, DraggableCardList } from '../DraggableCard'
 import AddWidgetMenu from '../AddWidgetMenu'
 
@@ -10,6 +11,7 @@ export const CARD_LABELS = {
   momentum: 'Momentum',
   tasks: 'This week',
   'habit-grid': 'Habit week',
+  calendar: "This week's calendar",
 }
 
 export const DEFAULT_ORDER = [
@@ -17,6 +19,7 @@ export const DEFAULT_ORDER = [
   { id: 'momentum', size: 'wide' },
   { id: 'tasks', size: 'wide' },
   { id: 'habit-grid', size: 'wide' },
+  { id: 'calendar', size: 'wide' },
 ]
 
 const DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
@@ -161,6 +164,15 @@ export default function WeeklyView({
         )}
       </div>
     ),
+    calendar: (
+      <div className="card card-finance">
+        <div className="flex items-center justify-between mb-4">
+          <h3>This week's calendar</h3>
+          <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-3)' }}>Mon → Sun</p>
+        </div>
+        <WeeklyAgenda weekStart={weekStart} />
+      </div>
+    ),
   }
 
   const available = Object.entries(CARD_LABELS)
@@ -183,7 +195,7 @@ export default function WeeklyView({
             editing={editing}
             onResize={s => onResize(id, s)}
             onRemove={() => onRemoveCard(id)}
-            onClick={id !== 'quote' ? () => openPanel(
+            onClick={id !== 'quote' && id !== 'calendar' ? () => openPanel(
               id === 'momentum' ? 'momentum' :
               id === 'tasks'    ? 'tasks'    :
               id === 'habit-grid' ? 'habits' : id,

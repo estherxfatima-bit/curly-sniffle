@@ -1,10 +1,11 @@
-import { Check, Droplets, Star } from 'lucide-react'
+import { Check, Droplets, Star, Calendar as CalendarIcon } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../../../lib/supabase'
 import ArcRing from '../../ui/ArcRing'
 import DailyTodos from '../DailyTodos'
 import MoodWidget from '../MoodWidget'
 import CurrentlyReading from '../CurrentlyReading'
+import DailyAgenda from '../../calendar/DailyAgenda'
 import { SortableCard, DraggableCardList } from '../DraggableCard'
 import AddWidgetMenu from '../AddWidgetMenu'
 
@@ -15,6 +16,7 @@ export const CARD_LABELS = {
   mood: 'Mood',
   water: 'Hydration',
   reading: 'Currently reading',
+  calendar: "Today's calendar",
 }
 
 export const DEFAULT_ORDER = [
@@ -24,6 +26,7 @@ export const DEFAULT_ORDER = [
   { id: 'mood', size: 'square' },
   { id: 'water', size: 'square' },
   { id: 'reading', size: 'square' },
+  { id: 'calendar', size: 'wide' },
 ]
 const HYDRATION_GOAL = 2500
 
@@ -124,6 +127,16 @@ export default function DailyView({
     ),
 
     reading: <CurrentlyReading />,
+
+    calendar: (
+      <div className="card card-finance">
+        <div className="flex items-center justify-between mb-3">
+          <h3>Today's calendar</h3>
+          <CalendarIcon size={14} color="var(--finance)" />
+        </div>
+        <DailyAgenda />
+      </div>
+    ),
   }
 
   const available = Object.entries(CARD_LABELS)
@@ -146,7 +159,7 @@ export default function DailyView({
             editing={editing}
             onResize={s => onResize(id, s)}
             onRemove={() => onRemoveCard(id)}
-            onClick={id !== 'todos' && id !== 'mood' && id !== 'reading' ? () => openPanel(id === 'habits' ? 'habits' : id === 'water' ? 'water' : id === 'priority' ? 'tasks' : id, { habits, tasks: weekTasks, hydration }) : undefined}
+            onClick={id !== 'todos' && id !== 'mood' && id !== 'reading' && id !== 'calendar' ? () => openPanel(id === 'habits' ? 'habits' : id === 'water' ? 'water' : id === 'priority' ? 'tasks' : id, { habits, tasks: weekTasks, hydration }) : undefined}
           >
             {CARDS[id] || null}
           </SortableCard>

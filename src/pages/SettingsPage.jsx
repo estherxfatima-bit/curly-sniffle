@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { useTheme } from '../hooks/useTheme'
+import { supabase } from '../lib/supabase'
 import { registerServiceWorker, subscribeToPush, unsubscribeFromPush, isSubscribed } from '../lib/pushNotifications'
-import { Bell, BellOff, Sun, Moon, LogOut } from 'lucide-react'
+import { Bell, BellOff, Sun, Moon, LogOut, Calendar, Unlink } from 'lucide-react'
 
 function SettingsDecoration() {
   return (
@@ -20,17 +21,35 @@ function SettingsDecoration() {
 }
 
 export default function SettingsPage() {
-  const { user, signOut } = useAuth()
+  const { user, session, signOut } = useAuth()
   const { theme, toggle } = useTheme()
   const [pushEnabled, setPushEnabled] = useState(false)
   const [pushLoading, setPushLoading] = useState(false)
   const [pushSupported, setPushSupported] = useState(true)
+  const [googleStatus, setGoogleStatus] = useState({ loading: true, connected: false, email: null })
 
   useEffect(() => {
     registerServiceWorker()
     if (!('PushManager' in window)) { setPushSupported(false); return }
     isSubscribed().then(setPushEnabled)
   }, [])
+
+  useEffect(() => {
+    if (!user) return
+    loadGoogleStatus()
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('google') === 'error') alert('Failed to connect Google Calendar. Please try again.')
+  }, [user])
+
+  async function loadGoogleStatus() {
+    const { data } = await supabase.from('google_tokens').select('google_email').eq('user_id', user.id).maybeSingle()
+    setGoogleStatus({ loading: false, connected: !!data, email: data?.google_email || null })
+  }
+
+  async function disconnectGoogle() {
+    await supabase.from('google_tokens').delete().eq('user_id', user.id)
+    setGoogleStatus({ loading: false, connected: false, email: null })
+  }
 
   async function togglePush() {
     setPushLoading(true)
@@ -98,6 +117,38 @@ export default function SettingsPage() {
               {pushEnabled ? <BellOff size={14} /> : <Bell size={14} />}
               {pushLoading ? 'Working…' : pushEnabled ? 'Disable' : 'Enable'}
             </button>
+          </div>
+        )}
+      </div>
+
+      {/* Google Calendar */}
+      <div className="card mb-4">
+        <h3 style={{ fontSize: '0.9rem', marginBottom: 16 }}>Google Calendar</h3>
+        {googleStatus.loading ? (
+          <p style={{ fontSize: 12, color: 'var(--text-3)' }}>Loading…</p>
+        ) : (
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className={`badge ${googleStatus.connected ? 'badge-finance' : 'badge-muted'}`}>
+                  {googleStatus.connected ? 'Connected' : 'Not connected'}
+                </span>
+              </div>
+              <p style={{ fontSize: 12, color: 'var(--text-3)' }}>
+                {googleStatus.connected ? googleStatus.email : 'Connect your Google account to show calendar events on your dashboard and weekly plan.'}
+              </p>
+            </div>
+            {googleStatus.connected ? (
+              <button className="btn btn-ghost flex items-center gap-2" onClick={disconnectGoogle} style={{ color: 'var(--danger)' }}>
+                <Unlink size={14} />
+                Disconnect
+              </button>
+            ) : (
+              <a className="btn btn-accent flex items-center gap-2" style={{ color: '#fff' }} href={`/api/auth/google/start?token=${encodeURIComponent(session?.access_token || '')}`}>
+                <Calendar size={14} />
+                Connect Google Calendar
+              </a>
+            )}
           </div>
         )}
       </div>

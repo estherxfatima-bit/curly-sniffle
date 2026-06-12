@@ -8,6 +8,7 @@ import WeeklyReviewModal from '../components/weekly/WeeklyReviewModal'
 import PastReviews from '../components/weekly/PastReviews'
 import WeeklyQuote from '../components/dashboard/WeeklyQuote'
 import TaskExpansion from '../components/weekly/TaskExpansion'
+import WeeklyAgenda from '../components/calendar/WeeklyAgenda'
 import ArcRing from '../components/ui/ArcRing'
 
 const FREQUENCIES = ['Daily', 'Weekly', '2x/week', '3x/week', 'One-off']
@@ -306,6 +307,15 @@ export default function WeeklyPage() {
             )}
           </tbody>
         </table>
+      </div>
+
+      {/* This week's calendar */}
+      <div className="card mt-4">
+        <div className="flex items-center justify-between mb-4">
+          <h3>This week's calendar</h3>
+          <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-3)' }}>Mon → Sun</p>
+        </div>
+        <WeeklyAgenda weekStart={weekStartStr} />
       </div>
 
       {showReview && <WeeklyReviewModal weekStart={weekStartStr} incompleteTasks={tasks.filter(t => !t.complete)} onClose={() => setShowReview(false)} onComplete={carryForwardIncomplete} />}
