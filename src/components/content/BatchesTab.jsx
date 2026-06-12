@@ -2,7 +2,9 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
 import { buildICSFile, buildICSEvent, downloadICS } from '../../lib/ics'
-import { Plus, X, Calendar } from 'lucide-react'
+import { Plus, X, Calendar, MapPin, Trash2 } from 'lucide-react'
+
+const TIME_OF_DAY = ['Morning', 'Afternoon', 'Evening']
 import { startOfWeek, addDays, format } from 'date-fns'
 
 function CompletionRing({ done, total, size = 48 }) {
@@ -65,6 +67,42 @@ export default function BatchesTab() {
   async function moveToBatch(ideaId, batchName) {
     await supabase.from('content_ideas').update({ batch: batchName }).eq('id', ideaId)
     setIdeas(prev => prev.map(i => i.id === ideaId ? { ...i, batch: batchName } : i))
+  }
+
+  async function updateBatch(batchId, field, value) {
+    const { error } = await supabase.from('content_batches').update({ [field]: value }).eq('id', batchId)
+    if (error) return
+    setBatches(prev => prev.map(b => b.id === batchId ? { ...b, [field]: value } : b))
+  }
+
+  function addFilmingDate(batch) {
+    const dates = [...(batch.filming_dates || []), { date: '', time: 'Morning' }]
+    updateBatch(batch.id, 'filming_dates', dates)
+  }
+
+  function updateFilmingDate(batch, idx, field, value) {
+    const dates = (batch.filming_dates || []).map((d, i) => i === idx ? { ...d, [field]: value } : d)
+    updateBatch(batch.id, 'filming_dates', dates)
+  }
+
+  function removeFilmingDate(batch, idx) {
+    const dates = (batch.filming_dates || []).filter((_, i) => i !== idx)
+    updateBatch(batch.id, 'filming_dates', dates)
+  }
+
+  function addLocation(batch) {
+    const locations = [...(batch.locations || []), '']
+    updateBatch(batch.id, 'locations', locations)
+  }
+
+  function updateLocation(batch, idx, value) {
+    const locations = (batch.locations || []).map((l, i) => i === idx ? value : l)
+    updateBatch(batch.id, 'locations', locations)
+  }
+
+  function removeLocation(batch, idx) {
+    const locations = (batch.locations || []).filter((_, i) => i !== idx)
+    updateBatch(batch.id, 'locations', locations)
   }
 
   async function markFilmingWeek(batch) {
@@ -180,6 +218,64 @@ export default function BatchesTab() {
                   ))}
                   {batchIdeas.length === 0 && (
                     <p style={{ fontSize: '12px', color: 'var(--text-3)', fontStyle: 'italic', padding: '8px 0' }}>Drop ideas here</p>
+                  )}
+                </div>
+
+                {/* Filming dates */}
+                <div style={{ marginBottom: '10px' }}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="mono" style={{ fontSize: '10px' }}>Filming dates</span>
+                    <button className="btn-icon btn" onClick={() => addFilmingDate(batch)}><Plus size={12} /></button>
+                  </div>
+                  {(batch.filming_dates || []).length === 0 ? (
+                    <p style={{ fontSize: '11px', color: 'var(--text-3)', fontStyle: 'italic' }}>No filming dates set.</p>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      {(batch.filming_dates || []).map((d, idx) => (
+                        <div key={idx} className="flex items-center gap-2">
+                          <input
+                            type="date"
+                            value={d.date || ''}
+                            onChange={e => updateFilmingDate(batch, idx, 'date', e.target.value)}
+                            style={{ fontSize: '12px', padding: '4px 6px', flex: 1 }}
+                          />
+                          <select
+                            value={d.time || 'Morning'}
+                            onChange={e => updateFilmingDate(batch, idx, 'time', e.target.value)}
+                            style={{ fontSize: '12px', padding: '4px 6px', width: 'auto' }}
+                          >
+                            {TIME_OF_DAY.map(t => <option key={t}>{t}</option>)}
+                          </select>
+                          <button className="btn-icon btn" onClick={() => removeFilmingDate(batch, idx)}><Trash2 size={12} /></button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Locations */}
+                <div style={{ marginBottom: '10px' }}>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="mono" style={{ fontSize: '10px' }}>Locations</span>
+                    <button className="btn-icon btn" onClick={() => addLocation(batch)}><Plus size={12} /></button>
+                  </div>
+                  {(batch.locations || []).length === 0 ? (
+                    <p style={{ fontSize: '11px', color: 'var(--text-3)', fontStyle: 'italic' }}>No locations set.</p>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      {(batch.locations || []).map((loc, idx) => (
+                        <div key={idx} className="flex items-center gap-2">
+                          <MapPin size={12} style={{ color: 'var(--text-3)', flexShrink: 0 }} />
+                          <input
+                            value={loc}
+                            onChange={e => updateLocation(batch, idx, e.target.value)}
+                            placeholder="e.g. Home studio"
+                            style={{ fontSize: '12px', padding: '4px 6px', flex: 1 }}
+                          />
+                          <button className="btn-icon btn" onClick={() => removeLocation(batch, idx)}><Trash2 size={12} /></button>
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
 

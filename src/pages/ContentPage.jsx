@@ -1,11 +1,12 @@
 import { useState } from 'react'
+import PillarsTab from '../components/content/PillarsTab'
 import InspirationTab from '../components/content/InspirationTab'
 import AIAnalysisTab from '../components/content/AIAnalysisTab'
 import IdeaDumpTab from '../components/content/IdeaDumpTab'
 import BatchesTab from '../components/content/BatchesTab'
 import ProductionPipelineTab from '../components/content/ProductionPipelineTab'
 
-const TABS = ['Inspiration', 'AI Analysis', 'Idea Dump', 'Batches', 'Production Pipeline']
+const TABS = ['Pillars', 'Inspiration', 'AI Analysis', 'Idea Dump', 'Batches', 'Production Pipeline']
 
 function ContentDecoration() {
   return (
@@ -20,7 +21,7 @@ function ContentDecoration() {
 }
 
 export default function ContentPage() {
-  const [tab, setTab] = useState('Inspiration')
+  const [tab, setTab] = useState('Pillars')
   const [ideaDumpRefresh, setIdeaDumpRefresh] = useState(0)
 
   return (
@@ -43,6 +44,7 @@ export default function ContentPage() {
         ))}
       </div>
 
+      {tab === 'Pillars'               && <PillarsTab />}
       {tab === 'Inspiration'          && <InspirationTab />}
       {tab === 'AI Analysis'          && <AIAnalysisTab onSaveIdea={() => setIdeaDumpRefresh(v => v+1)} />}
       {tab === 'Idea Dump'            && <IdeaDumpTab refreshKey={ideaDumpRefresh} />}

@@ -7,26 +7,28 @@ import { Plus, Trash2 } from 'lucide-react'
 const STATUS_COLORS = {
   'Idea': 'badge-muted',
   'Film next': 'badge-cobalt',
-  'Pull clip': 'badge-warning',
   'Ready to edit': 'badge-accent',
-  'Editing': 'badge-warning',
-  'Ready to post': 'badge-success',
+  'Pull clip': 'badge-warning',
   'Posted': 'badge-success',
 }
 
-function InlineCell({ value, onChange, type = 'text', options }) {
+function InlineCell({ value, onChange, type = 'text', options, renderDisplay }) {
   const [editing, setEditing] = useState(false)
   const [val, setVal] = useState(value || '')
 
+  useEffect(() => { setVal(value || '') }, [value])
+
+  function commit() {
+    setEditing(false)
+    if ((value || '') !== val) onChange(val)
+  }
+
   if (!editing) {
     return (
-      <span
-        onClick={() => setEditing(true)}
-        style={{ cursor: 'text', minWidth: '40px', display: 'inline-block', borderBottom: '1px dashed transparent' }}
-        onMouseEnter={e => e.target.style.borderBottomColor = 'var(--border-light)'}
-        onMouseLeave={e => e.target.style.borderBottomColor = 'transparent'}
-      >
-        {value || <span style={{ color: 'var(--text-3)', fontStyle: 'italic' }}>—</span>}
+      <span className="inline-cell" onClick={() => setEditing(true)}>
+        {renderDisplay
+          ? renderDisplay(value)
+          : (value || <span style={{ color: 'var(--text-3)', fontStyle: 'italic' }}>—</span>)}
       </span>
     )
   }
@@ -36,7 +38,7 @@ function InlineCell({ value, onChange, type = 'text', options }) {
       <select
         value={val}
         onChange={e => setVal(e.target.value)}
-        onBlur={() => { onChange(val); setEditing(false) }}
+        onBlur={commit}
         autoFocus
         style={{ fontSize: '12px', padding: '2px 6px', width: 'auto' }}
       >
@@ -50,8 +52,8 @@ function InlineCell({ value, onChange, type = 'text', options }) {
     <input
       value={val}
       onChange={e => setVal(e.target.value)}
-      onBlur={() => { onChange(val); setEditing(false) }}
-      onKeyDown={e => { if (e.key === 'Enter') { onChange(val); setEditing(false) } }}
+      onBlur={commit}
+      onKeyDown={e => { if (e.key === 'Enter') commit() }}
       autoFocus
       style={{ fontSize: '12px', padding: '2px 6px', width: type === 'date' ? '130px' : '160px' }}
       type={type}
@@ -63,10 +65,9 @@ export default function IdeaDumpTab({ refreshKey = 0 }) {
   const { user } = useAuth()
   const [ideas, setIdeas] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [filters, setFilters] = useState({ pillar: '', status: '', batch: '' })
   const [batches, setBatches] = useState([])
-  const [adding, setAdding] = useState(false)
-  const [newIdea, setNewIdea] = useState({ title: '', pillar: '', format: '', status: 'Idea' })
 
   useEffect(() => {
     if (user) { loadIdeas(); loadBatches() }
@@ -74,35 +75,39 @@ export default function IdeaDumpTab({ refreshKey = 0 }) {
 
   async function loadIdeas() {
     setLoading(true)
-    const { data } = await supabase.from('content_ideas').select('*').eq('user_id', user.id).order('created_at')
+    const { data, error } = await supabase.from('content_ideas').select('*').eq('user_id', user.id).order('created_at')
+    if (error) setError(error.message)
     setIdeas(data || [])
     setLoading(false)
   }
 
   async function loadBatches() {
-    const { data } = await supabase.from('content_batches').select('id, name').eq('user_id', user.id)
+    const { data, error } = await supabase.from('content_batches').select('id, name').eq('user_id', user.id)
+    if (error) setError(error.message)
     setBatches(data || [])
   }
 
   async function updateIdea(id, field, value) {
-    await supabase.from('content_ideas').update({ [field]: value || null }).eq('id', id)
-    setIdeas(prev => prev.map(i => i.id === id ? { ...i, [field]: value } : i))
+    const clean = value === '' ? null : value
+    const { error } = await supabase.from('content_ideas').update({ [field]: clean }).eq('id', id)
+    if (error) { setError(error.message); return }
+    setIdeas(prev => prev.map(i => i.id === id ? { ...i, [field]: clean } : i))
   }
 
-  async function addIdea() {
-    if (!newIdea.title.trim()) return
-    const { data } = await supabase.from('content_ideas').insert({
+  async function addIdea(position) {
+    const { data, error } = await supabase.from('content_ideas').insert({
       user_id: user.id,
-      ...newIdea,
+      title: 'New idea',
+      status: 'Idea',
       production_stage: 'Idea',
     }).select().single()
-    if (data) setIdeas(prev => [...prev, data])
-    setNewIdea({ title: '', pillar: '', format: '', status: 'Idea' })
-    setAdding(false)
+    if (error) { setError(error.message); return }
+    setIdeas(prev => position === 'top' ? [data, ...prev] : [...prev, data])
   }
 
   async function deleteIdea(id) {
-    await supabase.from('content_ideas').delete().eq('id', id)
+    const { error } = await supabase.from('content_ideas').delete().eq('id', id)
+    if (error) { setError(error.message); return }
     setIdeas(prev => prev.filter(i => i.id !== id))
   }
 
@@ -116,18 +121,27 @@ export default function IdeaDumpTab({ refreshKey = 0 }) {
   const cols = [
     { key: 'title', label: 'Idea / Title', width: '200px' },
     { key: 'series', label: 'Series', width: '120px' },
-    { key: 'pillar', label: 'Pillar', type: 'select', options: CONTENT_PILLARS, width: '140px' },
-    { key: 'format', label: 'Format', type: 'select', options: CONTENT_FORMATS, width: '120px' },
-    { key: 'status', label: 'Status', type: 'select', options: CONTENT_STATUSES, width: '110px' },
+    { key: 'pillar', label: 'Pillar', type: 'select', options: CONTENT_PILLARS, width: '160px' },
+    { key: 'format', label: 'Format', type: 'select', options: CONTENT_FORMATS, width: '150px' },
+    {
+      key: 'status', label: 'Status', type: 'select', options: CONTENT_STATUSES, width: '130px',
+      renderDisplay: v => <span className={`badge ${STATUS_COLORS[v] || 'badge-muted'}`} style={{ fontSize: '9px' }}>{v || 'Idea'}</span>,
+    },
     { key: 'hook', label: 'Hook', width: '180px' },
     { key: 'caption_notes', label: 'Caption notes', width: '150px' },
     { key: 'repurpose_from', label: 'Repurpose from', width: '140px' },
-    { key: 'batch', label: 'Batch', width: '80px' },
+    { key: 'batch', label: 'Batch', type: 'select', options: batches.map(b => b.name), width: '110px' },
     { key: 'posted_date', label: 'Posted date', type: 'date', width: '120px' },
     { key: 'notes', label: 'Notes', width: '150px' },
     { key: 'reference_url', label: 'Reference URL', width: '150px' },
     { key: 'sound', label: 'Sound', width: '120px' },
   ]
+
+  const AddRowButton = ({ position }) => (
+    <button className="btn btn-ghost btn-sm flex items-center gap-2" onClick={() => addIdea(position)}>
+      <Plus size={13} /> Add row
+    </button>
+  )
 
   return (
     <div>
@@ -146,16 +160,20 @@ export default function IdeaDumpTab({ refreshKey = 0 }) {
           {batches.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
         </select>
         <div style={{ flex: 1 }} />
-        <button className="btn btn-primary btn-sm" onClick={() => setAdding(v => !v)}>
-          <Plus size={13} /> Add idea
-        </button>
+        <AddRowButton position="top" />
       </div>
+
+      {error && (
+        <div className="card mb-4" style={{ borderLeft: '3px solid var(--personal)' }}>
+          <p style={{ fontSize: 12, color: 'var(--personal)' }}>Error: {error}</p>
+        </div>
+      )}
 
       {loading ? (
         <p className="text-dim" style={{ textAlign: 'center', padding: '40px' }}>Loading…</p>
       ) : (
         <div style={{ overflowX: 'auto' }}>
-          <table className="data-table" style={{ minWidth: '1400px' }}>
+          <table className="data-table" style={{ minWidth: '1500px' }}>
             <thead>
               <tr>
                 <th style={{ width: '32px' }}>#</th>
@@ -164,60 +182,18 @@ export default function IdeaDumpTab({ refreshKey = 0 }) {
               </tr>
             </thead>
             <tbody>
-              {adding && (
-                <tr style={{ background: 'var(--bg-3)' }}>
-                  <td></td>
-                  <td colSpan={3}>
-                    <div className="flex gap-2">
-                      <input value={newIdea.title} onChange={e => setNewIdea(p => ({ ...p, title: e.target.value }))} placeholder="Idea title" style={{ fontSize: '12px' }} autoFocus />
-                    </div>
-                  </td>
-                  <td>
-                    <select value={newIdea.pillar} onChange={e => setNewIdea(p => ({ ...p, pillar: e.target.value }))} style={{ fontSize: '12px', padding: '4px' }}>
-                      <option value="">Pick pillar</option>
-                      {CONTENT_PILLARS.map(p => <option key={p}>{p}</option>)}
-                    </select>
-                  </td>
-                  <td>
-                    <select value={newIdea.format} onChange={e => setNewIdea(p => ({ ...p, format: e.target.value }))} style={{ fontSize: '12px', padding: '4px' }}>
-                      <option value="">Pick format</option>
-                      {CONTENT_FORMATS.map(f => <option key={f}>{f}</option>)}
-                    </select>
-                  </td>
-                  <td>
-                    <select value={newIdea.status} onChange={e => setNewIdea(p => ({ ...p, status: e.target.value }))} style={{ fontSize: '12px', padding: '4px' }}>
-                      {CONTENT_STATUSES.map(s => <option key={s}>{s}</option>)}
-                    </select>
-                  </td>
-                  <td colSpan={cols.length - 5}></td>
-                  <td>
-                    <div className="flex gap-1">
-                      <button className="btn btn-primary btn-sm" onClick={addIdea}>Add</button>
-                      <button className="btn btn-ghost btn-sm" onClick={() => setAdding(false)}>✕</button>
-                    </div>
-                  </td>
-                </tr>
-              )}
               {filtered.map((idea, idx) => (
                 <tr key={idea.id} style={{ opacity: idea.status === 'Posted' ? 0.5 : 1 }}>
                   <td><span className="mono">{idx + 1}</span></td>
                   {cols.map(col => (
                     <td key={col.key}>
-                      {col.key === 'status' ? (
-                        <div className="flex items-center gap-2">
-                          <span className={`badge ${STATUS_COLORS[idea.status] || 'badge-muted'}`} style={{ fontSize: '9px' }}>
-                            {idea.status || '—'}
-                          </span>
-                          <InlineCell value={idea.status} onChange={v => updateIdea(idea.id, 'status', v)} type="select" options={CONTENT_STATUSES} />
-                        </div>
-                      ) : (
-                        <InlineCell
-                          value={idea[col.key]}
-                          onChange={v => updateIdea(idea.id, col.key, v)}
-                          type={col.type || 'text'}
-                          options={col.options}
-                        />
-                      )}
+                      <InlineCell
+                        value={idea[col.key]}
+                        onChange={v => updateIdea(idea.id, col.key, v)}
+                        type={col.type || 'text'}
+                        options={col.options}
+                        renderDisplay={col.renderDisplay}
+                      />
                     </td>
                   ))}
                   <td>
@@ -234,6 +210,10 @@ export default function IdeaDumpTab({ refreshKey = 0 }) {
           )}
         </div>
       )}
+
+      <div className="flex justify-end mt-4">
+        <AddRowButton position="bottom" />
+      </div>
     </div>
   )
 }

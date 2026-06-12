@@ -20,20 +20,33 @@ export const CONTENT_PILLARS = [
 
 export const CONTENT_FORMATS = [
   'Talking head',
-  'Video anchor',
   'Carousel',
+  'Video anchor',
   'Simple text over clip',
+  'Pull clip',
 ]
 
 export const CONTENT_STATUSES = [
   'Idea',
   'Film next',
-  'Pull clip',
   'Ready to edit',
-  'Editing',
-  'Ready to post',
+  'Pull clip',
   'Posted',
 ]
+
+export const PILLAR_COLORS = {
+  'Work & Becoming': 'var(--career)',
+  'Taste & Expression': 'var(--creative)',
+  'Life Design': 'var(--wellness)',
+  'Creative Direct Your Life': 'var(--personal)',
+}
+
+export const PILLAR_DESCRIPTIONS = {
+  'Work & Becoming': 'Career, portfolio life, business building, and the work of becoming who you\'re growing into.',
+  'Taste & Expression': 'Style, beauty, taste, and personal expression — the things that shape how you show up.',
+  'Life Design': 'How you design your days, money, routines, and the bigger-picture choices behind your life.',
+  'Creative Direct Your Life': 'Creative direction applied to everyday life — experiments, aesthetics, and intentional living.',
+}
 
 export const PRODUCTION_STAGES = [
   'Idea',

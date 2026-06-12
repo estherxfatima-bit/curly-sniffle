@@ -389,6 +389,17 @@ input[type="range"]::-webkit-slider-thumb {
 .badge-cobalt   { background: var(--career-tint);   color: var(--career);   }
 .badge-accent   { background: var(--creative-tint); color: var(--creative); }
 
+/* ── Inline-editable table cells ── */
+.inline-cell {
+  cursor: text;
+  min-width: 40px;
+  display: inline-block;
+  border-bottom: 1px dashed transparent;
+}
+.inline-cell:hover {
+  border-bottom-color: var(--border-light);
+}
+
 /* ── Toggle / check dots ── */
 .toggle-dot {
   width: 22px;
