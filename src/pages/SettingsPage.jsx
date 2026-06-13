@@ -3,7 +3,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useTheme } from '../hooks/useTheme'
 import { supabase } from '../lib/supabase'
 import { registerServiceWorker, subscribeToPush, unsubscribeFromPush, isSubscribed } from '../lib/pushNotifications'
-import { Bell, BellOff, Sun, Moon, LogOut, Calendar, Unlink, MessageSquare } from 'lucide-react'
+import { Bell, BellOff, Sun, Moon, LogOut, Calendar, Unlink, MessageSquare, Clock4 } from 'lucide-react'
 
 function SettingsDecoration() {
   return (
@@ -28,6 +28,9 @@ export default function SettingsPage() {
   const [pushSupported, setPushSupported] = useState(true)
   const [googleStatus, setGoogleStatus] = useState({ loading: true, connected: false, email: null })
   const [smsStatus, setSmsStatus] = useState({ loading: true, configured: false, smsNumber: null, examples: [] })
+  const [workingHours, setWorkingHours] = useState({ start: '09:00', end: '19:00' })
+  const [workingHoursLoading, setWorkingHoursLoading] = useState(true)
+  const [workingHoursSaved, setWorkingHoursSaved] = useState(false)
 
   useEffect(() => {
     registerServiceWorker()
@@ -39,9 +42,28 @@ export default function SettingsPage() {
     if (!user) return
     loadGoogleStatus()
     loadSmsStatus()
+    loadWorkingHours()
     const params = new URLSearchParams(window.location.search)
     if (params.get('google') === 'error') alert('Failed to connect Google Calendar. Please try again.')
   }, [user])
+
+  async function loadWorkingHours() {
+    const { data } = await supabase.from('user_preferences').select('working_hours_start, working_hours_end').eq('user_id', user.id).maybeSingle()
+    if (data) setWorkingHours({ start: data.working_hours_start, end: data.working_hours_end })
+    setWorkingHoursLoading(false)
+  }
+
+  async function saveWorkingHours(next) {
+    setWorkingHours(next)
+    await supabase.from('user_preferences').upsert({
+      user_id: user.id,
+      working_hours_start: next.start,
+      working_hours_end: next.end,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id' })
+    setWorkingHoursSaved(true)
+    setTimeout(() => setWorkingHoursSaved(false), 1500)
+  }
 
   async function loadGoogleStatus() {
     const { data } = await supabase.from('google_tokens').select('google_email').eq('user_id', user.id).maybeSingle()
@@ -153,17 +175,46 @@ export default function SettingsPage() {
                 {googleStatus.connected ? googleStatus.email : 'Connect your Google account to show calendar events on your dashboard and weekly plan.'}
               </p>
             </div>
-            {googleStatus.connected ? (
-              <button className="btn btn-ghost flex items-center gap-2" onClick={disconnectGoogle} style={{ color: 'var(--danger)' }}>
-                <Unlink size={14} />
-                Disconnect
-              </button>
-            ) : (
+            <div className="flex items-center gap-2">
               <a className="btn btn-accent flex items-center gap-2" style={{ color: '#fff' }} href={`/api/auth/google/start?token=${encodeURIComponent(session?.access_token || '')}`}>
                 <Calendar size={14} />
-                Connect Google Calendar
+                {googleStatus.connected ? 'Reconnect' : 'Connect Google Calendar'}
               </a>
-            )}
+              {googleStatus.connected && (
+                <button className="btn btn-ghost flex items-center gap-2" onClick={disconnectGoogle} style={{ color: 'var(--danger)' }}>
+                  <Unlink size={14} />
+                  Disconnect
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+        {!googleStatus.loading && (
+          <p style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 10 }}>
+            "Time-block my day" needs permission to create events in your calendar.
+            {googleStatus.connected ? ' If you connected before this feature was added, click Reconnect to grant write access.' : ''}
+          </p>
+        )}
+      </div>
+
+      {/* Working hours */}
+      <div className="card mb-4">
+        <h3 style={{ fontSize: '0.9rem', marginBottom: 16 }}>Working hours</h3>
+        {workingHoursLoading ? (
+          <p style={{ fontSize: 12, color: 'var(--text-3)' }}>Loading…</p>
+        ) : (
+          <div className="flex items-center justify-between">
+            <div>
+              <p style={{ fontSize: 14, fontWeight: 500 }}>Used for "Time-block my day"</p>
+              <p style={{ fontSize: 12, color: 'var(--text-3)' }}>To-dos are scheduled into free gaps within these hours.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Clock4 size={14} color="var(--text-3)" />
+              <input type="time" value={workingHours.start} onChange={e => saveWorkingHours({ ...workingHours, start: e.target.value })} style={{ fontSize: 12, padding: '4px 8px' }} />
+              <span style={{ color: 'var(--text-3)' }}>–</span>
+              <input type="time" value={workingHours.end} onChange={e => saveWorkingHours({ ...workingHours, end: e.target.value })} style={{ fontSize: 12, padding: '4px 8px' }} />
+              {workingHoursSaved && <span style={{ fontSize: 11, color: 'var(--success)' }}>Saved</span>}
+            </div>
           </div>
         )}
       </div>

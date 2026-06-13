@@ -1,11 +1,26 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
-import { format, subDays } from 'date-fns'
-import { Plus, Trash2, ChevronDown, ChevronRight, Check, Clock, Target } from 'lucide-react'
+import { useTimer } from '../../hooks/useTimer'
+import { format, subDays, startOfWeek } from 'date-fns'
+import { parseTimeAllocationToMinutes } from '../../lib/constants'
+import { deleteCalendarEvent } from '../../lib/googleCalendar'
+import WeeklyPlanPicker from './WeeklyPlanPicker'
+import TimerWidget from './TimerWidget'
+import TimeBlockModal from './TimeBlockModal'
+import { Plus, Trash2, ChevronDown, ChevronRight, Check, Clock, Target, Hourglass, AlarmClock, Link2, Timer as TimerIcon, CalendarClock } from 'lucide-react'
 
 const DEFAULT_CATS = ['Work', 'Personal', 'Errands', 'Creative', 'Health']
 const TIME_OPTS = ['15 min', '30 min', '45 min', '1 hr', '1.5 hr', '2 hr', '3 hr']
+
+const AREA_TO_CATEGORY = {
+  Career: 'Work',
+  Creative: 'Creative',
+  Personal: 'Personal',
+  Financial: 'Personal',
+  'Health/Wellness': 'Health',
+  Other: 'Personal',
+}
 
 const CAT_COLOR = {
   Work: 'var(--career)',
@@ -17,9 +32,10 @@ const CAT_COLOR = {
 function catColor(c) { return CAT_COLOR[c] || 'var(--career)' }
 
 export default function DailyTodos({ compact = false }) {
-  const { user } = useAuth()
+  const { user, session } = useAuth()
   const today     = format(new Date(), 'yyyy-MM-dd')
   const yesterday = format(subDays(new Date(), 1), 'yyyy-MM-dd')
+  const weekStartStr = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
 
   const [todos,   setTodos]   = useState([])
   const [loading, setLoading] = useState(true)
@@ -30,16 +46,34 @@ export default function DailyTodos({ compact = false }) {
   const [newCatInput, setNewCatInput] = useState('')
   const [showAddCat,  setShowAddCat]  = useState(false)
   const [goals, setGoals] = useState([])
+  const [showWeeklyPicker, setShowWeeklyPicker] = useState(false)
+  const [weeklyTasks, setWeeklyTasks] = useState([])
+  const [timerTodo, setTimerTodo] = useState(null)
+  const [showTimeBlock, setShowTimeBlock] = useState(false)
+  const [workingHours, setWorkingHours] = useState({ start: '09:00', end: '19:00' })
   const inputRef = useRef(null)
+  const timerCtx = useTimer()
 
   // Load todos, carrying over yesterday's incomplete tasks atomically
   useEffect(() => {
-    if (user) { init(); loadGoals() }
+    if (user) { init(); loadGoals(); loadWorkingHours() }
   }, [user])
 
   async function loadGoals() {
     const { data } = await supabase.from('goals').select('id, primary_goal, category').eq('user_id', user.id)
     setGoals(data || [])
+  }
+
+  async function loadWorkingHours() {
+    const { data } = await supabase.from('user_preferences').select('working_hours_start, working_hours_end').eq('user_id', user.id).maybeSingle()
+    if (data) setWorkingHours({ start: data.working_hours_start, end: data.working_hours_end })
+  }
+
+  async function loadWeeklyTasks() {
+    const { data } = await supabase.from('weekly_tasks').select('*')
+      .eq('user_id', user.id).eq('week_start', weekStartStr).eq('complete', false).order('created_at')
+    setWeeklyTasks(data || [])
+    setShowWeeklyPicker(true)
   }
 
   async function init() {
@@ -74,6 +108,7 @@ export default function DailyTodos({ compact = false }) {
             time_allocation: t.time_allocation,
             subtasks: t.subtasks,
             carried_from: yesterday,
+            duration_minutes: t.duration_minutes,
           }))
         )
         await supabase.from('daily_todos')
@@ -116,9 +151,10 @@ export default function DailyTodos({ compact = false }) {
     setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, complete: newVal } : t))
   }
 
-  async function remove(id) {
-    await supabase.from('daily_todos').delete().eq('id', id)
-    setTodos(prev => prev.filter(t => t.id !== id))
+  async function remove(todo) {
+    await supabase.from('daily_todos').delete().eq('id', todo.id)
+    if (todo.google_event_id) await deleteCalendarEvent(session, todo.google_event_id)
+    setTodos(prev => prev.filter(t => t.id !== todo.id))
   }
 
   async function updateField(id, field, value) {
@@ -139,6 +175,31 @@ export default function DailyTodos({ compact = false }) {
     setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, subtasks: subs } : t))
   }
 
+  async function pullFromWeeklyTask(task) {
+    const { data } = await supabase.from('daily_todos').insert({
+      user_id: user.id,
+      text: task.specific_task || task.action,
+      date: today,
+      category: AREA_TO_CATEGORY[task.area] || 'Personal',
+      complete: false,
+      duration_minutes: parseTimeAllocationToMinutes(task.time_allocation),
+      weekly_task_ref_id: task.id,
+    }).select().single()
+    if (data) setTodos(prev => [...prev, data])
+    setShowWeeklyPicker(false)
+  }
+
+  async function applyTimeBlocks(updates) {
+    for (const u of updates) {
+      await supabase.from('daily_todos').update({ scheduled_time: u.scheduled_time, google_event_id: u.google_event_id }).eq('id', u.todoId)
+    }
+    setTodos(prev => prev.map(t => {
+      const u = updates.find(x => x.todoId === t.id)
+      return u ? { ...t, scheduled_time: u.scheduled_time, google_event_id: u.google_event_id } : t
+    }))
+    setShowTimeBlock(false)
+  }
+
   function addCategory() {
     const c = newCatInput.trim()
     if (c && !categories.includes(c)) setCategories(prev => [...prev, c])
@@ -155,8 +216,17 @@ export default function DailyTodos({ compact = false }) {
     return true
   })
 
+  // Timed todos sort to the top in chronological order, then timeless todos below.
+  const sorted = [...filtered].sort((a, b) => {
+    if (a.scheduled_time && b.scheduled_time) return a.scheduled_time.localeCompare(b.scheduled_time)
+    if (a.scheduled_time) return -1
+    if (b.scheduled_time) return 1
+    return 0
+  })
+
   const done  = todos.filter(t => t.complete).length
   const total = todos.length
+  const blockable = todos.filter(t => !t.complete && t.duration_minutes > 0)
 
   return (
     <div>
@@ -196,6 +266,16 @@ export default function DailyTodos({ compact = false }) {
         </button>
       </div>
 
+      {/* Pull from weekly plan / Time-block actions */}
+      <div className="flex items-center gap-2 mb-3 wrap">
+        <button className="btn btn-ghost btn-xs" onClick={loadWeeklyTasks}>
+          <Link2 size={12} /> Pull from weekly plan
+        </button>
+        <button className="btn btn-ghost btn-xs" onClick={() => setShowTimeBlock(true)} disabled={blockable.length === 0}>
+          <CalendarClock size={12} /> Time-block my day
+        </button>
+      </div>
+
       {/* Category filter chips */}
       <div className="flex items-center gap-2 mb-4 wrap">
         <button
@@ -226,7 +306,7 @@ export default function DailyTodos({ compact = false }) {
       {/* List */}
       {loading ? (
         <p style={{ color: 'var(--text-3)', fontSize: 13, textAlign: 'center', padding: '16px 0' }}>Loading…</p>
-      ) : filtered.length === 0 ? (
+      ) : sorted.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--text-3)' }}>
           <p style={{ fontSize: 13, fontStyle: 'italic' }}>
             {statusFilter === 'done' ? 'Nothing completed yet today.' : 'Nothing here — add something above.'}
@@ -234,32 +314,55 @@ export default function DailyTodos({ compact = false }) {
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {filtered.map(todo => (
+          {sorted.map(todo => (
             <TodoItem
               key={todo.id}
               todo={todo}
               categories={allCategories}
               goals={goals}
+              isTimerRunning={timerCtx?.timer?.todoId === todo.id}
               onToggle={() => toggle(todo)}
-              onRemove={() => remove(todo.id)}
+              onRemove={() => remove(todo)}
               onUpdateField={(f, v) => updateField(todo.id, f, v)}
               onToggleSubtask={sid => toggleSubtask(todo, sid)}
               onAddSubtask={text => addSubtask(todo, text)}
+              onOpenTimer={() => setTimerTodo(todo)}
             />
           ))}
         </div>
+      )}
+
+      {showWeeklyPicker && (
+        <WeeklyPlanPicker tasks={weeklyTasks} onSelect={pullFromWeeklyTask} onClose={() => setShowWeeklyPicker(false)} />
+      )}
+
+      {timerTodo && (
+        <TimerWidget todo={timerTodo} onClose={() => setTimerTodo(null)} />
+      )}
+
+      {showTimeBlock && (
+        <TimeBlockModal
+          session={session}
+          todos={blockable}
+          date={today}
+          workingHours={workingHours}
+          onClose={() => setShowTimeBlock(false)}
+          onApply={applyTimeBlocks}
+        />
       )}
     </div>
   )
 }
 
-function TodoItem({ todo, categories, goals, onToggle, onRemove, onUpdateField, onToggleSubtask, onAddSubtask }) {
+function TodoItem({ todo, categories, goals, isTimerRunning, onToggle, onRemove, onUpdateField, onToggleSubtask, onAddSubtask, onOpenTimer }) {
   const [expanded,     setExpanded]     = useState(false)
   const [addingSub,    setAddingSub]    = useState(false)
   const [subInput,     setSubInput]     = useState('')
   const [editingTime,  setEditingTime]  = useState(false)
   const [editingCat,   setEditingCat]   = useState(false)
   const [editingGoal,  setEditingGoal]  = useState(false)
+  const [editingDuration, setEditingDuration] = useState(false)
+  const [editingScheduled, setEditingScheduled] = useState(false)
   const subtasks = todo.subtasks || []
   const linkedGoal = goals.find(g => g.id === todo.goal_id)
   const cc = catColor(todo.category)
@@ -280,7 +383,7 @@ function TodoItem({ todo, categories, goals, onToggle, onRemove, onUpdateField, 
       opacity: todo.complete ? 0.62 : 1,
     }}>
       {/* Main row */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' }}>
         {/* Expand chevron */}
         {subtasks.length > 0 ? (
           <button className="btn-icon" style={{ padding: 2, flexShrink: 0, color: 'var(--text-3)' }} onClick={() => setExpanded(v => !v)}>
@@ -310,9 +413,72 @@ function TodoItem({ todo, categories, goals, onToggle, onRemove, onUpdateField, 
           {todo.text}
         </span>
 
+        {/* Running timer indicator */}
+        {isTimerRunning && (
+          <span className="badge badge-career" style={{ fontSize: 9, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 3 }}>
+            <span className="pulse-dot" style={{ width: 6, height: 6, borderRadius: '50%', background: 'currentColor', display: 'inline-block' }} /> timing
+          </span>
+        )}
+
         {/* Carried-from label */}
         {todo.carried_from && (
           <span className="badge badge-warning" style={{ fontSize: 9, flexShrink: 0 }}>yesterday</span>
+        )}
+
+        {/* From weekly plan badge */}
+        {todo.weekly_task_ref_id && (
+          <a href="/weekly" title="View in weekly plan" className="badge" style={{ fontSize: 9, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 3, color: 'var(--career)', background: 'var(--career-tint)', textDecoration: 'none' }}>
+            <Link2 size={9} /> from weekly plan
+          </a>
+        )}
+
+        {/* Scheduled time pill */}
+        {editingScheduled ? (
+          <input
+            type="time"
+            autoFocus
+            defaultValue={todo.scheduled_time || ''}
+            onBlur={e => { onUpdateField('scheduled_time', e.target.value || null); setEditingScheduled(false) }}
+            onKeyDown={e => { if (e.key === 'Enter') e.target.blur() }}
+            style={{ fontSize: 11, padding: '2px 6px', width: 'auto', border: '1px solid var(--border)', borderRadius: 6 }}
+          />
+        ) : todo.scheduled_time ? (
+          <span
+            onClick={() => setEditingScheduled(true)}
+            title="Click to change"
+            style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 10, color: 'var(--career)', background: 'var(--career-tint)', borderRadius: 10, padding: '2px 7px', cursor: 'pointer', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>
+            <AlarmClock size={9} /> {todo.scheduled_time}
+          </span>
+        ) : (
+          <button onClick={() => setEditingScheduled(true)} className="btn-icon" style={{ padding: 2, color: 'var(--border)', flexShrink: 0 }} title="Set time of day">
+            <AlarmClock size={12} />
+          </button>
+        )}
+
+        {/* Duration pill */}
+        {editingDuration ? (
+          <input
+            type="number"
+            min="0"
+            step="5"
+            autoFocus
+            defaultValue={todo.duration_minutes || ''}
+            placeholder="min"
+            onBlur={e => { const v = e.target.value ? Number(e.target.value) : null; onUpdateField('duration_minutes', v); setEditingDuration(false) }}
+            onKeyDown={e => { if (e.key === 'Enter') e.target.blur() }}
+            style={{ fontSize: 11, padding: '2px 6px', width: 56, border: '1px solid var(--border)', borderRadius: 6 }}
+          />
+        ) : todo.duration_minutes ? (
+          <span
+            onClick={() => setEditingDuration(true)}
+            title="Click to change"
+            style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 10, color: 'var(--text-3)', background: 'var(--bg-3)', borderRadius: 10, padding: '2px 7px', cursor: 'pointer', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>
+            <Hourglass size={9} /> {todo.duration_minutes}m
+          </span>
+        ) : (
+          <button onClick={() => setEditingDuration(true)} className="btn-icon" style={{ padding: 2, color: 'var(--border)', flexShrink: 0 }} title="Set duration">
+            <Hourglass size={12} />
+          </button>
         )}
 
         {/* Time pill — click to cycle */}
@@ -384,6 +550,11 @@ function TodoItem({ todo, categories, goals, onToggle, onRemove, onUpdateField, 
             <Target size={12} />
           </button>
         )}
+
+        {/* Timer */}
+        <button className="btn-icon" style={{ padding: 2, color: isTimerRunning ? 'var(--career)' : 'var(--text-3)', flexShrink: 0 }} onClick={onOpenTimer} title="Task timer">
+          <TimerIcon size={12} />
+        </button>
 
         {/* Add subtask */}
         <button className="btn-icon" style={{ padding: 2, color: 'var(--text-3)', flexShrink: 0 }} onClick={() => setAddingSub(v => !v)} title="Add subtask">

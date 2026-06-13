@@ -24,9 +24,11 @@ Connecting Google Calendar lets the app show your events on the daily/weekly das
 1. In the Supabase dashboard, go to **Authentication → Providers → Google** and enable the Google provider.
 2. Under "Additional scopes" (or "Scopes"), add the calendar scope alongside the default scopes:
    ```
-   https://www.googleapis.com/auth/calendar.readonly
+   https://www.googleapis.com/auth/calendar
    ```
 3. Run `supabase/phase10_schema.sql` in the Supabase SQL editor. This creates the `google_tokens` table (with row-level security so each user can only read/write their own row).
+
+> ⚠️ **Existing users**: Phase 19 upgrades the Google Calendar scope from read-only (`calendar.readonly`) to full read/write (`calendar`) so "Time-block my day" can create events. If you connected Google Calendar before this change, go to **Settings → Google Calendar** and click **Reconnect** to grant the new permission — your stored tokens will be refreshed automatically.
 
 ### 2. Google Cloud Console setup
 
@@ -62,6 +64,18 @@ These are all server-side variables (no `VITE_` prefix) — they are used only b
 2. You'll be redirected to Google to sign in and grant calendar access.
 3. After authorizing, you're redirected back to Settings, which will show "Connected" along with your Google account email.
 4. Click **Disconnect** at any time to delete the stored tokens from `google_tokens`.
+
+## Enhanced daily to-dos
+
+Daily to-dos support:
+
+- **Subtasks**: expandable inline list, each independently checkable; the parent task auto-completes once all subtasks are done.
+- **Duration** (minutes) and **time of day**: optional pills on each to-do. To-dos with a time set sort to the top, in chronological order, with timeless to-dos below.
+- **Pull from weekly plan**: pulls an incomplete task from this week's weekly plan into today's to-dos as an independent copy (copies the task text, area→category, and any time allocation as duration). The original weekly task is untouched; the daily to-do shows a "from weekly plan" badge linking back to `/weekly`.
+- **Task timer**: tap the timer icon on any to-do to start a countdown (defaults to the to-do's duration), stopwatch, or Pomodoro (25/5 by default, adjustable) session. Time spent is logged cumulatively to the to-do, and a floating indicator shows the active timer across all pages.
+- **Time-block my day**: analyses today's to-dos with a duration set and your existing Google Calendar events to propose a schedule within your working hours (Settings → Working hours, default 9am–7pm). On confirmation, creates real events on your connected Google Calendar (requires the `calendar` write scope — see the Google Calendar section above).
+
+Run `supabase/phase19_schema.sql` in the Supabase SQL editor to add the required `daily_todos` columns and the `user_preferences` table.
 
 ## Twilio SMS integration
 

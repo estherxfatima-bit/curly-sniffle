@@ -78,6 +78,16 @@ export const PRODUCTION_STAGES = [
   'Posted',
 ]
 
+// Parses time-allocation strings like '15 min', '1 hr', '1.5 hr' into minutes.
+export function parseTimeAllocationToMinutes(value) {
+  if (!value) return null
+  const match = String(value).match(/^([\d.]+)\s*(min|hr)/i)
+  if (!match) return null
+  const num = parseFloat(match[1])
+  if (Number.isNaN(num)) return null
+  return match[2].toLowerCase() === 'hr' ? Math.round(num * 60) : Math.round(num)
+}
+
 export const QUARTERS = ['Q1', 'Q2', 'Q3', 'Q4']
 
 export const getCurrentQuarter = () => getQuarterFromDate(new Date())

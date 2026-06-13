@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './hooks/useAuth'
 import { ThemeProvider } from './hooks/useTheme'
+import { TimerProvider } from './hooks/useTimer'
 import AppLayout from './components/layout/AppLayout'
 import AuthPage from './pages/AuthPage'
 import DashboardPage from './pages/DashboardPage'
@@ -59,7 +60,9 @@ export default function App() {
     <BrowserRouter>
       <ThemeProvider>
         <AuthProvider>
-          <AppRoutes />
+          <TimerProvider>
+            <AppRoutes />
+          </TimerProvider>
         </AuthProvider>
       </ThemeProvider>
     </BrowserRouter>

@@ -17,7 +17,7 @@ export default async function handler(req, res) {
     response_type: 'code',
     access_type: 'offline',
     prompt: 'consent',
-    scope: 'https://www.googleapis.com/auth/calendar.readonly email profile',
+    scope: 'https://www.googleapis.com/auth/calendar email profile',
     state: token,
   })
 

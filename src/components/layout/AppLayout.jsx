@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import Sidebar from './Sidebar'
 import MobileNav from './MobileNav'
 import AIPlanningPanel from './AIPlanningPanel'
+import ActiveTimerBar from '../timer/ActiveTimerBar'
 import { Sparkles } from 'lucide-react'
 
 export default function AppLayout({ children }) {
@@ -21,6 +22,8 @@ export default function AppLayout({ children }) {
         {children}
       </main>
       {isMobile && <MobileNav />}
+
+      <ActiveTimerBar isMobile={isMobile} />
 
       {/* AI panel overlay */}
       {showAI && (
