@@ -16,20 +16,29 @@ function appBaseUrl() {
 }
 
 export default async function handler(req, res) {
-  const { code, state, error } = req.query
   const base = appBaseUrl()
+  const requestUrl = new URL(req.url, `https://${req.headers.host}`)
+  const code = requestUrl.searchParams.get('code')
+  const state = requestUrl.searchParams.get('state')
+  const error = requestUrl.searchParams.get('error')
 
   if (error || !code || !state) {
+    console.error('[google/callback] missing/invalid params from Google', { error, hasCode: !!code, hasState: !!state })
     return res.redirect(302, `${base}/settings?google=error`)
   }
 
   const { data: userData, error: userErr } = await supabase.auth.getUser(state)
   if (userErr || !userData?.user) {
+    console.error('[google/callback] failed to resolve user from state token', userErr?.message || userErr)
     return res.redirect(302, `${base}/settings?google=error`)
   }
   const userId = userData.user.id
 
   try {
+    if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET || !process.env.GOOGLE_REDIRECT_URI) {
+      throw new Error('Google OAuth env vars are not fully configured (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / GOOGLE_REDIRECT_URI)')
+    }
+
     const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -42,12 +51,23 @@ export default async function handler(req, res) {
       }),
     })
     const tokens = await tokenRes.json()
-    if (!tokenRes.ok) throw new Error(tokens.error_description || 'Token exchange failed')
+    if (!tokenRes.ok) {
+      console.error('[google/callback] token exchange failed', {
+        status: tokenRes.status,
+        error: tokens.error,
+        error_description: tokens.error_description,
+        redirect_uri: process.env.GOOGLE_REDIRECT_URI,
+      })
+      throw new Error(tokens.error_description || tokens.error || 'Token exchange failed')
+    }
 
     const userInfoRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
       headers: { Authorization: `Bearer ${tokens.access_token}` },
     })
     const userInfo = await userInfoRes.json()
+    if (!userInfoRes.ok) {
+      console.error('[google/callback] userinfo request failed', { status: userInfoRes.status, body: userInfo })
+    }
 
     const expiresAt = new Date(Date.now() + (tokens.expires_in || 3600) * 1000).toISOString()
 
@@ -62,10 +82,15 @@ export default async function handler(req, res) {
     if (tokens.refresh_token) row.refresh_token = tokens.refresh_token
 
     const { error: upsertErr } = await supabase.from('google_tokens').upsert(row, { onConflict: 'user_id' })
-    if (upsertErr) throw upsertErr
+    if (upsertErr) {
+      console.error('[google/callback] failed to upsert google_tokens', upsertErr.message || upsertErr)
+      throw upsertErr
+    }
 
     return res.redirect(302, `${base}/settings?google=connected`)
   } catch (e) {
+    console.error('[google/callback] OAuth callback failed:', e.message)
+    if (e.stack) console.error(e.stack)
     return res.redirect(302, `${base}/settings?google=error`)
   }
 }
