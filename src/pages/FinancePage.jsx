@@ -551,11 +551,13 @@ export default function FinancePage() {
         </div>
       </div>
 
-      {/* Income & Fixed expenses — always monthly, outside the Daily/Weekly/Monthly toggle */}
-      <div className="mb-6" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
-        {incomeCard}
-        {fixedCard}
-      </div>
+      {/* Income & Fixed expenses — always monthly, only shown in the Monthly view */}
+      {activeView === 'monthly' && (
+        <div className="mb-6" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
+          {incomeCard}
+          {fixedCard}
+        </div>
+      )}
 
       {/* Customisable card grid */}
       {editing && (

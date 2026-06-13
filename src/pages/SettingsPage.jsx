@@ -3,7 +3,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useTheme } from '../hooks/useTheme'
 import { supabase } from '../lib/supabase'
 import { registerServiceWorker, subscribeToPush, unsubscribeFromPush, isSubscribed } from '../lib/pushNotifications'
-import { Bell, BellOff, Sun, Moon, LogOut, Calendar, Unlink, MessageSquare, Clock4 } from 'lucide-react'
+import { Bell, BellOff, Sun, Moon, LogOut, Calendar, Unlink, MessageSquare, Clock4, Check, Pencil } from 'lucide-react'
 
 function SettingsDecoration() {
   return (
@@ -31,6 +31,10 @@ export default function SettingsPage() {
   const [workingHours, setWorkingHours] = useState({ start: '09:00', end: '19:00' })
   const [workingHoursLoading, setWorkingHoursLoading] = useState(true)
   const [workingHoursSaved, setWorkingHoursSaved] = useState(false)
+  const [editingName, setEditingName] = useState(false)
+  const [nameInput, setNameInput] = useState('')
+  const [nameSaving, setNameSaving] = useState(false)
+  const [nameSaved, setNameSaved] = useState(false)
 
   useEffect(() => {
     registerServiceWorker()
@@ -86,6 +90,18 @@ export default function SettingsPage() {
   async function disconnectGoogle() {
     await supabase.from('google_tokens').delete().eq('user_id', user.id)
     setGoogleStatus({ loading: false, connected: false, email: null })
+  }
+
+  async function saveName() {
+    const name = nameInput.trim()
+    if (!name) return
+    setNameSaving(true)
+    const { error } = await supabase.auth.updateUser({ data: { full_name: name } })
+    setNameSaving(false)
+    if (error) { alert(`Failed to save name: ${error.message}`); return }
+    setEditingName(false)
+    setNameSaved(true)
+    setTimeout(() => setNameSaved(false), 1500)
   }
 
   async function togglePush() {
@@ -280,16 +296,44 @@ export default function SettingsPage() {
       {/* Account */}
       <div className="card">
         <h3 style={{ fontSize: '0.9rem', marginBottom: 16 }}>Account</h3>
-        <div className="flex items-center justify-between">
-          <div>
-            <p style={{ fontSize: 14, fontWeight: 500 }}>{user?.user_metadata?.full_name || user?.email}</p>
-            <p style={{ fontSize: 12, color: 'var(--text-3)' }}>{user?.email}</p>
+        <div className="flex items-center justify-between mb-4">
+          <div style={{ flex: 1 }}>
+            {editingName ? (
+              <div className="flex items-center gap-2">
+                <input
+                  value={nameInput}
+                  onChange={e => setNameInput(e.target.value)}
+                  placeholder="Your name"
+                  autoFocus
+                  onKeyDown={e => e.key === 'Enter' && saveName()}
+                  style={{ fontSize: 14, maxWidth: 220 }}
+                />
+                <button className="btn-icon btn" onClick={saveName} disabled={nameSaving}><Check size={14} /></button>
+                <button className="btn-icon btn" onClick={() => setEditingName(false)}>✕</button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <p style={{ fontSize: 14, fontWeight: 500 }}>{user?.user_metadata?.full_name || user?.email}</p>
+                <button
+                  className="btn-icon btn-sm"
+                  title="Edit name"
+                  onClick={() => { setNameInput(user?.user_metadata?.full_name || ''); setEditingName(true) }}
+                >
+                  <Pencil size={12} />
+                </button>
+                {nameSaved && <span style={{ fontSize: 11, color: 'var(--success)' }}>Saved</span>}
+              </div>
+            )}
+            <p style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>{user?.email}</p>
           </div>
           <button className="btn btn-ghost flex items-center gap-2" onClick={signOut} style={{ color: 'var(--danger)' }}>
             <LogOut size={14} />
             Sign out
           </button>
         </div>
+        <p style={{ fontSize: 11, color: 'var(--text-3)' }}>
+          Set your name so Life OS can greet you by name across the app.
+        </p>
       </div>
     </div>
   )
