@@ -3,10 +3,10 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { searchBooks } from '../lib/openLibrary'
 import { getCurrentQuarter } from '../lib/constants'
-import { Search, Plus, BookOpen, Check, Pause, X, Trash2 } from 'lucide-react'
+import { Search, Plus, BookOpen, Check, Pause, X, Trash2, Heart, Star, FileText, Pencil } from 'lucide-react'
 
-const STATUSES = ['reading', 'paused', 'completed']
-const STATUS_LABELS = { reading: 'Reading', paused: 'Paused', completed: 'Completed' }
+const STATUSES = ['wishlist', 'reading', 'paused', 'completed']
+const STATUS_LABELS = { wishlist: 'Wishlist', reading: 'Reading', paused: 'Paused', completed: 'Completed' }
 
 function BooksDecoration() {
   return (
@@ -23,6 +23,7 @@ export default function BooksPage() {
   const [books, setBooks] = useState([])
   const [loading, setLoading] = useState(true)
   const [showSearch, setShowSearch] = useState(false)
+  const [reviewBook, setReviewBook] = useState(null)
 
   useEffect(() => { if (user) loadBooks() }, [user])
 
@@ -33,26 +34,48 @@ export default function BooksPage() {
     setLoading(false)
   }
 
-  async function addBook(book) {
+  async function addBook(book, status = 'reading') {
     const { data } = await supabase.from('books').insert({
       user_id: user.id, ol_key: book.ol_key, title: book.title, author: book.author,
-      cover_url: book.cover_url, status: 'reading', started_at: new Date().toISOString().slice(0, 10),
+      cover_url: book.cover_url, status, started_at: status === 'wishlist' ? null : new Date().toISOString().slice(0, 10),
     }).select().single()
     if (data) setBooks(prev => [data, ...prev])
     setShowSearch(false)
   }
 
-  async function setStatus(book, status) {
-    const updates = { status }
+  async function applyUpdate(id, updates) {
+    await supabase.from('books').update(updates).eq('id', id)
+    setBooks(prev => prev.map(b => b.id === id ? { ...b, ...updates } : b))
+  }
+
+  function setStatus(book, status) {
     if (status === 'completed') {
-      updates.finished_at = new Date().toISOString().slice(0, 10)
-      updates.quarter = `${getCurrentQuarter()} ${new Date().getFullYear()}`
-    } else {
-      updates.finished_at = null
-      updates.quarter = null
+      setReviewBook(book)
+      return
     }
-    await supabase.from('books').update(updates).eq('id', book.id)
-    setBooks(prev => prev.map(b => b.id === book.id ? { ...b, ...updates } : b))
+    const updates = { status, finished_at: null, quarter: null }
+    if (status === 'reading' && !book.started_at) updates.started_at = new Date().toISOString().slice(0, 10)
+    applyUpdate(book.id, updates)
+  }
+
+  function completeBook(book, { rating, review }) {
+    applyUpdate(book.id, {
+      status: 'completed',
+      finished_at: new Date().toISOString().slice(0, 10),
+      quarter: `${getCurrentQuarter()} ${new Date().getFullYear()}`,
+      rating,
+      review,
+    })
+    setReviewBook(null)
+  }
+
+  function saveReview(book, { rating, review }) {
+    applyUpdate(book.id, { rating, review })
+    setReviewBook(null)
+  }
+
+  function saveNotes(book, notes) {
+    applyUpdate(book.id, { notes })
   }
 
   async function removeBook(id) {
@@ -61,6 +84,7 @@ export default function BooksPage() {
     setBooks(prev => prev.filter(b => b.id !== id))
   }
 
+  const wishlist = books.filter(b => b.status === 'wishlist')
   const reading = books.filter(b => b.status === 'reading')
   const paused = books.filter(b => b.status === 'paused')
   const completed = books.filter(b => b.status === 'completed')
@@ -93,13 +117,22 @@ export default function BooksPage() {
         <p style={{ textAlign: 'center', padding: 40, color: 'var(--text-3)' }}>Loading…</p>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+          {wishlist.length > 0 && (
+            <section>
+              <h3 style={{ marginBottom: 14 }}>Wishlist</h3>
+              <div className="grid-3" style={{ gap: 14 }}>
+                {wishlist.map(b => <BookCard key={b.id} book={b} onSetStatus={setStatus} onRemove={removeBook} onSaveNotes={saveNotes} onEditReview={setReviewBook} />)}
+              </div>
+            </section>
+          )}
+
           <section>
             <h3 style={{ marginBottom: 14 }}>Currently reading</h3>
             {reading.length === 0 ? (
               <p style={{ fontSize: 13, color: 'var(--text-3)', fontStyle: 'italic' }}>Nothing on the go. Add a book to start tracking.</p>
             ) : (
               <div className="grid-3" style={{ gap: 14 }}>
-                {reading.map(b => <BookCard key={b.id} book={b} onSetStatus={setStatus} onRemove={removeBook} />)}
+                {reading.map(b => <BookCard key={b.id} book={b} onSetStatus={setStatus} onRemove={removeBook} onSaveNotes={saveNotes} onEditReview={setReviewBook} />)}
               </div>
             )}
           </section>
@@ -108,7 +141,7 @@ export default function BooksPage() {
             <section>
               <h3 style={{ marginBottom: 14 }}>Paused</h3>
               <div className="grid-3" style={{ gap: 14 }}>
-                {paused.map(b => <BookCard key={b.id} book={b} onSetStatus={setStatus} onRemove={removeBook} />)}
+                {paused.map(b => <BookCard key={b.id} book={b} onSetStatus={setStatus} onRemove={removeBook} onSaveNotes={saveNotes} onEditReview={setReviewBook} />)}
               </div>
             </section>
           )}
@@ -123,7 +156,7 @@ export default function BooksPage() {
                   <div key={q}>
                     <p className="mono mb-2">{q}</p>
                     <div className="grid-3" style={{ gap: 14 }}>
-                      {byQuarter[q].map(b => <BookCard key={b.id} book={b} onSetStatus={setStatus} onRemove={removeBook} />)}
+                      {byQuarter[q].map(b => <BookCard key={b.id} book={b} onSetStatus={setStatus} onRemove={removeBook} onSaveNotes={saveNotes} onEditReview={setReviewBook} />)}
                     </div>
                   </div>
                 ))}
@@ -134,11 +167,20 @@ export default function BooksPage() {
       )}
 
       {showSearch && <BookSearchModal onAdd={addBook} onClose={() => setShowSearch(false)} />}
+      {reviewBook && (
+        <ReviewModal
+          book={reviewBook}
+          onSave={data => reviewBook.status === 'completed' ? saveReview(reviewBook, data) : completeBook(reviewBook, data)}
+          onClose={() => setReviewBook(null)}
+        />
+      )}
     </div>
   )
 }
 
-function BookCard({ book, onSetStatus, onRemove }) {
+function BookCard({ book, onSetStatus, onRemove, onSaveNotes, onEditReview }) {
+  const [notesOpen, setNotesOpen] = useState(false)
+  const [notes, setNotes] = useState(book.notes || '')
   return (
     <div className="card card-creative" style={{ display: 'flex', gap: 12, padding: 14 }}>
       <div style={{
@@ -154,7 +196,39 @@ function BookCard({ book, onSetStatus, onRemove }) {
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
         <p style={{ fontSize: 13, fontWeight: 500, lineHeight: 1.35, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{book.title}</p>
         <p style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{book.author}</p>
+
+        {book.status === 'completed' && (
+          <div style={{ marginTop: 6 }}>
+            <div className="flex items-center gap-1">
+              {[1, 2, 3, 4, 5].map(n => (
+                <Star key={n} size={12} fill={n <= (book.rating || 0) ? 'var(--creative)' : 'none'} color={n <= (book.rating || 0) ? 'var(--creative)' : 'var(--text-3)'} />
+              ))}
+              <button className="btn-icon btn-sm" title="Edit rating & review" onClick={() => onEditReview(book)} style={{ marginLeft: 4 }}>
+                <Pencil size={11} />
+              </button>
+            </div>
+            {book.review && (
+              <p style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 4, fontStyle: 'italic', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' }}>
+                "{book.review}"
+              </p>
+            )}
+          </div>
+        )}
+
         <div style={{ flex: 1 }} />
+
+        {notesOpen && (
+          <textarea
+            value={notes}
+            onChange={e => setNotes(e.target.value)}
+            onBlur={() => onSaveNotes(book, notes.trim() || null)}
+            placeholder="Jot down your thoughts…"
+            rows={2}
+            style={{ fontSize: 11, width: '100%', marginTop: 6 }}
+            onClick={e => e.stopPropagation()}
+          />
+        )}
+
         <div className="flex items-center gap-1" style={{ marginTop: 8 }}>
           {STATUSES.map(s => (
             <button
@@ -167,14 +241,52 @@ function BookCard({ book, onSetStatus, onRemove }) {
                 background: book.status === s ? 'var(--creative-tint, var(--bg-2))' : 'transparent',
               }}
             >
+              {s === 'wishlist' && <Heart size={12} />}
               {s === 'reading' && <BookOpen size={12} />}
               {s === 'paused' && <Pause size={12} />}
               {s === 'completed' && <Check size={12} />}
             </button>
           ))}
+          <button className="btn-icon btn-sm" title="Notes" onClick={() => setNotesOpen(o => !o)} style={{ color: book.notes ? 'var(--creative)' : 'var(--text-3)' }}>
+            <FileText size={12} />
+          </button>
           <div style={{ flex: 1 }} />
           <button className="btn-icon btn-sm" onClick={() => onRemove(book.id)}><Trash2 size={12} /></button>
         </div>
+      </div>
+    </div>
+  )
+}
+
+function ReviewModal({ book, onSave, onClose }) {
+  const [rating, setRating] = useState(book.rating || 0)
+  const [review, setReview] = useState(book.review || '')
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal scale-in" style={{ maxWidth: 420 }}>
+        <div className="modal-header">
+          <h2 style={{ fontSize: '1.2rem' }}>{book.status === 'completed' ? 'Edit review' : 'Finished!'}</h2>
+          <button className="btn-icon btn" onClick={onClose}><X size={16} /></button>
+        </div>
+        <p style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 12 }}>{book.title}</p>
+        <div className="form-group">
+          <label style={{ fontSize: 12, color: 'var(--text-3)', display: 'block', marginBottom: 6 }}>Rating</label>
+          <div className="flex items-center gap-1">
+            {[1, 2, 3, 4, 5].map(n => (
+              <button key={n} className="btn-icon" onClick={() => setRating(n === rating ? 0 : n)}>
+                <Star size={20} fill={n <= rating ? 'var(--creative)' : 'none'} color={n <= rating ? 'var(--creative)' : 'var(--text-3)'} />
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="form-group">
+          <label style={{ fontSize: 12, color: 'var(--text-3)', display: 'block', marginBottom: 6 }}>Review / notes (optional)</label>
+          <textarea value={review} onChange={e => setReview(e.target.value)} rows={4} placeholder="What did you think?" style={{ width: '100%', fontSize: 13 }} />
+        </div>
+        <button className="btn btn-creative" style={{ color: '#fff', width: '100%' }} onClick={() => onSave({ rating: rating || null, review: review.trim() || null })}>
+          Save
+        </button>
       </div>
     </div>
   )
@@ -184,6 +296,7 @@ function BookSearchModal({ onAdd, onClose }) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
   const [searching, setSearching] = useState(false)
+  const [addAs, setAddAs] = useState('reading')
   const timer = useRef(null)
 
   useEffect(() => {
@@ -211,13 +324,28 @@ function BookSearchModal({ onAdd, onClose }) {
             <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search by title…" autoFocus style={{ paddingLeft: 34 }} />
           </div>
         </div>
+        <div className="form-group">
+          <label style={{ fontSize: 12, color: 'var(--text-3)', display: 'block', marginBottom: 6 }}>Add as</label>
+          <div className="flex items-center gap-1">
+            {STATUSES.filter(s => s === 'wishlist' || s === 'reading').map(s => (
+              <button
+                key={s}
+                className="btn btn-sm"
+                onClick={() => setAddAs(s)}
+                style={addAs === s ? { background: 'var(--creative)', color: '#fff' } : {}}
+              >
+                {s === 'wishlist' && <Heart size={12} />} {STATUS_LABELS[s]}
+              </button>
+            ))}
+          </div>
+        </div>
         <div style={{ maxHeight: 360, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
           {searching && <p style={{ fontSize: 12, color: 'var(--text-3)', textAlign: 'center', padding: 12 }}>Searching…</p>}
           {!searching && query.trim() && results.length === 0 && (
             <p style={{ fontSize: 12, color: 'var(--text-3)', textAlign: 'center', padding: 12, fontStyle: 'italic' }}>No results.</p>
           )}
           {results.map((b, i) => (
-            <div key={i} onClick={() => onAdd(b)} style={{ display: 'flex', gap: 10, padding: 8, borderRadius: 'var(--radius)', cursor: 'pointer', alignItems: 'center' }}
+            <div key={i} onClick={() => onAdd(b, addAs)} style={{ display: 'flex', gap: 10, padding: 8, borderRadius: 'var(--radius)', cursor: 'pointer', alignItems: 'center' }}
               onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-2)'}
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
             >

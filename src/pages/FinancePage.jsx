@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { format, subWeeks, subDays, subMonths, endOfWeek } from 'date-fns'
+import { format, subWeeks, subDays, subMonths, endOfWeek, getDaysInMonth } from 'date-fns'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
@@ -22,8 +22,6 @@ const FREQUENCIES = ['monthly', 'weekly', 'annual', 'one-off']
 
 const CARD_LABELS = {
   'category-budgets': 'Category budgets',
-  income: 'Income sources',
-  fixed: 'Fixed expenses',
   'variable-list': 'Variable expenses',
   'tax-pot': 'Tax pot & take-home',
   'weekly-chart': 'Spending trend',
@@ -32,8 +30,6 @@ const CARD_LABELS = {
 
 const DEFAULT_ORDER = [
   { id: 'category-budgets', size: 'wide' },
-  { id: 'income', size: 'square' },
-  { id: 'fixed', size: 'square' },
   { id: 'variable-list', size: 'wide' },
   { id: 'tax-pot', size: 'square' },
   { id: 'weekly-chart', size: 'square' },
@@ -231,15 +227,9 @@ export default function FinancePage() {
   const categoryBudget = {}
   VARIABLE_CATS.forEach(c => { categoryBudget[c] = monthBudgets.find(b => b.category === c)?.amount || 0 })
 
-  // Disposable income colour: red if overspent, amber if thin margin, else green
-  const disposablePct = totalIncome > 0 ? (takeHome / totalIncome) * 100 : (takeHome >= 0 ? 100 : -1)
-  const disposableColor = takeHome < 0 ? 'var(--danger)' : disposablePct < 15 ? 'var(--warning)' : 'var(--success)'
-
-  // Reminder banner
-  const reminderDays = shouldShowSpendingReminder(variable)
-
-  // Daily / weekly / monthly period scaling — budgets are stored as monthly amounts
-  const BUDGET_SCALE = { daily: 12 / 365, weekly: 12 / 52, monthly: 1 }
+  // Daily / weekly / monthly period scaling — budgets (and income/fixed costs,
+  // which are monthly constants) are stored as monthly amounts.
+  const BUDGET_SCALE = { daily: 1 / getDaysInMonth(refDate), weekly: 12 / 52, monthly: 1 }
   const { start: periodStart, end: periodEnd } = getCurrentPeriodBounds(refDate, activeView)
   const periodStartStr = format(periodStart, 'yyyy-MM-dd')
   const periodEndStr = format(periodEnd, 'yyyy-MM-dd')
@@ -251,6 +241,20 @@ export default function FinancePage() {
   VARIABLE_CATS.forEach(c => { periodCategorySpend[c] = periodVariable.filter(v => v.category === c).reduce((s, v) => s + v.amount, 0) })
   const periodCategoryBudget = {}
   VARIABLE_CATS.forEach(c => { periodCategoryBudget[c] = categoryBudget[c] * BUDGET_SCALE[activeView] })
+
+  // Disposable income for the selected period: income/tax/fixed costs are monthly
+  // constants, scaled to the period, minus that period's actual variable spending.
+  const monthlyDisposableBase = totalIncome - taxPot - totalFixed
+  const periodIncome = totalIncome * BUDGET_SCALE[activeView]
+  const periodDisposableAllowance = monthlyDisposableBase * BUDGET_SCALE[activeView]
+  const periodTakeHome = periodDisposableAllowance - periodTotal
+
+  // Disposable income colour: red if overspent, amber if thin margin, else green
+  const disposablePct = periodIncome > 0 ? (periodTakeHome / periodIncome) * 100 : (periodTakeHome >= 0 ? 100 : -1)
+  const disposableColor = periodTakeHome < 0 ? 'var(--danger)' : disposablePct < 15 ? 'var(--warning)' : 'var(--success)'
+
+  // Reminder banner
+  const reminderDays = shouldShowSpendingReminder(variable)
 
   // Spending trend chart — trailing window + granularity follow the period view
   const { start: trailStart, end: trailEnd } = getTrailingBounds(refDate, activeView)
@@ -283,12 +287,87 @@ export default function FinancePage() {
 
   if (loading) return <p style={{ padding: 40, color: 'var(--text-3)', textAlign: 'center' }}>Loading…</p>
 
-  const order = normalizeOrder(cardOrder)
+  const order = normalizeOrder(cardOrder).filter(o => o.id !== 'income' && o.id !== 'fixed')
   const available = Object.entries(CARD_LABELS)
     .filter(([id]) => !order.some(o => o.id === id))
     .map(([id, label]) => ({ id, label }))
 
-  const filteredVariable = filterCat ? variable.filter(v => v.category === filterCat) : variable
+  const filteredVariable = filterCat ? periodVariable.filter(v => v.category === filterCat) : periodVariable
+  const periodLabel = activeView === 'daily' ? 'today' : activeView === 'weekly' ? 'this week' : 'this month'
+
+  const monthlyBadge = (
+    <span className="mono" style={{ fontSize: 10, color: 'var(--text-3)', fontWeight: 400, border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '1px 6px', marginLeft: 8 }}>
+      Monthly
+    </span>
+  )
+
+  const incomeCard = (
+    <div className="card">
+      <h3 style={{ fontSize: '0.9rem', marginBottom: 14 }}>Income sources {monthlyBadge}</h3>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+        {income.map(i => (
+          <div key={i.id} className="flex items-center justify-between gap-2">
+            <div>
+              <p style={{ fontSize: 13 }}>{i.name}</p>
+              <p className="mono" style={{ fontSize: 10, color: 'var(--text-3)' }}>
+                £{i.amount.toFixed(2)} / {i.frequency}{i.is_self_employed ? ' · self-emp' : ''}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--finance)', fontWeight: 500 }}>
+                £{toMonthly(i.amount, i.frequency).toFixed(0)}/mo
+              </span>
+              <button className="btn-icon btn" onClick={() => deleteIncome(i.id)}><Trash2 size={12} /></button>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+        <input placeholder="Source name" value={newIncome.name} onChange={e => setNewIncome(p => ({ ...p, name: e.target.value }))} style={{ fontSize: 12 }} />
+        <div style={{ display: 'flex', gap: 6 }}>
+          <input type="number" placeholder="Amount £" value={newIncome.amount} onChange={e => setNewIncome(p => ({ ...p, amount: e.target.value }))} style={{ fontSize: 12, flex: 1 }} />
+          <select value={newIncome.frequency} onChange={e => setNewIncome(p => ({ ...p, frequency: e.target.value }))} style={{ fontSize: 12 }}>
+            {FREQUENCIES.map(f => <option key={f}>{f}</option>)}
+          </select>
+        </div>
+        <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-2)' }}>
+          <input type="checkbox" checked={newIncome.is_self_employed} onChange={e => setNewIncome(p => ({ ...p, is_self_employed: e.target.checked }))} />
+          Self-employed (tax pot applies)
+        </label>
+        <button className="btn btn-sm btn-finance" style={{ color: '#fff' }} onClick={addIncome}><Plus size={12} /> Add income</button>
+      </div>
+    </div>
+  )
+
+  const fixedCard = (
+    <div className="card">
+      <h3 style={{ fontSize: '0.9rem', marginBottom: 14 }}>Fixed expenses <span className="mono" style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 400 }}>£{totalFixed.toFixed(0)}/mo</span> {monthlyBadge}</h3>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+        {fixed.map(i => (
+          <div key={i.id} className="flex items-center justify-between gap-2">
+            <div>
+              <p style={{ fontSize: 13 }}>{i.name}</p>
+              <p className="mono" style={{ fontSize: 10, color: 'var(--text-3)' }}>{i.category}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text)', fontWeight: 500 }}>£{i.amount.toFixed(2)}</span>
+              <button className="btn-icon btn" onClick={() => deleteFixed(i.id)}><Trash2 size={12} /></button>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+        <input placeholder="Expense name" value={newFixed.name} onChange={e => setNewFixed(p => ({ ...p, name: e.target.value }))} style={{ fontSize: 12 }} />
+        <div style={{ display: 'flex', gap: 6 }}>
+          <input type="number" placeholder="Amount £" value={newFixed.amount} onChange={e => setNewFixed(p => ({ ...p, amount: e.target.value }))} style={{ fontSize: 12, flex: 1 }} />
+          <select value={newFixed.category} onChange={e => setNewFixed(p => ({ ...p, category: e.target.value }))} style={{ fontSize: 12 }}>
+            {EXPENSE_CATS.map(c => <option key={c}>{c}</option>)}
+          </select>
+        </div>
+        <button className="btn btn-sm btn-ghost" onClick={addFixed}><Plus size={12} /> Add fixed expense</button>
+      </div>
+    </div>
+  )
 
   const CARDS = {
     'category-budgets': (
@@ -329,78 +408,10 @@ export default function FinancePage() {
       </div>
     ),
 
-    income: (
-      <div className="card">
-        <h3 style={{ fontSize: '0.9rem', marginBottom: 14 }}>Income sources</h3>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }} onClick={e => e.stopPropagation()}>
-          {income.map(i => (
-            <div key={i.id} className="flex items-center justify-between gap-2">
-              <div>
-                <p style={{ fontSize: 13 }}>{i.name}</p>
-                <p className="mono" style={{ fontSize: 10, color: 'var(--text-3)' }}>
-                  £{i.amount.toFixed(2)} / {i.frequency}{i.is_self_employed ? ' · self-emp' : ''}
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--finance)', fontWeight: 500 }}>
-                  £{toMonthly(i.amount, i.frequency).toFixed(0)}/mo
-                </span>
-                <button className="btn-icon btn" onClick={() => deleteIncome(i.id)}><Trash2 size={12} /></button>
-              </div>
-            </div>
-          ))}
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, borderTop: '1px solid var(--border)', paddingTop: 12 }} onClick={e => e.stopPropagation()}>
-          <input placeholder="Source name" value={newIncome.name} onChange={e => setNewIncome(p => ({ ...p, name: e.target.value }))} style={{ fontSize: 12 }} />
-          <div style={{ display: 'flex', gap: 6 }}>
-            <input type="number" placeholder="Amount £" value={newIncome.amount} onChange={e => setNewIncome(p => ({ ...p, amount: e.target.value }))} style={{ fontSize: 12, flex: 1 }} />
-            <select value={newIncome.frequency} onChange={e => setNewIncome(p => ({ ...p, frequency: e.target.value }))} style={{ fontSize: 12 }}>
-              {FREQUENCIES.map(f => <option key={f}>{f}</option>)}
-            </select>
-          </div>
-          <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-2)' }}>
-            <input type="checkbox" checked={newIncome.is_self_employed} onChange={e => setNewIncome(p => ({ ...p, is_self_employed: e.target.checked }))} />
-            Self-employed (tax pot applies)
-          </label>
-          <button className="btn btn-sm btn-finance" style={{ color: '#fff' }} onClick={addIncome}><Plus size={12} /> Add income</button>
-        </div>
-      </div>
-    ),
-
-    fixed: (
-      <div className="card">
-        <h3 style={{ fontSize: '0.9rem', marginBottom: 14 }}>Fixed expenses <span className="mono" style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 400 }}>£{totalFixed.toFixed(0)}/mo</span></h3>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }} onClick={e => e.stopPropagation()}>
-          {fixed.map(i => (
-            <div key={i.id} className="flex items-center justify-between gap-2">
-              <div>
-                <p style={{ fontSize: 13 }}>{i.name}</p>
-                <p className="mono" style={{ fontSize: 10, color: 'var(--text-3)' }}>{i.category}</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text)', fontWeight: 500 }}>£{i.amount.toFixed(2)}</span>
-                <button className="btn-icon btn" onClick={() => deleteFixed(i.id)}><Trash2 size={12} /></button>
-              </div>
-            </div>
-          ))}
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, borderTop: '1px solid var(--border)', paddingTop: 12 }} onClick={e => e.stopPropagation()}>
-          <input placeholder="Expense name" value={newFixed.name} onChange={e => setNewFixed(p => ({ ...p, name: e.target.value }))} style={{ fontSize: 12 }} />
-          <div style={{ display: 'flex', gap: 6 }}>
-            <input type="number" placeholder="Amount £" value={newFixed.amount} onChange={e => setNewFixed(p => ({ ...p, amount: e.target.value }))} style={{ fontSize: 12, flex: 1 }} />
-            <select value={newFixed.category} onChange={e => setNewFixed(p => ({ ...p, category: e.target.value }))} style={{ fontSize: 12 }}>
-              {EXPENSE_CATS.map(c => <option key={c}>{c}</option>)}
-            </select>
-          </div>
-          <button className="btn btn-sm btn-ghost" onClick={addFixed}><Plus size={12} /> Add fixed expense</button>
-        </div>
-      </div>
-    ),
-
     'variable-list': (
       <div className="card">
         <div className="flex items-center justify-between mb-3">
-          <h3 style={{ fontSize: '0.9rem' }}>Variable expenses <span className="mono" style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 400 }}>this month: £{totalVariable.toFixed(2)}</span></h3>
+          <h3 style={{ fontSize: '0.9rem' }}>Variable expenses <span className="mono" style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 400 }}>{periodLabel}: £{periodTotal.toFixed(2)}</span></h3>
           {filterCat && (
             <button className="btn btn-xs btn-ghost" onClick={e => { e.stopPropagation(); setFilterCat(null) }}>
               {CAT_EMOJI[filterCat]} {filterCat} ✕
@@ -525,19 +536,25 @@ export default function FinancePage() {
       {/* Hero section */}
       <div className="card card-finance mb-6" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 28, padding: '24px 28px' }}>
         <div>
-          <p className="mono" style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 6 }}>Total spent</p>
+          <p className="mono" style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 6 }}>Total spent {periodLabel}</p>
           <p style={{ fontFamily: 'var(--font-serif)', fontSize: '2.6rem', fontWeight: 700, letterSpacing: '-0.02em' }}>£{periodTotal.toFixed(0)}</p>
         </div>
         <BudgetRing label="Budget" spent={periodTotal} budget={periodOverallBudget} size={120} />
         <div>
           <p className="mono" style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 6 }}>Disposable income remaining</p>
-          <p style={{ fontFamily: 'var(--font-serif)', fontSize: '2.2rem', fontWeight: 700, letterSpacing: '-0.02em', color: disposableColor }}>£{takeHome.toFixed(0)}</p>
+          <p style={{ fontFamily: 'var(--font-serif)', fontSize: '2.2rem', fontWeight: 700, letterSpacing: '-0.02em', color: disposableColor }}>£{periodTakeHome.toFixed(0)}</p>
           <p className="mono" style={{ fontSize: 11, color: disposableColor, marginTop: 4 }}>
             {periodOverallBudget > 0
               ? (periodTotal <= periodOverallBudget ? `£${(periodOverallBudget - periodTotal).toFixed(0)} left of budget` : `£${(periodTotal - periodOverallBudget).toFixed(0)} over budget`)
-              : (takeHome >= 0 ? `£${takeHome.toFixed(0)} left this month` : `£${Math.abs(takeHome).toFixed(0)} over budget this month`)}
+              : (periodTakeHome >= 0 ? `£${periodTakeHome.toFixed(0)} left ${periodLabel}` : `£${Math.abs(periodTakeHome).toFixed(0)} over budget ${periodLabel}`)}
           </p>
         </div>
+      </div>
+
+      {/* Income & Fixed expenses — always monthly, outside the Daily/Weekly/Monthly toggle */}
+      <div className="mb-6" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
+        {incomeCard}
+        {fixedCard}
       </div>
 
       {/* Customisable card grid */}
