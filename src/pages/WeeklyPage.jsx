@@ -12,6 +12,7 @@ import WeeklyAgenda from '../components/calendar/WeeklyAgenda'
 import ArcRing from '../components/ui/ArcRing'
 
 const FREQUENCIES = ['Daily', 'Weekly', '2x/week', '3x/week', 'One-off']
+const DAY_SHORT_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
 function areaColor(area) {
   return AREA_COLORS[area] || AREA_COLORS.Other
@@ -275,6 +276,7 @@ export default function WeeklyPage() {
                               <ChevronDown size={12} color="var(--text-3)" style={{ flexShrink: 0, transform: expanded ? 'none' : 'rotate(-90deg)', transition: 'transform 0.15s' }} />
                               <span style={{ textDecoration: task.complete ? 'line-through' : 'none', fontSize: 13 }}>{task.specific_task}</span>
                               {task.carried_forward && <span className="badge badge-warning" style={{ marginLeft: 6, fontSize: 9 }}>carried</span>}
+                              {task.day_of_week != null && <span className="badge" style={{ marginLeft: 6, fontSize: 9, background: 'var(--career-tint)', color: 'var(--career)' }}>{DAY_SHORT_LABELS[task.day_of_week]}</span>}
                               {task.notes && <MessageSquare size={11} color="var(--creative)" style={{ flexShrink: 0 }} />}
                             </div>
                           </td>

@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react'
 import { format } from 'date-fns'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
-import { Plus, Check, Clock, Target, Send } from 'lucide-react'
+import { Plus, Check, Clock, Target, Send, CalendarDays } from 'lucide-react'
 
 const TIME_OPTS = ['15 min', '30 min', '45 min', '1 hr', '1.5 hr', '2 hr', '3 hr']
+const DAY_LABELS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 
 export default function TaskExpansion({ task, goals, onUpdateField, onToggleSubtask, onAddSubtask }) {
   const { user } = useAuth()
@@ -73,6 +74,17 @@ export default function TaskExpansion({ task, goals, onUpdateField, onToggleSubt
           <select value={task.goal_id || ''} onChange={e => onUpdateField('goal_id', e.target.value || null)} style={{ fontSize: 12, padding: '4px 8px', maxWidth: 220 }}>
             <option value="">No linked goal</option>
             {goals.map(g => <option key={g.id} value={g.id}>{g.category}: {g.primary_goal?.slice(0, 28)}</option>)}
+          </select>
+        </div>
+        <div className="flex items-center gap-2">
+          <CalendarDays size={13} color="var(--text-3)" />
+          <select
+            value={task.day_of_week ?? ''}
+            onChange={e => onUpdateField('day_of_week', e.target.value === '' ? null : Number(e.target.value))}
+            style={{ fontSize: 12, padding: '4px 8px' }}
+          >
+            <option value="">No specific day</option>
+            {DAY_LABELS.map((label, i) => <option key={i} value={i}>{label}</option>)}
           </select>
         </div>
       </div>

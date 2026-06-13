@@ -2,13 +2,13 @@ import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
 import { useTimer } from '../../hooks/useTimer'
-import { format, subDays, startOfWeek } from 'date-fns'
+import { format, subDays, addDays, startOfWeek, getDay, parseISO } from 'date-fns'
 import { parseTimeAllocationToMinutes } from '../../lib/constants'
 import { deleteCalendarEvent } from '../../lib/googleCalendar'
 import WeeklyPlanPicker from './WeeklyPlanPicker'
 import TimerWidget from './TimerWidget'
 import TimeBlockModal from './TimeBlockModal'
-import { Plus, Trash2, ChevronDown, ChevronRight, Check, Clock, Target, Hourglass, AlarmClock, Link2, Timer as TimerIcon, CalendarClock } from 'lucide-react'
+import { Plus, Trash2, ChevronDown, ChevronRight, Check, Clock, Target, Hourglass, AlarmClock, Link2, Timer as TimerIcon, CalendarClock, ChevronLeft } from 'lucide-react'
 
 const DEFAULT_CATS = ['Work', 'Personal', 'Errands', 'Creative', 'Health']
 const TIME_OPTS = ['15 min', '30 min', '45 min', '1 hr', '1.5 hr', '2 hr', '3 hr']
@@ -51,13 +51,29 @@ export default function DailyTodos({ compact = false }) {
   const [timerTodo, setTimerTodo] = useState(null)
   const [showTimeBlock, setShowTimeBlock] = useState(false)
   const [workingHours, setWorkingHours] = useState({ start: '09:00', end: '19:00' })
+  const [viewDate, setViewDate] = useState(today)
   const inputRef = useRef(null)
   const timerCtx = useTimer()
+  const carriedRef = useRef(false)
 
-  // Load todos, carrying over yesterday's incomplete tasks atomically
+  const isToday = viewDate === today
+  const viewDayOfWeek = (getDay(parseISO(viewDate)) + 6) % 7 // 0=Mon..6=Sun
+
   useEffect(() => {
-    if (user) { init(); loadGoals(); loadWorkingHours() }
+    if (user) { loadGoals(); loadWorkingHours() }
   }, [user])
+
+  // Carry over yesterday's incomplete tasks (once, only when viewing today), then load todos for viewDate
+  useEffect(() => {
+    if (!user) return
+    ;(async () => {
+      if (viewDate === today && !carriedRef.current) {
+        carriedRef.current = true
+        await carryOverYesterday()
+      }
+      await loadTodosForDate(viewDate)
+    })()
+  }, [user, viewDate])
 
   async function loadGoals() {
     const { data } = await supabase.from('goals').select('id, primary_goal, category').eq('user_id', user.id)
@@ -72,13 +88,19 @@ export default function DailyTodos({ compact = false }) {
   async function loadWeeklyTasks() {
     const { data } = await supabase.from('weekly_tasks').select('*')
       .eq('user_id', user.id).eq('week_start', weekStartStr).eq('complete', false).order('created_at')
-    setWeeklyTasks(data || [])
+    const tasks = data || []
+    // Tasks allocated to the day being viewed surface first
+    const sorted = [...tasks].sort((a, b) => {
+      const aMatch = a.day_of_week === viewDayOfWeek ? 0 : 1
+      const bMatch = b.day_of_week === viewDayOfWeek ? 0 : 1
+      return aMatch - bMatch
+    })
+    setWeeklyTasks(sorted)
     setShowWeeklyPicker(true)
   }
 
-  async function init() {
-    setLoading(true)
-    // 1. Carry over yesterday's incomplete (idempotent guard via carried_from)
+  async function carryOverYesterday() {
+    // Carry over yesterday's incomplete (idempotent guard via carried_from)
     const { data: yd } = await supabase
       .from('daily_todos')
       .select('*')
@@ -118,13 +140,15 @@ export default function DailyTodos({ compact = false }) {
           .eq('complete', false)
       }
     }
+  }
 
-    // 2. Load today's todos
+  async function loadTodosForDate(date) {
+    setLoading(true)
     const { data: td } = await supabase
       .from('daily_todos')
       .select('*')
       .eq('user_id', user.id)
-      .eq('date', today)
+      .eq('date', date)
       .eq('archived', false)
       .order('created_at')
 
@@ -136,7 +160,7 @@ export default function DailyTodos({ compact = false }) {
     const text = input.trim()
     if (!text) return
     const { data } = await supabase.from('daily_todos').insert({
-      user_id: user.id, text, date: today,
+      user_id: user.id, text, date: viewDate,
       category: categoryFilter || 'Personal',
       complete: false,
     }).select().single()
@@ -179,7 +203,7 @@ export default function DailyTodos({ compact = false }) {
     const { data } = await supabase.from('daily_todos').insert({
       user_id: user.id,
       text: task.specific_task || task.action,
-      date: today,
+      date: viewDate,
       category: AREA_TO_CATEGORY[task.area] || 'Personal',
       complete: false,
       duration_minutes: parseTimeAllocationToMinutes(task.time_allocation),
@@ -231,23 +255,36 @@ export default function DailyTodos({ compact = false }) {
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-3 wrap">
         <div>
-          <h3>Today's to-dos</h3>
+          <h3>{isToday ? "Today's to-dos" : `${format(parseISO(viewDate), 'EEEE')}'s to-dos`}</h3>
           {!loading && (
             <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-3)', marginTop: 2, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
-              {done}/{total} done · {format(new Date(), 'EEE d MMM')}
+              {done}/{total} done · {format(parseISO(viewDate), 'EEE d MMM')}
             </p>
           )}
         </div>
-        <div className="flex gap-2">
-          {(['all', 'active', 'done']).map(f => (
-            <button key={f} onClick={() => setStatusFilter(f)}
-              className={`btn btn-xs ${statusFilter === f ? 'btn-career' : 'btn-ghost'}`}
-              style={statusFilter === f ? { color: '#fff' } : {}}>
-              {f}
+        <div className="flex items-center gap-2 wrap">
+          <div className="flex items-center gap-1">
+            <button className="btn-icon" onClick={() => setViewDate(d => format(subDays(parseISO(d), 1), 'yyyy-MM-dd'))} title="Previous day">
+              <ChevronLeft size={14} />
             </button>
-          ))}
+            {!isToday && (
+              <button className="btn btn-ghost btn-xs" onClick={() => setViewDate(today)}>Today</button>
+            )}
+            <button className="btn-icon" onClick={() => setViewDate(d => format(addDays(parseISO(d), 1), 'yyyy-MM-dd'))} title="Next day">
+              <ChevronRight size={14} />
+            </button>
+          </div>
+          <div className="flex gap-2">
+            {(['all', 'active', 'done']).map(f => (
+              <button key={f} onClick={() => setStatusFilter(f)}
+                className={`btn btn-xs ${statusFilter === f ? 'btn-career' : 'btn-ghost'}`}
+                style={statusFilter === f ? { color: '#fff' } : {}}>
+                {f}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -309,7 +346,7 @@ export default function DailyTodos({ compact = false }) {
       ) : sorted.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--text-3)' }}>
           <p style={{ fontSize: 13, fontStyle: 'italic' }}>
-            {statusFilter === 'done' ? 'Nothing completed yet today.' : 'Nothing here — add something above.'}
+            {statusFilter === 'done' ? `Nothing completed ${isToday ? 'yet today' : 'this day'}.` : 'Nothing here — add something above.'}
           </p>
         </div>
       ) : (
@@ -333,7 +370,7 @@ export default function DailyTodos({ compact = false }) {
       )}
 
       {showWeeklyPicker && (
-        <WeeklyPlanPicker tasks={weeklyTasks} onSelect={pullFromWeeklyTask} onClose={() => setShowWeeklyPicker(false)} />
+        <WeeklyPlanPicker tasks={weeklyTasks} viewDayOfWeek={viewDayOfWeek} onSelect={pullFromWeeklyTask} onClose={() => setShowWeeklyPicker(false)} />
       )}
 
       {timerTodo && (
@@ -344,7 +381,7 @@ export default function DailyTodos({ compact = false }) {
         <TimeBlockModal
           session={session}
           todos={blockable}
-          date={today}
+          date={viewDate}
           workingHours={workingHours}
           onClose={() => setShowTimeBlock(false)}
           onApply={applyTimeBlocks}
