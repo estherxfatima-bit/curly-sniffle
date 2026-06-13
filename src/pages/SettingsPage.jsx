@@ -3,7 +3,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useTheme } from '../hooks/useTheme'
 import { supabase } from '../lib/supabase'
 import { registerServiceWorker, subscribeToPush, unsubscribeFromPush, isSubscribed } from '../lib/pushNotifications'
-import { Bell, BellOff, Sun, Moon, LogOut, Calendar, Unlink } from 'lucide-react'
+import { Bell, BellOff, Sun, Moon, LogOut, Calendar, Unlink, MessageSquare } from 'lucide-react'
 
 function SettingsDecoration() {
   return (
@@ -27,6 +27,7 @@ export default function SettingsPage() {
   const [pushLoading, setPushLoading] = useState(false)
   const [pushSupported, setPushSupported] = useState(true)
   const [googleStatus, setGoogleStatus] = useState({ loading: true, connected: false, email: null })
+  const [smsStatus, setSmsStatus] = useState({ loading: true, configured: false, smsNumber: null, examples: [] })
 
   useEffect(() => {
     registerServiceWorker()
@@ -37,6 +38,7 @@ export default function SettingsPage() {
   useEffect(() => {
     if (!user) return
     loadGoogleStatus()
+    loadSmsStatus()
     const params = new URLSearchParams(window.location.search)
     if (params.get('google') === 'error') alert('Failed to connect Google Calendar. Please try again.')
   }, [user])
@@ -44,6 +46,19 @@ export default function SettingsPage() {
   async function loadGoogleStatus() {
     const { data } = await supabase.from('google_tokens').select('google_email').eq('user_id', user.id).maybeSingle()
     setGoogleStatus({ loading: false, connected: !!data, email: data?.google_email || null })
+  }
+
+  async function loadSmsStatus() {
+    try {
+      const res = await fetch('/api/sms/status', {
+        headers: { Authorization: `Bearer ${session?.access_token || ''}` },
+      })
+      if (!res.ok) throw new Error('Request failed')
+      const data = await res.json()
+      setSmsStatus({ loading: false, ...data })
+    } catch {
+      setSmsStatus({ loading: false, configured: false, smsNumber: null, examples: [] })
+    }
   }
 
   async function disconnectGoogle() {
@@ -150,6 +165,42 @@ export default function SettingsPage() {
               </a>
             )}
           </div>
+        )}
+      </div>
+
+      {/* SMS (Twilio) */}
+      <div className="card mb-4">
+        <h3 style={{ fontSize: '0.9rem', marginBottom: 16 }}>SMS assistant</h3>
+        {smsStatus.loading ? (
+          <p style={{ fontSize: 12, color: 'var(--text-3)' }}>Loading…</p>
+        ) : (
+          <>
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className={`badge ${smsStatus.configured ? 'badge-finance' : 'badge-muted'}`}>
+                    {smsStatus.configured ? 'Connected' : 'Not connected'}
+                  </span>
+                </div>
+                <p style={{ fontSize: 12, color: 'var(--text-3)' }}>
+                  {smsStatus.configured
+                    ? `Text ${smsStatus.smsNumber} to log expenses, manage to-dos, or ask the AI assistant anything.`
+                    : 'Set the TWILIO_* and MY_PHONE_NUMBER environment variables to enable two-way SMS.'}
+                </p>
+              </div>
+              <MessageSquare size={18} color={smsStatus.configured ? 'var(--finance)' : 'var(--text-3)'} />
+            </div>
+            {smsStatus.configured && (
+              <div>
+                <p className="mono mb-2" style={{ fontSize: 11, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Example commands</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {smsStatus.examples.map(ex => (
+                    <code key={ex} style={{ fontSize: 12, background: 'var(--bg-3)', padding: '6px 10px', borderRadius: 'var(--radius)', color: 'var(--text-2)' }}>{ex}</code>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 
