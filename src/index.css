@@ -721,3 +721,27 @@ input[type="range"]::-webkit-slider-thumb {
 
 /* ── Section colour: btn-section aliases ── */
 .btn-section { color: #fff; }
+
+/* ── Daily to-dos: mobile drawer ── */
+@media (max-width: 480px) {
+  .todos-card-header { cursor: pointer; }
+  .todos-content { display: none; }
+  .todos-content.drawer-open {
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    inset: 0;
+    z-index: 500;
+    background: var(--bg);
+    padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+    overflow-y: auto;
+  }
+  .todos-drawer-backbtn { display: flex !important; }
+  .todos-mobile-hint { display: block; }
+}
+@media (min-width: 481px) {
+  .todos-content { display: block; }
+  .todos-drawer-backbtn { display: none !important; }
+  .todos-mobile-hint { display: none; }
+}
+.todo-item-row { min-height: 44px; }

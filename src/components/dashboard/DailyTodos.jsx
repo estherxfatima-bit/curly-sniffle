@@ -52,6 +52,7 @@ export default function DailyTodos({ compact = false }) {
   const [showTimeBlock, setShowTimeBlock] = useState(false)
   const [workingHours, setWorkingHours] = useState({ start: '09:00', end: '19:00' })
   const [viewDate, setViewDate] = useState(today)
+  const [drawerOpen, setDrawerOpen] = useState(false)
   const inputRef = useRef(null)
   const timerCtx = useTimer()
   const carriedRef = useRef(false)
@@ -254,17 +255,18 @@ export default function DailyTodos({ compact = false }) {
 
   return (
     <div>
-      {/* Header */}
-      <div className="flex items-center justify-between mb-3 wrap">
+      {/* Header — tapping it opens the full-screen drawer on mobile */}
+      <div className="flex items-center justify-between mb-3 wrap todos-card-header" onClick={() => setDrawerOpen(true)}>
         <div>
           <h3>{isToday ? "Today's to-dos" : `${format(parseISO(viewDate), 'EEEE')}'s to-dos`}</h3>
           {!loading && (
             <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-3)', marginTop: 2, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
               {done}/{total} done · {format(parseISO(viewDate), 'EEE d MMM')}
+              <span className="todos-mobile-hint"> · tap to open</span>
             </p>
           )}
         </div>
-        <div className="flex items-center gap-2 wrap">
+        <div className="flex items-center gap-2 wrap" onClick={e => e.stopPropagation()}>
           <div className="flex items-center gap-1">
             <button className="btn-icon" onClick={() => setViewDate(d => format(subDays(parseISO(d), 1), 'yyyy-MM-dd'))} title="Previous day">
               <ChevronLeft size={14} />
@@ -288,86 +290,96 @@ export default function DailyTodos({ compact = false }) {
         </div>
       </div>
 
-      {/* Quick-add input */}
-      <div style={{ display: 'flex', gap: 7, marginBottom: 12 }}>
-        <input
-          ref={inputRef}
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && addTodo()}
-          placeholder="Add task… Enter to save"
-          style={{ flex: 1 }}
-        />
-        <button className="btn btn-career btn-sm" style={{ color: '#fff', flexShrink: 0 }} onClick={addTodo}>
-          <Plus size={13} />
-        </button>
-      </div>
-
-      {/* Pull from weekly plan / Time-block actions */}
-      <div className="flex items-center gap-2 mb-3 wrap">
-        <button className="btn btn-ghost btn-xs" onClick={loadWeeklyTasks}>
-          <Link2 size={12} /> Pull from weekly plan
-        </button>
-        <button className="btn btn-ghost btn-xs" onClick={() => setShowTimeBlock(true)} disabled={blockable.length === 0}>
-          <CalendarClock size={12} /> Time-block my day
-        </button>
-      </div>
-
-      {/* Category filter chips */}
-      <div className="flex items-center gap-2 mb-4 wrap">
+      <div className={`todos-content${drawerOpen ? ' drawer-open' : ''}`}>
         <button
-          onClick={() => setCategoryFilter('')}
-          className={`btn btn-xs ${!categoryFilter ? 'btn-career' : 'btn-ghost'}`}
-          style={!categoryFilter ? { color: '#fff' } : {}}
-        >All</button>
-        {allCategories.map(c => (
-          <button key={c} onClick={() => setCategoryFilter(categoryFilter === c ? '' : c)}
-            className={`btn btn-xs ${categoryFilter === c ? '' : 'btn-ghost'}`}
-            style={categoryFilter === c ? { background: catColor(c), color: '#fff', border: 'none' } : {}}
-          >
-            {c}
+          className="todos-drawer-backbtn btn btn-ghost btn-sm mb-3"
+          style={{ display: 'none', alignSelf: 'flex-start' }}
+          onClick={() => setDrawerOpen(false)}
+        >
+          <ChevronLeft size={14} /> Back
+        </button>
+
+        {/* Quick-add input */}
+        <div style={{ display: 'flex', gap: 7, marginBottom: 12 }}>
+          <input
+            ref={inputRef}
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && addTodo()}
+            placeholder="Add task… Enter to save"
+            style={{ flex: 1 }}
+          />
+          <button className="btn btn-career btn-sm" style={{ color: '#fff', flexShrink: 0 }} onClick={addTodo}>
+            <Plus size={13} />
           </button>
-        ))}
-        {showAddCat ? (
-          <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
-            <input value={newCatInput} onChange={e => setNewCatInput(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') addCategory(); if (e.key === 'Escape') setShowAddCat(false) }}
-              placeholder="Category name" style={{ fontSize: 11, padding: '3px 8px', width: 110 }} autoFocus />
-            <button className="btn btn-xs btn-career" style={{ color: '#fff' }} onClick={addCategory}>+</button>
+        </div>
+
+        {/* Pull from weekly plan / Time-block actions */}
+        <div className="flex items-center gap-2 mb-3 wrap">
+          <button className="btn btn-ghost btn-xs" onClick={loadWeeklyTasks}>
+            <Link2 size={12} /> Pull from weekly plan
+          </button>
+          <button className="btn btn-ghost btn-xs" onClick={() => setShowTimeBlock(true)} disabled={blockable.length === 0}>
+            <CalendarClock size={12} /> Time-block my day
+          </button>
+        </div>
+
+        {/* Category filter chips */}
+        <div className="flex items-center gap-2 mb-4 wrap">
+          <button
+            onClick={() => setCategoryFilter('')}
+            className={`btn btn-xs ${!categoryFilter ? 'btn-career' : 'btn-ghost'}`}
+            style={!categoryFilter ? { color: '#fff' } : {}}
+          >All</button>
+          {allCategories.map(c => (
+            <button key={c} onClick={() => setCategoryFilter(categoryFilter === c ? '' : c)}
+              className={`btn btn-xs ${categoryFilter === c ? '' : 'btn-ghost'}`}
+              style={categoryFilter === c ? { background: catColor(c), color: '#fff', border: 'none' } : {}}
+            >
+              {c}
+            </button>
+          ))}
+          {showAddCat ? (
+            <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
+              <input value={newCatInput} onChange={e => setNewCatInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') addCategory(); if (e.key === 'Escape') setShowAddCat(false) }}
+                placeholder="Category name" style={{ fontSize: 11, padding: '3px 8px', width: 110 }} autoFocus />
+              <button className="btn btn-xs btn-career" style={{ color: '#fff' }} onClick={addCategory}>+</button>
+            </div>
+          ) : (
+            <button className="btn btn-xs btn-ghost" onClick={() => setShowAddCat(true)} title="Add custom category" style={{ color: 'var(--text-3)' }}>+ cat</button>
+          )}
+        </div>
+
+        {/* List */}
+        {loading ? (
+          <p style={{ color: 'var(--text-3)', fontSize: 13, textAlign: 'center', padding: '16px 0' }}>Loading…</p>
+        ) : sorted.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--text-3)' }}>
+            <p style={{ fontSize: 13, fontStyle: 'italic' }}>
+              {statusFilter === 'done' ? `Nothing completed ${isToday ? 'yet today' : 'this day'}.` : 'Nothing here — add something above.'}
+            </p>
           </div>
         ) : (
-          <button className="btn btn-xs btn-ghost" onClick={() => setShowAddCat(true)} title="Add custom category" style={{ color: 'var(--text-3)' }}>+ cat</button>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {sorted.map(todo => (
+              <TodoItem
+                key={todo.id}
+                todo={todo}
+                categories={allCategories}
+                goals={goals}
+                isTimerRunning={timerCtx?.timer?.todoId === todo.id}
+                onToggle={() => toggle(todo)}
+                onRemove={() => remove(todo)}
+                onUpdateField={(f, v) => updateField(todo.id, f, v)}
+                onToggleSubtask={sid => toggleSubtask(todo, sid)}
+                onAddSubtask={text => addSubtask(todo, text)}
+                onOpenTimer={() => setTimerTodo(todo)}
+              />
+            ))}
+          </div>
         )}
       </div>
-
-      {/* List */}
-      {loading ? (
-        <p style={{ color: 'var(--text-3)', fontSize: 13, textAlign: 'center', padding: '16px 0' }}>Loading…</p>
-      ) : sorted.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--text-3)' }}>
-          <p style={{ fontSize: 13, fontStyle: 'italic' }}>
-            {statusFilter === 'done' ? `Nothing completed ${isToday ? 'yet today' : 'this day'}.` : 'Nothing here — add something above.'}
-          </p>
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {sorted.map(todo => (
-            <TodoItem
-              key={todo.id}
-              todo={todo}
-              categories={allCategories}
-              goals={goals}
-              isTimerRunning={timerCtx?.timer?.todoId === todo.id}
-              onToggle={() => toggle(todo)}
-              onRemove={() => remove(todo)}
-              onUpdateField={(f, v) => updateField(todo.id, f, v)}
-              onToggleSubtask={sid => toggleSubtask(todo, sid)}
-              onAddSubtask={text => addSubtask(todo, text)}
-              onOpenTimer={() => setTimerTodo(todo)}
-            />
-          ))}
-        </div>
-      )}
 
       {showWeeklyPicker && (
         <WeeklyPlanPicker tasks={weeklyTasks} viewDayOfWeek={viewDayOfWeek} onSelect={pullFromWeeklyTask} onClose={() => setShowWeeklyPicker(false)} />
@@ -410,12 +422,15 @@ function TodoItem({ todo, categories, goals, isTimerRunning, onToggle, onRemove,
   }
 
   return (
-    <div style={{
+    <div className="todo-item-row" style={{
       background: todo.complete ? 'var(--bg-2)' : 'var(--card-bg)',
       border: '1px solid var(--border)',
       borderLeft: `3px solid ${todo.complete ? 'var(--border)' : cc}`,
       borderRadius: 'var(--radius)',
       padding: '9px 12px',
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'center',
       transition: 'opacity 0.2s, transform 0.2s',
       opacity: todo.complete ? 0.62 : 1,
     }}>
