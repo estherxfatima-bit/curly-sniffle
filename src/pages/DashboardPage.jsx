@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { format, startOfWeek, endOfWeek, startOfMonth, addDays, addWeeks, addMonths } from 'date-fns'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
 import { getQuarterFromDate, getQuarterYear } from '../lib/constants'
+import { simulateHabit } from '../lib/habitUtils'
 
 import Confetti from '../components/ui/Confetti'
 import ImageHeader from '../components/dashboard/ImageHeader'
@@ -60,6 +61,7 @@ export default function DashboardPage() {
 
   // Static data (loaded once)
   const [allHabits, setAllHabits] = useState([])
+  const [allHabitLogs, setAllHabitLogs] = useState([])
   const [goals,     setGoals]     = useState([])
   const [imageUrl,  setImageUrl]  = useState(null)
   const [staticLoading, setStaticLoading] = useState(true)
@@ -108,13 +110,15 @@ export default function DashboardPage() {
 
   async function loadStatic() {
     setStaticLoading(true)
-    const [habitsRes, goalsRes, profileRes, layoutRes] = await Promise.all([
+    const [habitsRes, habitLogsRes, goalsRes, profileRes, layoutRes] = await Promise.all([
       supabase.from('habits').select('*').eq('user_id', user.id),
+      supabase.from('habit_logs').select('habit_id,log_date').eq('user_id', user.id),
       supabase.from('goals').select('*').eq('user_id', user.id),
       supabase.from('profiles').select('image_url').eq('id', user.id).maybeSingle(),
       supabase.from('dashboard_layout').select('view,card_order').eq('user_id', user.id),
     ])
     setAllHabits(habitsRes.data || [])
+    setAllHabitLogs(habitLogsRes.data || [])
     setGoals(goalsRes.data || [])
     setImageUrl(profileRes.data?.image_url || null)
 
@@ -197,10 +201,23 @@ export default function DashboardPage() {
     if (!weekLogsByHabit[l.habit_id]) weekLogsByHabit[l.habit_id] = new Set()
     weekLogsByHabit[l.habit_id].add(l.log_date)
   })
+  // Live streaks, recalculated from real habit_logs whenever logs change
+  const habitSims = useMemo(() => {
+    const logsByHabit = {}
+    allHabitLogs.forEach(l => {
+      if (!logsByHabit[l.habit_id]) logsByHabit[l.habit_id] = new Set()
+      logsByHabit[l.habit_id].add(l.log_date)
+    })
+    const sims = {}
+    allHabits.forEach(h => { sims[h.id] = simulateHabit(h, logsByHabit[h.id] || new Set(), new Date()) })
+    return sims
+  }, [allHabits, allHabitLogs])
+
   const habits = allHabits.map(h => ({
     ...h,
     done: todaySet.has(h.id),
     weekLogs: weekLogsByHabit[h.id] || new Set(),
+    streak: habitSims[h.id]?.streak ?? 0,
   }))
 
   // ── momentum ───────────────────────────────────────────────────────────────
@@ -222,6 +239,7 @@ export default function DashboardPage() {
   function toggleHabit(habit) {
     supabase.from('habit_logs').insert({ user_id: user.id, habit_id: habit.id, log_date: today })
     setHabitLogs(prev => [...prev, { habit_id: habit.id, log_date: today }])
+    setAllHabitLogs(prev => [...prev, { habit_id: habit.id, log_date: today }])
   }
 
   function toggleTask(task) {
