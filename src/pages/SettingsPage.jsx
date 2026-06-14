@@ -31,6 +31,7 @@ export default function SettingsPage() {
   const [workingHours, setWorkingHours] = useState({ start: '09:00', end: '19:00' })
   const [workingHoursLoading, setWorkingHoursLoading] = useState(true)
   const [workingHoursSaved, setWorkingHoursSaved] = useState(false)
+  const [autoCompleteLinked, setAutoCompleteLinked] = useState(true)
   const [editingName, setEditingName] = useState(false)
   const [nameInput, setNameInput] = useState('')
   const [nameSaving, setNameSaving] = useState(false)
@@ -52,9 +53,22 @@ export default function SettingsPage() {
   }, [user])
 
   async function loadWorkingHours() {
-    const { data } = await supabase.from('user_preferences').select('working_hours_start, working_hours_end').eq('user_id', user.id).maybeSingle()
-    if (data) setWorkingHours({ start: data.working_hours_start, end: data.working_hours_end })
+    const { data } = await supabase.from('user_preferences').select('working_hours_start, working_hours_end, auto_complete_linked_tasks').eq('user_id', user.id).maybeSingle()
+    if (data) {
+      setWorkingHours({ start: data.working_hours_start, end: data.working_hours_end })
+      setAutoCompleteLinked(data.auto_complete_linked_tasks ?? true)
+    }
     setWorkingHoursLoading(false)
+  }
+
+  async function toggleAutoCompleteLinked() {
+    const next = !autoCompleteLinked
+    setAutoCompleteLinked(next)
+    await supabase.from('user_preferences').upsert({
+      user_id: user.id,
+      auto_complete_linked_tasks: next,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id' })
   }
 
   async function saveWorkingHours(next) {
@@ -233,6 +247,28 @@ export default function SettingsPage() {
             </div>
           </div>
         )}
+      </div>
+
+      {/* Task linking */}
+      <div className="card mb-4">
+        <h3 style={{ fontSize: '0.9rem', marginBottom: 16 }}>Task linking</h3>
+        <div className="flex items-center justify-between">
+          <div>
+            <p style={{ fontSize: 14, fontWeight: 500 }}>Auto-complete linked tasks</p>
+            <p style={{ fontSize: 12, color: 'var(--text-3)' }}>
+              When you complete a to-do pulled from the weekly plan, also mark that weekly task as done.
+            </p>
+          </div>
+          <button
+            className={`btn ${autoCompleteLinked ? 'btn-accent' : 'btn-ghost'} flex items-center gap-2`}
+            onClick={toggleAutoCompleteLinked}
+            disabled={workingHoursLoading}
+            style={autoCompleteLinked ? { color: '#fff' } : {}}
+          >
+            {autoCompleteLinked ? <Check size={14} /> : null}
+            {autoCompleteLinked ? 'On' : 'Off'}
+          </button>
+        </div>
       </div>
 
       {/* SMS (Twilio) */}

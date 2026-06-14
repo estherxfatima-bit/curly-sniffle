@@ -51,6 +51,7 @@ export default function DailyTodos({ compact = false }) {
   const [timerTodo, setTimerTodo] = useState(null)
   const [showTimeBlock, setShowTimeBlock] = useState(false)
   const [workingHours, setWorkingHours] = useState({ start: '09:00', end: '19:00' })
+  const [autoCompleteLinked, setAutoCompleteLinked] = useState(true)
   const [viewDate, setViewDate] = useState(today)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const inputRef = useRef(null)
@@ -82,8 +83,11 @@ export default function DailyTodos({ compact = false }) {
   }
 
   async function loadWorkingHours() {
-    const { data } = await supabase.from('user_preferences').select('working_hours_start, working_hours_end').eq('user_id', user.id).maybeSingle()
-    if (data) setWorkingHours({ start: data.working_hours_start, end: data.working_hours_end })
+    const { data } = await supabase.from('user_preferences').select('working_hours_start, working_hours_end, auto_complete_linked_tasks').eq('user_id', user.id).maybeSingle()
+    if (data) {
+      setWorkingHours({ start: data.working_hours_start, end: data.working_hours_end })
+      setAutoCompleteLinked(data.auto_complete_linked_tasks ?? true)
+    }
   }
 
   async function loadWeeklyTasks() {
@@ -174,6 +178,9 @@ export default function DailyTodos({ compact = false }) {
     const newVal = !todo.complete
     await supabase.from('daily_todos').update({ complete: newVal }).eq('id', todo.id)
     setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, complete: newVal } : t))
+    if (newVal && todo.weekly_task_ref_id && autoCompleteLinked) {
+      await supabase.from('weekly_tasks').update({ complete: true }).eq('id', todo.weekly_task_ref_id)
+    }
   }
 
   async function remove(todo) {
