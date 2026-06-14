@@ -259,8 +259,9 @@ export default function DailyTodos({ compact = false }) {
     return true
   })
 
-  // Timed todos sort to the top in chronological order, then timeless todos below.
+  // Pinned priorities sort first, then timed todos in chronological order, then timeless todos.
   const sorted = [...filtered].sort((a, b) => {
+    if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1
     if (a.scheduled_time && b.scheduled_time) return a.scheduled_time.localeCompare(b.scheduled_time)
     if (a.scheduled_time) return -1
     if (b.scheduled_time) return 1
@@ -495,6 +496,11 @@ function TodoItem({ todo, categories, goals, isTimerRunning, onToggle, onRemove,
         {/* Carried-from label */}
         {todo.carried_from && (
           <span className="badge badge-warning" style={{ fontSize: 9, flexShrink: 0 }}>yesterday</span>
+        )}
+
+        {/* Pinned priority label */}
+        {todo.pinned && (
+          <span className="badge" style={{ fontSize: 9, flexShrink: 0, background: 'var(--career-tint)', color: 'var(--career)' }}>priority</span>
         )}
 
         {/* From weekly plan badge */}

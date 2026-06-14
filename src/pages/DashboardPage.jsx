@@ -8,6 +8,7 @@ import { simulateHabit } from '../lib/habitUtils'
 import Confetti from '../components/ui/Confetti'
 import ImageHeader from '../components/dashboard/ImageHeader'
 import DetailPanel from '../components/dashboard/DetailPanel'
+import ReflectionModal from '../components/dashboard/ReflectionModal'
 import DailyView, { DEFAULT_ORDER as DAILY_DEFAULT } from '../components/dashboard/views/DailyView'
 import WeeklyView, { DEFAULT_ORDER as WEEKLY_DEFAULT } from '../components/dashboard/views/WeeklyView'
 import MonthlyView, { DEFAULT_ORDER as MONTHLY_DEFAULT } from '../components/dashboard/views/MonthlyView'
@@ -100,6 +101,9 @@ export default function DashboardPage() {
   // Confetti
   const [confetti, setConfetti] = useState(false)
   const prevMomentum = useRef(0)
+
+  // Daily reflection deep link (?reflect=1)
+  const [showReflection, setShowReflection] = useState(() => new URLSearchParams(window.location.search).get('reflect') === '1')
 
   // ── data loading ───────────────────────────────────────────────────────────
   useEffect(() => { if (user) loadStatic() }, [user])
@@ -489,6 +493,15 @@ export default function DashboardPage() {
         panel={panel ? { ...panel, data: enrichPanelData(panel, { habits, weekTasks, goals, momentum, habitScore, taskScore, moodScore, moodAvg, moodWeek, hydration, toggleHabit, toggleTask }) } : null}
         onClose={() => setPanel(null)}
       />
+
+      {showReflection && (
+        <ReflectionModal onClose={() => {
+          setShowReflection(false)
+          const url = new URL(window.location.href)
+          url.searchParams.delete('reflect')
+          window.history.replaceState({}, '', url.toString())
+        }} />
+      )}
     </div>
   )
 }

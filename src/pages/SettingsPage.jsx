@@ -32,6 +32,7 @@ export default function SettingsPage() {
   const [workingHoursLoading, setWorkingHoursLoading] = useState(true)
   const [workingHoursSaved, setWorkingHoursSaved] = useState(false)
   const [autoCompleteLinked, setAutoCompleteLinked] = useState(true)
+  const [reflection, setReflection] = useState({ enabled: false, time: '20:00', method: 'push' })
   const [editingName, setEditingName] = useState(false)
   const [nameInput, setNameInput] = useState('')
   const [nameSaving, setNameSaving] = useState(false)
@@ -53,12 +54,30 @@ export default function SettingsPage() {
   }, [user])
 
   async function loadWorkingHours() {
-    const { data } = await supabase.from('user_preferences').select('working_hours_start, working_hours_end, auto_complete_linked_tasks').eq('user_id', user.id).maybeSingle()
+    const { data } = await supabase.from('user_preferences')
+      .select('working_hours_start, working_hours_end, auto_complete_linked_tasks, reflection_enabled, reflection_time, reflection_method')
+      .eq('user_id', user.id).maybeSingle()
     if (data) {
       setWorkingHours({ start: data.working_hours_start, end: data.working_hours_end })
       setAutoCompleteLinked(data.auto_complete_linked_tasks ?? true)
+      setReflection({
+        enabled: data.reflection_enabled ?? false,
+        time: data.reflection_time || '20:00',
+        method: data.reflection_method || 'push',
+      })
     }
     setWorkingHoursLoading(false)
+  }
+
+  async function saveReflection(next) {
+    setReflection(next)
+    await supabase.from('user_preferences').upsert({
+      user_id: user.id,
+      reflection_enabled: next.enabled,
+      reflection_time: next.time,
+      reflection_method: next.method,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id' })
   }
 
   async function toggleAutoCompleteLinked() {
@@ -269,6 +288,49 @@ export default function SettingsPage() {
             {autoCompleteLinked ? 'On' : 'Off'}
           </button>
         </div>
+      </div>
+
+      {/* Daily reflection */}
+      <div className="card mb-4">
+        <h3 style={{ fontSize: '0.9rem', marginBottom: 16 }}>Daily reflection</h3>
+        {workingHoursLoading ? (
+          <p style={{ fontSize: 12, color: 'var(--text-3)' }}>Loading…</p>
+        ) : (
+          <>
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <p style={{ fontSize: 14, fontWeight: 500 }}>Evening reflection nudge</p>
+                <p style={{ fontSize: 12, color: 'var(--text-3)' }}>
+                  Get reminded to reflect on your day and set tomorrow's priorities.
+                </p>
+              </div>
+              <button
+                className={`btn ${reflection.enabled ? 'btn-accent' : 'btn-ghost'} flex items-center gap-2`}
+                onClick={() => saveReflection({ ...reflection, enabled: !reflection.enabled })}
+                style={reflection.enabled ? { color: '#fff' } : {}}
+              >
+                {reflection.enabled ? <Check size={14} /> : null}
+                {reflection.enabled ? 'On' : 'Off'}
+              </button>
+            </div>
+            {reflection.enabled && (
+              <div className="flex items-center gap-4 wrap">
+                <div className="flex items-center gap-2">
+                  <Clock4 size={14} color="var(--text-3)" />
+                  <input type="time" value={reflection.time} onChange={e => saveReflection({ ...reflection, time: e.target.value })} style={{ fontSize: 12, padding: '4px 8px' }} />
+                </div>
+                <div className="flex items-center gap-2">
+                  <span style={{ fontSize: 12, color: 'var(--text-3)' }}>via</span>
+                  <select value={reflection.method} onChange={e => saveReflection({ ...reflection, method: e.target.value })} style={{ fontSize: 12, padding: '4px 8px' }}>
+                    <option value="push">Push notification</option>
+                    <option value="sms">SMS</option>
+                    <option value="both">Both</option>
+                  </select>
+                </div>
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       {/* SMS (Twilio) */}

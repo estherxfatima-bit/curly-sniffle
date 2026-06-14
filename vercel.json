@@ -3,6 +3,7 @@
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "crons": [
-    { "path": "/api/sms/morning-briefing", "schedule": "0 8 * * *" }
+    { "path": "/api/sms/morning-briefing", "schedule": "0 8 * * *" },
+    { "path": "/api/cron/daily-reflection", "schedule": "*/15 * * * *" }
   ]
 }
