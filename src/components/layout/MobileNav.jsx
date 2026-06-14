@@ -31,7 +31,7 @@ export default function MobileNav() {
       )}
 
       {showOverflow && (
-        <div style={{
+        <div className="mobile-more-sheet" style={{
           position: 'fixed', bottom: 72, right: 12,
           background: 'var(--card-bg)',
           border: '1px solid var(--border)',
@@ -41,6 +41,7 @@ export default function MobileNav() {
           minWidth: 160,
           boxShadow: 'var(--shadow-lg)',
         }}>
+          <div className="mobile-more-handle" />
           {overflowItems.map(item => (
             <button
               key={item.to}
