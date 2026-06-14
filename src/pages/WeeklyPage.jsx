@@ -352,6 +352,28 @@ export default function WeeklyPage() {
 
       {/* Cards — mobile */}
       <div className="weekly-card-view">
+        {showAddRow && (
+          <div className="card-sm" style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius)', background: 'var(--career-tint)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div className="flex gap-2 wrap">
+              <select value={newTask.area} onChange={e => setNewTask(p => ({ ...p, area: e.target.value }))} style={{ fontSize: 12, padding: '4px 8px', flex: 1 }}>
+                {TASK_AREAS.map(a => <option key={a}>{a}</option>)}
+              </select>
+              <select value={newTask.frequency} onChange={e => setNewTask(p => ({ ...p, frequency: e.target.value }))} style={{ fontSize: 12, padding: '4px 8px', flex: 1 }}>
+                {FREQUENCIES.map(f => <option key={f}>{f}</option>)}
+              </select>
+            </div>
+            <input value={newTask.action} onChange={e => setNewTask(p => ({ ...p, action: e.target.value }))} placeholder="Area of action" style={{ fontSize: 12, padding: '6px 8px' }} />
+            <input value={newTask.specific_task} onChange={e => setNewTask(p => ({ ...p, specific_task: e.target.value }))} placeholder="Specific task" style={{ fontSize: 12, padding: '6px 8px' }} onKeyDown={e => e.key === 'Enter' && addTask()} />
+            <select value={newTask.goal_id} onChange={e => setNewTask(p => ({ ...p, goal_id: e.target.value }))} style={{ fontSize: 12, padding: '6px 8px' }}>
+              <option value="">No goal</option>
+              {goals.map(g => <option key={g.id} value={g.id}>{g.category}: {g.primary_goal?.slice(0, 28)}</option>)}
+            </select>
+            <div className="flex gap-2 justify-end">
+              <button className="btn btn-ghost btn-sm" onClick={() => setShowAddRow(false)}>Cancel</button>
+              <button className="btn btn-career btn-sm" style={{ color: '#fff' }} onClick={addTask}>Add</button>
+            </div>
+          </div>
+        )}
         {loading ? (
           <p style={{ textAlign: 'center', padding: 32, color: 'var(--text-3)' }}>Loading…</p>
         ) : tasks.length === 0 && !showAddRow ? (
