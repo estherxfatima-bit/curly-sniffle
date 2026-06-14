@@ -203,6 +203,7 @@ export default function WeeklyPage() {
 
       {/* Table */}
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+        <div className="table-scroll">
         <table className="data-table">
           <thead>
             <tr>
@@ -309,6 +310,7 @@ export default function WeeklyPage() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* This week's calendar */}

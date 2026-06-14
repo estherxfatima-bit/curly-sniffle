@@ -174,7 +174,7 @@ export default function IdeaDumpTab({ refreshKey = 0 }) {
       {loading ? (
         <p className="text-dim" style={{ textAlign: 'center', padding: '40px' }}>Loading…</p>
       ) : (
-        <div style={{ overflowX: 'auto' }}>
+        <div className="table-scroll">
           <table className="data-table" style={{ minWidth: '1500px' }}>
             <thead>
               <tr>

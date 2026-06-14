@@ -117,6 +117,7 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   transition: background 0.2s, color 0.2s;
+  overflow-x: hidden;
 }
 
 /* ── Typography ── */
@@ -325,6 +326,7 @@ input[type="range"]::-webkit-slider-thumb {
   border-radius: var(--radius-lg);
   padding: 24px;
   box-shadow: var(--shadow-card);
+  min-width: 0;
 }
 .card-sm { padding: 16px 20px; }
 
@@ -745,3 +747,9 @@ input[type="range"]::-webkit-slider-thumb {
   .todos-mobile-hint { display: none; }
 }
 .todo-item-row { min-height: 44px; }
+
+/* ── Horizontal scroll containers for wide content on mobile ── */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}

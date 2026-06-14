@@ -10,7 +10,7 @@ export default function WeekView({ habits, weekDays, todayStr, logsByHabit, sims
   }
 
   return (
-    <div className="card" style={{ padding: 0, overflow: 'auto' }}>
+    <div className="card table-scroll" style={{ padding: 0 }}>
       {/* Day headers */}
       <div style={{ display: 'grid', gridTemplateColumns: '220px 110px 1fr 56px', padding: '12px 20px', borderBottom: '1px solid var(--border)', background: 'var(--bg-2)', minWidth: 700 }}>
         <span className="mono">Habit</span>

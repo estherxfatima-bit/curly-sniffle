@@ -49,7 +49,7 @@ export default function MonthView({ habits, logsByHabit, sims, monthDate, today,
               </div>
 
               {/* Calendar grid: Mon-Sun rows, weeks across */}
-              <div style={{ display: 'flex', gap: 6, marginBottom: 10, overflowX: 'auto' }}>
+              <div className="table-scroll" style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 3, flexShrink: 0 }}>
                   {DAY_NAMES.map(d => (
                     <div key={d} style={{ height: CELL, display: 'flex', alignItems: 'center', fontSize: 8, fontFamily: 'var(--font-mono)', color: 'var(--text-3)' }}>
