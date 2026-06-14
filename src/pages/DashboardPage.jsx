@@ -496,7 +496,7 @@ export default function DashboardPage() {
 
       {/* Detail panel */}
       <DetailPanel
-        panel={panel ? { ...panel, data: enrichPanelData(panel, { habits, weekTasks, goals, momentum, habitScore, taskScore, moodScore, moodAvg, moodWeek, hydration, toggleHabit, toggleTask }) } : null}
+        panel={panel ? { ...panel, data: enrichPanelData(panel, { habits, weekTasks, goals, momentum, habitScore, taskScore, moodScore, moodAvg, moodWeek, hydration, toggleHabit, toggleTask, removeTask }) } : null}
         onClose={() => setPanel(null)}
       />
 
@@ -519,7 +519,7 @@ function enrichPanelData(panel, ctx) {
   const base = panel.data || {}
 
   if (type === 'habits')   return { ...base, habits: ctx.habits, toggleHabit: ctx.toggleHabit }
-  if (type === 'tasks')    return { ...base, tasks: ctx.weekTasks, toggleTask: ctx.toggleTask }
+  if (type === 'tasks')    return { ...base, tasks: ctx.weekTasks, toggleTask: ctx.toggleTask, onRemoveTask: ctx.removeTask }
   if (type === 'goals')    return { ...base, goals: ctx.goals, tasks: ctx.weekTasks }
   if (type === 'momentum') return { habits: ctx.habits, weekTasks: ctx.weekTasks, momentum: ctx.momentum, habitScore: ctx.habitScore, taskScore: ctx.taskScore, moodScore: ctx.moodScore, moodAvg: ctx.moodAvg }
   if (type === 'mood')     return { moodWeek: ctx.moodWeek }

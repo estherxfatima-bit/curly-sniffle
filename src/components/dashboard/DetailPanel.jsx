@@ -1,4 +1,4 @@
-import { X, Check, ArrowRight } from 'lucide-react'
+import { X, Check, ArrowRight, Trash2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { format } from 'date-fns'
 import ArcRing from '../ui/ArcRing'
@@ -88,7 +88,7 @@ function PanelContent({ type, data }) {
   }
 
   if (type === 'tasks') {
-    const { tasks, toggleTask } = data
+    const { tasks, toggleTask, onRemoveTask } = data
     const incomplete = tasks.filter(t => !t.complete)
     const complete   = tasks.filter(t => t.complete)
     return (
@@ -101,7 +101,7 @@ function PanelContent({ type, data }) {
             <p className="mono mb-3">Remaining ({incomplete.length})</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
               {incomplete.map(t => (
-                <TaskRow key={t.id} task={t} onToggle={() => toggleTask(t)} />
+                <TaskRow key={t.id} task={t} onToggle={() => toggleTask(t)} onRemove={onRemoveTask ? () => onRemoveTask(t.id) : undefined} />
               ))}
             </div>
           </>
@@ -110,7 +110,7 @@ function PanelContent({ type, data }) {
           <>
             <p className="mono mb-3">Done ({complete.length})</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {complete.map(t => <TaskRow key={t.id} task={t} onToggle={() => toggleTask(t)} />)}
+              {complete.map(t => <TaskRow key={t.id} task={t} onToggle={() => toggleTask(t)} onRemove={onRemoveTask ? () => onRemoveTask(t.id) : undefined} />)}
             </div>
           </>
         )}
@@ -251,16 +251,19 @@ function PanelContent({ type, data }) {
   )
 }
 
-function TaskRow({ task, onToggle }) {
+function TaskRow({ task, onToggle, onRemove }) {
   return (
-    <div onClick={onToggle} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, cursor: 'pointer', padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
-      <div className={`toggle-dot ${task.complete ? 'done' : ''}`} style={{ marginTop: 1, flexShrink: 0 }}>
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
+      <div onClick={onToggle} className={`toggle-dot ${task.complete ? 'done' : ''}`} style={{ marginTop: 1, flexShrink: 0, cursor: 'pointer' }}>
         {task.complete && <Check size={11} color="white" strokeWidth={3} />}
       </div>
-      <div style={{ flex: 1 }}>
+      <div onClick={onToggle} style={{ flex: 1, cursor: 'pointer' }}>
         <p style={{ fontSize: 13, textDecoration: task.complete ? 'line-through' : 'none', color: task.complete ? 'var(--text-3)' : 'var(--text)' }}>{task.specific_task}</p>
         <p className="mono" style={{ marginTop: 2 }}>{task.area}</p>
       </div>
+      {onRemove && (
+        <button className="btn-icon btn" style={{ flexShrink: 0 }} onClick={onRemove}><Trash2 size={12} /></button>
+      )}
     </div>
   )
 }
