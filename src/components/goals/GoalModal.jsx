@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
 import { GOAL_CATEGORIES, QUARTERS, getCurrentQuarter } from '../../lib/constants'
-import { X } from 'lucide-react'
+import { X, Plus, Trash2 } from 'lucide-react'
 
 export default function GoalModal({ goal, defaults, onClose, onSave }) {
   const { user } = useAuth()
@@ -18,9 +18,22 @@ export default function GoalModal({ goal, defaults, onClose, onSave }) {
     metric_name: goal?.metric_name || '',
     metric_start: goal?.metric_start ?? '',
     metric_target: goal?.metric_target ?? '',
+    tasks: goal?.tasks || [],
   })
   const [saving, setSaving] = useState(false)
+  const [newTaskText, setNewTaskText] = useState('')
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
+
+  function addBucketTask() {
+    const text = newTaskText.trim()
+    if (!text) return
+    set('tasks', [...form.tasks, { id: crypto.randomUUID(), text }])
+    setNewTaskText('')
+  }
+
+  function removeBucketTask(id) {
+    set('tasks', form.tasks.filter(t => t.id !== id))
+  }
 
   async function save() {
     if (!form.primary_goal.trim()) return
@@ -36,6 +49,7 @@ export default function GoalModal({ goal, defaults, onClose, onSave }) {
       metric_name: form.tracking_type === 'metric' ? form.metric_name : null,
       metric_start: form.tracking_type === 'metric' && form.metric_start !== '' ? Number(form.metric_start) : null,
       metric_target: form.tracking_type === 'metric' && form.metric_target !== '' ? Number(form.metric_target) : null,
+      tasks: form.tasks,
       updated_at: new Date().toISOString(),
     }
     const { data, error } = isNew
@@ -83,6 +97,33 @@ export default function GoalModal({ goal, defaults, onClose, onSave }) {
         <div className="form-group">
           <label>Success metrics</label>
           <textarea value={form.success_metrics} onChange={e => set('success_metrics', e.target.value)} placeholder="How will you know you've achieved this?" style={{ minHeight: 60 }} />
+        </div>
+
+        <div className="form-group">
+          <label>Task bucket</label>
+          <p style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 6 }}>
+            Tasks that lead to this goal's completion — pull them into your weekly plan or daily to-dos when you're ready to work on them.
+          </p>
+          {form.tasks.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
+              {form.tasks.map(t => (
+                <div key={t.id} className="flex items-center gap-2">
+                  <span style={{ flex: 1, fontSize: 12, color: 'var(--text-2)' }}>{t.text}</span>
+                  <button className="btn-icon btn btn-sm" onClick={() => removeBucketTask(t.id)}><Trash2 size={12} /></button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex items-center gap-2">
+            <input
+              value={newTaskText}
+              onChange={e => setNewTaskText(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addBucketTask() } }}
+              placeholder="Add a task to the bucket…"
+              style={{ flex: 1, fontSize: 12, padding: '4px 8px' }}
+            />
+            <button className="btn btn-xs btn-career" style={{ color: '#fff' }} onClick={addBucketTask}><Plus size={12} /></button>
+          </div>
         </div>
 
         <div className="form-group">

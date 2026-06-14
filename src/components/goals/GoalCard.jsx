@@ -84,6 +84,14 @@ export default function GoalCard({ goal, color, linkedTasks, metricHistory, onEd
           <p style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.6 }}>{goal.success_metrics}</p>
         </div>
       )}
+      {goal.tasks?.length > 0 && (
+        <div className="mb-2">
+          <p className="mono mb-1">Task bucket ({goal.tasks.length})</p>
+          <p style={{ fontSize: 12, color: 'var(--text-3)', fontStyle: 'italic' }}>
+            {goal.tasks.length} task{goal.tasks.length === 1 ? '' : 's'} ready to pull into your weekly plan or daily to-dos.
+          </p>
+        </div>
+      )}
 
       {isMetric ? (
         <div>

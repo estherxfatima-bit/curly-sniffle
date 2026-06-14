@@ -6,6 +6,7 @@ import { format, subDays, addDays, startOfWeek, getDay, parseISO } from 'date-fn
 import { parseTimeAllocationToMinutes } from '../../lib/constants'
 import { deleteCalendarEvent } from '../../lib/googleCalendar'
 import WeeklyPlanPicker from './WeeklyPlanPicker'
+import GoalTaskPicker from './GoalTaskPicker'
 import TimerWidget from './TimerWidget'
 import TimeBlockModal from './TimeBlockModal'
 import { Plus, Trash2, ChevronDown, ChevronRight, Check, Clock, Target, Hourglass, AlarmClock, Link2, Timer as TimerIcon, CalendarClock, ChevronLeft } from 'lucide-react'
@@ -47,6 +48,7 @@ export default function DailyTodos({ compact = false }) {
   const [showAddCat,  setShowAddCat]  = useState(false)
   const [goals, setGoals] = useState([])
   const [showWeeklyPicker, setShowWeeklyPicker] = useState(false)
+  const [showGoalPicker, setShowGoalPicker] = useState(false)
   const [weeklyTasks, setWeeklyTasks] = useState([])
   const [timerTodo, setTimerTodo] = useState(null)
   const [showTimeBlock, setShowTimeBlock] = useState(false)
@@ -78,7 +80,7 @@ export default function DailyTodos({ compact = false }) {
   }, [user, viewDate])
 
   async function loadGoals() {
-    const { data } = await supabase.from('goals').select('id, primary_goal, category').eq('user_id', user.id)
+    const { data } = await supabase.from('goals').select('id, primary_goal, category, tasks').eq('user_id', user.id)
     setGoals(data || [])
   }
 
@@ -232,6 +234,23 @@ export default function DailyTodos({ compact = false }) {
     setShowWeeklyPicker(false)
   }
 
+  async function pullFromGoalTask(goal, task) {
+    const { data } = await supabase.from('daily_todos').insert({
+      user_id: user.id,
+      text: task.text,
+      date: viewDate,
+      category: AREA_TO_CATEGORY[goal.category === 'Wellness' ? 'Health/Wellness' : goal.category] || 'Personal',
+      complete: false,
+      goal_id: goal.id,
+    }).select().single()
+    if (data) setTodos(prev => [...prev, data])
+
+    const remaining = goal.tasks.filter(t => t.id !== task.id)
+    await supabase.from('goals').update({ tasks: remaining }).eq('id', goal.id)
+    setGoals(prev => prev.map(g => g.id === goal.id ? { ...g, tasks: remaining } : g))
+    setShowGoalPicker(false)
+  }
+
   async function applyTimeBlocks(updates) {
     for (const u of updates) {
       await supabase.from('daily_todos').update({ scheduled_time: u.scheduled_time, google_event_id: u.google_event_id }).eq('id', u.todoId)
@@ -338,6 +357,9 @@ export default function DailyTodos({ compact = false }) {
           <button className="btn btn-ghost btn-xs" onClick={loadWeeklyTasks}>
             <Link2 size={12} /> Pull from weekly plan
           </button>
+          <button className="btn btn-ghost btn-xs" onClick={() => setShowGoalPicker(true)}>
+            <Target size={12} /> Pull from goal
+          </button>
           <button className="btn btn-ghost btn-xs" onClick={() => setShowTimeBlock(true)} disabled={blockable.length === 0}
             title={blockable.length === 0 ? 'Set a duration on a to-do to enable time-blocking' : 'Find free slots for your timed to-dos'}>
             <CalendarClock size={12} /> Time-block my day
@@ -404,6 +426,10 @@ export default function DailyTodos({ compact = false }) {
 
       {showWeeklyPicker && (
         <WeeklyPlanPicker tasks={weeklyTasks} viewDayOfWeek={viewDayOfWeek} onSelect={pullFromWeeklyTask} onClose={() => setShowWeeklyPicker(false)} />
+      )}
+
+      {showGoalPicker && (
+        <GoalTaskPicker goals={goals} onSelect={pullFromGoalTask} onClose={() => setShowGoalPicker(false)} />
       )}
 
       {timerTodo && (

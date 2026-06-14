@@ -3,13 +3,14 @@ import { format, startOfWeek, endOfWeek, addWeeks, subWeeks } from 'date-fns'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { TASK_AREAS, AREA_COLORS } from '../lib/constants'
-import { ChevronLeft, ChevronRight, ChevronDown, Plus, Trash2, RotateCcw, MessageSquare, Check } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ChevronDown, Plus, Trash2, RotateCcw, MessageSquare, Check, Target } from 'lucide-react'
 import WeeklyReviewModal from '../components/weekly/WeeklyReviewModal'
 import PastReviews from '../components/weekly/PastReviews'
 import WeeklyQuote from '../components/dashboard/WeeklyQuote'
 import TaskExpansion from '../components/weekly/TaskExpansion'
 import WeeklyAgenda from '../components/calendar/WeeklyAgenda'
 import ArcRing from '../components/ui/ArcRing'
+import GoalTaskPicker from '../components/dashboard/GoalTaskPicker'
 
 const FREQUENCIES = ['Daily', 'Weekly', '2x/week', '3x/week', 'One-off']
 const DAY_SHORT_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -53,6 +54,7 @@ export default function WeeklyPage() {
   const [metrics, setMetrics] = useState([])
   const [loading, setLoading] = useState(true)
   const [showAddRow, setShowAddRow] = useState(false)
+  const [showGoalPicker, setShowGoalPicker] = useState(false)
   const [showReview, setShowReview] = useState(false)
   const [showPastReviews, setShowPastReviews] = useState(false)
   const [expandedTask, setExpandedTask] = useState(null)
@@ -96,6 +98,22 @@ export default function WeeklyPage() {
     if (data) setTasks(prev => [...prev, data])
     setNewTask({ area: 'Career', action: '', frequency: 'Weekly', specific_task: '', goal_id: '' })
     setShowAddRow(false)
+  }
+
+  async function pullFromGoalTask(goal, task) {
+    const area = goal.category === 'Wellness' ? 'Health/Wellness' : goal.category
+    const { data } = await supabase.from('weekly_tasks').insert({
+      user_id: user.id, week_start: weekStartStr,
+      area, action: goal.primary_goal?.slice(0, 60) || '', frequency: 'One-off',
+      specific_task: task.text, goal_id: goal.id,
+      complete: false, carried_forward: false,
+    }).select().single()
+    if (data) setTasks(prev => [...prev, data])
+
+    const remaining = goal.tasks.filter(t => t.id !== task.id)
+    await supabase.from('goals').update({ tasks: remaining }).eq('id', goal.id)
+    setGoals(prev => prev.map(g => g.id === goal.id ? { ...g, tasks: remaining } : g))
+    setShowGoalPicker(false)
   }
 
   async function toggleTask(task) {
@@ -208,6 +226,9 @@ export default function WeeklyPage() {
             <RotateCcw size={13} /> Carry forward ({incompleteCount})
           </button>
         )}
+        <button className="btn btn-ghost btn-sm" onClick={() => setShowGoalPicker(true)}>
+          <Target size={13} /> Pull from goal
+        </button>
         <button className="btn btn-career btn-sm" style={{ color: '#fff' }} onClick={() => setShowAddRow(v => !v)}>
           <Plus size={14} /> Add task
         </button>
@@ -339,6 +360,7 @@ export default function WeeklyPage() {
 
       {showReview && <WeeklyReviewModal weekStart={weekStartStr} incompleteTasks={tasks.filter(t => !t.complete)} onClose={() => setShowReview(false)} onComplete={carryForwardIncomplete} />}
       {showPastReviews && <PastReviews onClose={() => setShowPastReviews(false)} />}
+      {showGoalPicker && <GoalTaskPicker goals={goals} onSelect={pullFromGoalTask} onClose={() => setShowGoalPicker(false)} />}
     </div>
   )
 }
