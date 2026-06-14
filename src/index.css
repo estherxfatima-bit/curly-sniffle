@@ -753,3 +753,7 @@ input[type="range"]::-webkit-slider-thumb {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
+
+/* ── Spinner ── */
+@keyframes spin { to { transform: rotate(360deg); } }
+.spin { animation: spin 1s linear infinite; }
