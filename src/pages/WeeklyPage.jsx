@@ -8,6 +8,7 @@ import WeeklyReviewModal from '../components/weekly/WeeklyReviewModal'
 import PastReviews from '../components/weekly/PastReviews'
 import WeeklyQuote from '../components/dashboard/WeeklyQuote'
 import TaskExpansion from '../components/weekly/TaskExpansion'
+import WeeklyTaskCard from '../components/weekly/WeeklyTaskCard'
 import WeeklyAgenda from '../components/calendar/WeeklyAgenda'
 import ArcRing from '../components/ui/ArcRing'
 import GoalTaskPicker from '../components/dashboard/GoalTaskPicker'
@@ -161,7 +162,7 @@ export default function WeeklyPage() {
   }
 
   async function addSubtask(task, text) {
-    const subs = [...(task.subtasks || []), { id: String(Date.now()), text, complete: false }]
+    const subs = [...(task.subtasks || []), { id: crypto.randomUUID(), text, complete: false }]
     await supabase.from('weekly_tasks').update({ subtasks: subs }).eq('id', task.id)
     setTasks(prev => prev.map(t => t.id === task.id ? { ...t, subtasks: subs } : t))
   }
@@ -234,8 +235,8 @@ export default function WeeklyPage() {
         </button>
       </div>
 
-      {/* Table */}
-      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+      {/* Table — desktop/tablet */}
+      <div className="card weekly-table-view" style={{ padding: 0, overflow: 'hidden' }}>
         <div className="table-scroll">
         <table className="data-table">
           <thead>
@@ -347,6 +348,48 @@ export default function WeeklyPage() {
           </tbody>
         </table>
         </div>
+      </div>
+
+      {/* Cards — mobile */}
+      <div className="weekly-card-view">
+        {loading ? (
+          <p style={{ textAlign: 'center', padding: 32, color: 'var(--text-3)' }}>Loading…</p>
+        ) : tasks.length === 0 && !showAddRow ? (
+          <p style={{ textAlign: 'center', padding: 40, color: 'var(--text-3)', fontStyle: 'italic' }}>No tasks this week — tap "Add task" to start</p>
+        ) : (
+          groups.map(group => (
+            <div key={group.key} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ padding: '4px 2px' }}>
+                {groupBy === 'area' ? (
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 600, color: group.color, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    {group.label}
+                  </span>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    {group.goal && <ArcRing value={group.pct} max={100} size={28} strokeWidth={3} color="var(--career)" label={`${group.pct}%`} fontSize={8} />}
+                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>{group.label}</span>
+                  </div>
+                )}
+              </div>
+              {group.tasks.map(task => (
+                <WeeklyTaskCard
+                  key={task.id}
+                  task={task}
+                  areaColor={areaColor}
+                  goals={goals}
+                  expanded={expandedTask === task.id}
+                  onToggleExpand={id => setExpandedTask(expandedTask === id ? null : id)}
+                  onToggle={toggleTask}
+                  onUpdateField={(field, value) => updateTaskField(task.id, field, value)}
+                  onToggleSubtask={subId => toggleSubtask(task, subId)}
+                  onAddSubtask={text => addSubtask(task, text)}
+                  onPushNextWeek={pushToNextWeek}
+                  onDelete={deleteTask}
+                />
+              ))}
+            </div>
+          ))
+        )}
       </div>
 
       {/* This week's calendar */}

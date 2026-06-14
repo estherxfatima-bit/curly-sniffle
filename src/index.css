@@ -791,6 +791,17 @@ input[type="range"]::-webkit-slider-thumb {
   -webkit-overflow-scrolling: touch;
 }
 
+/* ── Weekly plan: card layout on mobile instead of a wide table ── */
+.weekly-card-view { display: none; }
+@media (max-width: 768px) {
+  .weekly-table-view { display: none; }
+  .weekly-card-view {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+}
+
 /* ── Spinner ── */
 @keyframes spin { to { transform: rotate(360deg); } }
 .spin { animation: spin 1s linear infinite; }
