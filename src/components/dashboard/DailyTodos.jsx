@@ -182,6 +182,17 @@ export default function DailyTodos({ compact = false }) {
     setTodos(prev => prev.filter(t => t.id !== todo.id))
   }
 
+  async function pushToTomorrow(todo) {
+    const nextDate = format(addDays(parseISO(todo.date), 1), 'yyyy-MM-dd')
+    await supabase.from('daily_todos').insert({
+      user_id: user.id, text: todo.text, date: nextDate, complete: false,
+      category: todo.category, time_allocation: todo.time_allocation, subtasks: todo.subtasks,
+      carried_from: todo.date, duration_minutes: todo.duration_minutes, goal_id: todo.goal_id,
+    })
+    await supabase.from('daily_todos').update({ archived: true }).eq('id', todo.id)
+    setTodos(prev => prev.filter(t => t.id !== todo.id))
+  }
+
   async function updateField(id, field, value) {
     await supabase.from('daily_todos').update({ [field]: value }).eq('id', id)
     setTodos(prev => prev.map(t => t.id === id ? { ...t, [field]: value } : t))
@@ -372,6 +383,7 @@ export default function DailyTodos({ compact = false }) {
                 isTimerRunning={timerCtx?.timer?.todoId === todo.id}
                 onToggle={() => toggle(todo)}
                 onRemove={() => remove(todo)}
+                onPushTomorrow={() => pushToTomorrow(todo)}
                 onUpdateField={(f, v) => updateField(todo.id, f, v)}
                 onToggleSubtask={sid => toggleSubtask(todo, sid)}
                 onAddSubtask={text => addSubtask(todo, text)}
@@ -404,7 +416,7 @@ export default function DailyTodos({ compact = false }) {
   )
 }
 
-function TodoItem({ todo, categories, goals, isTimerRunning, onToggle, onRemove, onUpdateField, onToggleSubtask, onAddSubtask, onOpenTimer }) {
+function TodoItem({ todo, categories, goals, isTimerRunning, onToggle, onRemove, onPushTomorrow, onUpdateField, onToggleSubtask, onAddSubtask, onOpenTimer }) {
   const [expanded,     setExpanded]     = useState(false)
   const [addingSub,    setAddingSub]    = useState(false)
   const [subInput,     setSubInput]     = useState('')
@@ -613,6 +625,13 @@ function TodoItem({ todo, categories, goals, isTimerRunning, onToggle, onRemove,
         <button className="btn-icon" style={{ padding: 2, color: 'var(--text-3)', flexShrink: 0 }} onClick={() => setAddingSub(v => !v)} title="Add subtask">
           <Plus size={12} />
         </button>
+
+        {/* Push to tomorrow */}
+        {!todo.complete && (
+          <button className="btn-icon" style={{ padding: 2, color: 'var(--text-3)', flexShrink: 0 }} onClick={onPushTomorrow} title="Push to tomorrow">
+            <ChevronRight size={12} />
+          </button>
+        )}
 
         {/* Delete */}
         <button className="btn-icon" style={{ padding: 2, flexShrink: 0 }} onClick={onRemove}>

@@ -75,7 +75,7 @@ export default function WeeklyPage() {
   async function loadTasks() {
     setLoading(true)
     const { data } = await supabase.from('weekly_tasks').select('*')
-      .eq('user_id', user.id).eq('week_start', weekStartStr).order('created_at')
+      .eq('user_id', user.id).eq('week_start', weekStartStr).eq('archived', false).order('created_at')
     setTasks(data || [])
     setLoading(false)
   }
@@ -107,6 +107,18 @@ export default function WeeklyPage() {
   async function deleteTask(id) {
     await supabase.from('weekly_tasks').delete().eq('id', id)
     setTasks(prev => prev.filter(t => t.id !== id))
+  }
+
+  async function pushToNextWeek(task) {
+    const nextWeekStart = format(addWeeks(weekStart, 1), 'yyyy-MM-dd')
+    await supabase.from('weekly_tasks').insert({
+      user_id: user.id, week_start: nextWeekStart, area: task.area, action: task.action,
+      frequency: task.frequency, specific_task: task.specific_task, goal_id: task.goal_id,
+      complete: false, carried_forward: true, notes: task.notes, subtasks: task.subtasks, time_allocation: task.time_allocation,
+    })
+    await supabase.from('weekly_tasks').update({ archived: true }).eq('id', task.id)
+    setTasks(prev => prev.filter(t => t.id !== task.id))
+    if (expandedTask === task.id) setExpandedTask(null)
   }
 
   async function carryForwardIncomplete() {
@@ -285,6 +297,9 @@ export default function WeeklyPage() {
                           <td>{task.complete ? <span className="badge badge-success">Done</span> : <span className="badge badge-muted">Open</span>}</td>
                           <td>
                             <div className="flex items-center gap-1">
+                              {!task.complete && (
+                                <button className="btn-icon btn" title="Push to next week" onClick={e => { e.stopPropagation(); pushToNextWeek(task) }}><ChevronRight size={13} /></button>
+                              )}
                               <button className="btn-icon btn" onClick={e => { e.stopPropagation(); deleteTask(task.id) }}><Trash2 size={13} /></button>
                             </div>
                           </td>
