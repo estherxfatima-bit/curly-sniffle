@@ -39,6 +39,8 @@ export default function QuickAddExpense({ onAdd, compact }) {
         <input
           type="number"
           inputMode="decimal"
+          step="0.01"
+          min="0"
           placeholder="£ amount"
           value={amount}
           onChange={e => setAmount(e.target.value)}

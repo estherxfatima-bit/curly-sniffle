@@ -86,6 +86,7 @@ export default function FinancePage() {
   const [refDate, setRefDate] = useState(new Date())
 
   const thisMonth = new Date().toISOString().slice(0, 7)
+  const todayStr = new Date().toISOString().slice(0, 10)
   const refMonthYear = format(refDate, 'yyyy-MM')
 
   useEffect(() => { if (user) load() }, [user])
@@ -140,6 +141,14 @@ export default function FinancePage() {
   async function addVariableQuick({ amount, category, name }) {
     const { data } = await supabase.from('variable_expenses').insert({
       user_id: user.id, name, amount, category, date: new Date().toISOString().slice(0, 10),
+    }).select().single()
+    setVariable(prev => [data, ...prev])
+  }
+
+  // Log a £0 "no spend" entry for today so the spending reminder doesn't nag and the day is on record.
+  async function logNoSpendToday() {
+    const { data } = await supabase.from('variable_expenses').insert({
+      user_id: user.id, name: 'No spend day', amount: 0, category: 'Other', date: new Date().toISOString().slice(0, 10),
     }).select().single()
     setVariable(prev => [data, ...prev])
   }
@@ -325,7 +334,7 @@ export default function FinancePage() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
         <input placeholder="Source name" value={newIncome.name} onChange={e => setNewIncome(p => ({ ...p, name: e.target.value }))} style={{ fontSize: 12 }} />
         <div style={{ display: 'flex', gap: 6 }}>
-          <input type="number" placeholder="Amount £" value={newIncome.amount} onChange={e => setNewIncome(p => ({ ...p, amount: e.target.value }))} style={{ fontSize: 12, flex: 1 }} />
+          <input type="number" inputMode="decimal" step="0.01" min="0" placeholder="Amount £" value={newIncome.amount} onChange={e => setNewIncome(p => ({ ...p, amount: e.target.value }))} style={{ fontSize: 12, flex: 1 }} />
           <select value={newIncome.frequency} onChange={e => setNewIncome(p => ({ ...p, frequency: e.target.value }))} style={{ fontSize: 12 }}>
             {FREQUENCIES.map(f => <option key={f}>{f}</option>)}
           </select>
@@ -359,7 +368,7 @@ export default function FinancePage() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
         <input placeholder="Expense name" value={newFixed.name} onChange={e => setNewFixed(p => ({ ...p, name: e.target.value }))} style={{ fontSize: 12 }} />
         <div style={{ display: 'flex', gap: 6 }}>
-          <input type="number" placeholder="Amount £" value={newFixed.amount} onChange={e => setNewFixed(p => ({ ...p, amount: e.target.value }))} style={{ fontSize: 12, flex: 1 }} />
+          <input type="number" inputMode="decimal" step="0.01" min="0" placeholder="Amount £" value={newFixed.amount} onChange={e => setNewFixed(p => ({ ...p, amount: e.target.value }))} style={{ fontSize: 12, flex: 1 }} />
           <select value={newFixed.category} onChange={e => setNewFixed(p => ({ ...p, category: e.target.value }))} style={{ fontSize: 12 }}>
             {EXPENSE_CATS.map(c => <option key={c}>{c}</option>)}
           </select>
@@ -387,12 +396,12 @@ export default function FinancePage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 12 }}>
             <div onClick={e => e.stopPropagation()}>
               <label style={{ fontSize: 11, color: 'var(--text-3)', display: 'block', marginBottom: 4 }}>Overall monthly limit</label>
-              <input type="number" placeholder="£" value={budgetInputs.overall || ''} onChange={e => setBudgetInputs(p => ({ ...p, overall: e.target.value }))} style={{ fontSize: 12, width: '100%' }} />
+              <input type="number" inputMode="decimal" step="0.01" min="0" placeholder="£" value={budgetInputs.overall || ''} onChange={e => setBudgetInputs(p => ({ ...p, overall: e.target.value }))} style={{ fontSize: 12, width: '100%' }} />
             </div>
             {VARIABLE_CATS.map(cat => (
               <div key={cat} onClick={e => e.stopPropagation()}>
                 <label style={{ fontSize: 11, color: 'var(--text-3)', display: 'block', marginBottom: 4 }}>{CAT_EMOJI[cat]} {cat}</label>
-                <input type="number" placeholder="£" value={budgetInputs[cat] || ''} onChange={e => setBudgetInputs(p => ({ ...p, [cat]: e.target.value }))} style={{ fontSize: 12, width: '100%' }} />
+                <input type="number" inputMode="decimal" step="0.01" min="0" placeholder="£" value={budgetInputs[cat] || ''} onChange={e => setBudgetInputs(p => ({ ...p, [cat]: e.target.value }))} style={{ fontSize: 12, width: '100%' }} />
               </div>
             ))}
           </div>
@@ -420,7 +429,7 @@ export default function FinancePage() {
         </div>
         <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }} onClick={e => e.stopPropagation()}>
           <input placeholder="Description" value={newVariable.name} onChange={e => setNewVariable(p => ({ ...p, name: e.target.value }))} style={{ fontSize: 12, flex: 2, minWidth: 120 }} />
-          <input type="number" placeholder="£" value={newVariable.amount} onChange={e => setNewVariable(p => ({ ...p, amount: e.target.value }))} style={{ fontSize: 12, width: 80 }} />
+          <input type="number" inputMode="decimal" step="0.01" min="0" placeholder="£" value={newVariable.amount} onChange={e => setNewVariable(p => ({ ...p, amount: e.target.value }))} style={{ fontSize: 12, width: 80 }} />
           <select value={newVariable.category} onChange={e => setNewVariable(p => ({ ...p, category: e.target.value }))} style={{ fontSize: 12 }}>
             {VARIABLE_CATS.map(c => <option key={c}>{c}</option>)}
           </select>
@@ -529,8 +538,17 @@ export default function FinancePage() {
       )}
 
       {/* Period view switcher + navigation */}
-      <div className="mb-6">
+      <div className="mb-6 flex items-center justify-between gap-3 wrap">
         <PeriodNav activeView={activeView} onViewChange={setActiveView} refDate={refDate} onRefDateChange={setRefDate} accentColor="var(--finance)" />
+        {activeView === 'daily' && format(refDate, 'yyyy-MM-dd') === todayStr && (
+          <button
+            className="btn btn-sm btn-ghost"
+            onClick={logNoSpendToday}
+            disabled={variable.some(v => v.date === todayStr && v.name === 'No spend day')}
+          >
+            {variable.some(v => v.date === todayStr && v.name === 'No spend day') ? 'No spend day logged ✓' : 'No spend today'}
+          </button>
+        )}
       </div>
 
       {/* Hero section */}
