@@ -1,4 +1,4 @@
-import { Check, ChevronDown, ChevronRight, MessageSquare, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, MessageSquare, SkipForward, Trash2 } from 'lucide-react'
 import TaskExpansion from './TaskExpansion'
 
 const DAY_SHORT_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -16,10 +16,13 @@ export default function WeeklyTaskCard({ task, areaColor, goals, expanded, onTog
     }}>
       {/* Main row */}
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9 }}>
-        <div className={`toggle-dot ${task.complete ? 'done' : ''}`} onClick={() => onToggle(task)}
-          style={{ flexShrink: 0, cursor: 'pointer', marginTop: 2 }}>
-          {task.complete && <Check size={11} color="white" strokeWidth={3} />}
-        </div>
+        <button
+          onClick={() => onToggle(task)}
+          title={task.complete ? 'Mark as not done' : 'Mark as done'}
+          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 17, lineHeight: 1, flexShrink: 0 }}
+        >
+          {task.complete ? '✅' : '⬜'}
+        </button>
 
         <span style={{
           flex: 1,
@@ -39,7 +42,7 @@ export default function WeeklyTaskCard({ task, areaColor, goals, expanded, onTog
 
         {task.notes && <MessageSquare size={12} color="var(--creative)" style={{ flexShrink: 0, marginTop: 2 }} />}
 
-        <button className="btn-icon" style={{ padding: 2, flexShrink: 0, color: 'var(--text-3)' }} onClick={() => onToggleExpand(task.id)} title="Show details">
+        <button className="btn-icon" style={{ padding: 2, flexShrink: 0, color: 'var(--text-3)' }} onClick={() => onToggleExpand(task.id)} title="Show notes, comments and details">
           {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         </button>
       </div>
@@ -54,7 +57,7 @@ export default function WeeklyTaskCard({ task, areaColor, goals, expanded, onTog
         {goal && <span style={{ fontSize: 9, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>{goal.primary_goal?.slice(0, 20)}</span>}
         <div style={{ flex: 1 }} />
         {!task.complete && (
-          <button className="btn-icon btn" title="Push to next week" onClick={() => onPushNextWeek(task)}><ChevronRight size={13} /></button>
+          <button className="btn-icon btn" title="Push to next week" onClick={() => onPushNextWeek(task)}><SkipForward size={13} /></button>
         )}
         <button className="btn-icon btn" onClick={() => onDelete(task.id)}><Trash2 size={13} /></button>
       </div>

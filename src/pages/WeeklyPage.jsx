@@ -3,7 +3,7 @@ import { format, startOfWeek, endOfWeek, addWeeks, subWeeks } from 'date-fns'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { TASK_AREAS, AREA_COLORS } from '../lib/constants'
-import { ChevronLeft, ChevronRight, ChevronDown, Plus, Trash2, RotateCcw, MessageSquare, Check, Target } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ChevronDown, Plus, Trash2, RotateCcw, MessageSquare, Check, Target, SkipForward } from 'lucide-react'
 import WeeklyReviewModal from '../components/weekly/WeeklyReviewModal'
 import PastReviews from '../components/weekly/PastReviews'
 import WeeklyQuote from '../components/dashboard/WeeklyQuote'
@@ -119,6 +119,12 @@ export default function WeeklyPage() {
 
   async function toggleTask(task) {
     const newVal = !task.complete
+    if (!newVal) {
+      const reason = window.prompt("Marking this as not done — add a note on why / what's left? (optional)")
+      if (reason && reason.trim()) {
+        await supabase.from('comments').insert({ user_id: user.id, task_id: task.id, content: reason.trim() })
+      }
+    }
     await supabase.from('weekly_tasks').update({ complete: newVal }).eq('id', task.id)
     setTasks(prev => prev.map(t => t.id === task.id ? { ...t, complete: newVal } : t))
   }
@@ -320,7 +326,7 @@ export default function WeeklyPage() {
                           <td>
                             <div className="flex items-center gap-1">
                               {!task.complete && (
-                                <button className="btn-icon btn" title="Push to next week" onClick={e => { e.stopPropagation(); pushToNextWeek(task) }}><ChevronRight size={13} /></button>
+                                <button className="btn-icon btn" title="Push to next week" onClick={e => { e.stopPropagation(); pushToNextWeek(task) }}><SkipForward size={13} /></button>
                               )}
                               <button className="btn-icon btn" onClick={e => { e.stopPropagation(); deleteTask(task.id) }}><Trash2 size={13} /></button>
                             </div>
