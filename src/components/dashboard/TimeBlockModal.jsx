@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { format } from 'date-fns'
+import { Link } from 'react-router-dom'
 import { fetchCalendarEvents, createCalendarEvent } from '../../lib/googleCalendar'
 import { proposeTimeBlocks } from '../../lib/timeBlocking'
 import { X, Clock } from 'lucide-react'
@@ -62,7 +63,7 @@ export default function TimeBlockModal({ session, todos, date, workingHours, onC
             <p style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 10 }}>
               {connected
                 ? 'These slots will be created as events in your Google Calendar.'
-                : 'Google Calendar is not connected — slots will be set on your to-dos only.'}
+                : <>Google Calendar is not connected — slots will be set on your to-dos only. <Link to="/settings" style={{ color: 'var(--finance)' }}>Connect it in Settings</Link> to create calendar events too.</>}
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
               {proposal.map(slot => (
