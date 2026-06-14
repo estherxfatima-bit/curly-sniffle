@@ -113,7 +113,9 @@ export default function TaskExpansion({ task, goals, onUpdateField, onToggleSubt
             {comments.map(c => (
               <div key={c.id} style={{ fontSize: 12, color: 'var(--text-2)', background: 'var(--bg-2)', borderRadius: 'var(--radius)', padding: '6px 10px' }}>
                 <span>{c.content}</span>
-                <span style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-3)', marginTop: 3 }}>{format(new Date(c.created_at), 'd MMM, HH:mm')}</span>
+                <span style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-3)', marginTop: 3 }}>
+                  {c.user_id === user.id ? 'You' : 'Partner'} · {format(new Date(c.created_at), 'd MMM, HH:mm')}
+                </span>
               </div>
             ))}
           </div>
