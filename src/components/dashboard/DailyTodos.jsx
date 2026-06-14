@@ -426,6 +426,7 @@ export default function DailyTodos({ compact = false }) {
 
 function TodoItem({ todo, categories, goals, isTimerRunning, onToggle, onRemove, onPushTomorrow, onUpdateField, onToggleSubtask, onAddSubtask, onOpenTimer }) {
   const [expanded,     setExpanded]     = useState(false)
+  const [showOptions,  setShowOptions]  = useState(false)
   const [addingSub,    setAddingSub]    = useState(false)
   const [subInput,     setSubInput]     = useState('')
   const [editingTime,  setEditingTime]  = useState(false)
@@ -456,17 +457,17 @@ function TodoItem({ todo, categories, goals, isTimerRunning, onToggle, onRemove,
       opacity: todo.complete ? 0.62 : 1,
     }}>
       {/* Main row */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9 }}>
         {/* Expand chevron */}
         {subtasks.length > 0 ? (
-          <button className="btn-icon" style={{ padding: 2, flexShrink: 0, color: 'var(--text-3)' }} onClick={() => setExpanded(v => !v)}>
+          <button className="btn-icon" style={{ padding: 2, flexShrink: 0, color: 'var(--text-3)', marginTop: 1 }} onClick={() => setExpanded(v => !v)}>
             {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
           </button>
         ) : <div style={{ width: 18, flexShrink: 0 }} />}
 
         {/* Toggle dot */}
         <div className={`toggle-dot ${todo.complete ? 'done' : ''}`} onClick={onToggle}
-          style={{ borderColor: todo.complete ? 'var(--success)' : cc, flexShrink: 0, cursor: 'pointer' }}>
+          style={{ borderColor: todo.complete ? 'var(--success)' : cc, flexShrink: 0, cursor: 'pointer', marginTop: 2 }}>
           {todo.complete && <Check size={10} color="white" strokeWidth={3} />}
         </div>
 
@@ -479,13 +480,26 @@ function TodoItem({ todo, categories, goals, isTimerRunning, onToggle, onRemove,
           textDecoration: todo.complete ? 'line-through' : 'none',
           transition: 'all 0.18s',
           minWidth: 0,
+          whiteSpace: 'normal',
+          wordBreak: 'break-word',
+          display: '-webkit-box',
+          WebkitLineClamp: 4,
+          WebkitBoxOrient: 'vertical',
           overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
         }}>
           {todo.text}
         </span>
 
+        {/* Options toggle */}
+        <button className="btn-icon" style={{ padding: 2, flexShrink: 0, color: showOptions ? 'var(--career)' : 'var(--text-3)' }}
+          onClick={() => setShowOptions(v => !v)} title="Show options">
+          {showOptions ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        </button>
+      </div>
+
+      {/* Options row */}
+      {showOptions && (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap', marginTop: 8, paddingLeft: 27 }}>
         {/* Running timer indicator */}
         {isTimerRunning && (
           <span className="badge badge-career" style={{ fontSize: 9, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 3 }}>
@@ -651,6 +665,7 @@ function TodoItem({ todo, categories, goals, isTimerRunning, onToggle, onRemove,
           <Trash2 size={12} />
         </button>
       </div>
+      )}
 
       {/* Subtasks */}
       {expanded && subtasks.length > 0 && (

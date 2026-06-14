@@ -727,7 +727,7 @@ input[type="range"]::-webkit-slider-thumb {
 /* ── Daily to-dos: mobile drawer ── */
 @media (max-width: 480px) {
   .todos-card-header { cursor: pointer; }
-  .todos-content { display: none; }
+  .todos-content { display: flex; flex-direction: column; }
   .todos-content.drawer-open {
     display: flex;
     flex-direction: column;
