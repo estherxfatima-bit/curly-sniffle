@@ -136,7 +136,7 @@ export default function DashboardPage() {
     setPeriodLoading(true)
     const [logsRes, tasksRes, moodRes, wellnessRes, quoteRes] = await Promise.all([
       supabase.from('habit_logs').select('habit_id,log_date').eq('user_id', user.id).gte('log_date', weekStart).lte('log_date', weekEnd),
-      supabase.from('weekly_tasks').select('*').eq('user_id', user.id).eq('week_start', weekStart),
+      supabase.from('weekly_tasks').select('*').eq('user_id', user.id).eq('week_start', weekStart).eq('archived', false),
       supabase.from('mood_logs').select('mood_score,log_date').eq('user_id', user.id).gte('log_date', weekStart).lte('log_date', weekEnd),
       supabase.from('wellness_logs').select('hydration_ml').eq('user_id', user.id).eq('log_date', today).maybeSingle(),
       supabase.from('weekly_quotes').select('quote').eq('user_id', user.id).eq('week_start', weekStart).maybeSingle(),
@@ -250,6 +250,11 @@ export default function DashboardPage() {
     const newVal = !task.complete
     supabase.from('weekly_tasks').update({ complete: newVal }).eq('id', task.id)
     setWeekTasks(prev => prev.map(t => t.id === task.id ? { ...t, complete: newVal } : t))
+  }
+
+  function removeTask(id) {
+    supabase.from('weekly_tasks').delete().eq('id', id)
+    setWeekTasks(prev => prev.filter(t => t.id !== id))
   }
 
   async function addHydration(ml) {
@@ -451,6 +456,7 @@ export default function DashboardPage() {
           cardOrder={normalizeOrder(cardOrders.weekly, 'weekly')}
           onReorder={order => saveCardOrder('weekly', order)}
           onToggleTask={toggleTask}
+          onRemoveTask={removeTask}
           {...viewProps}
         />
       )}

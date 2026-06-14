@@ -2,12 +2,12 @@ import { useState, useEffect } from 'react'
 import { format } from 'date-fns'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
-import { Plus, Check, Clock, Target, Send, CalendarDays } from 'lucide-react'
+import { Plus, Check, Clock, Target, Send, CalendarDays, SkipForward } from 'lucide-react'
 
 const TIME_OPTS = ['15 min', '30 min', '45 min', '1 hr', '1.5 hr', '2 hr', '3 hr']
 const DAY_LABELS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 
-export default function TaskExpansion({ task, goals, onUpdateField, onToggleSubtask, onAddSubtask }) {
+export default function TaskExpansion({ task, goals, onUpdateField, onToggleSubtask, onAddSubtask, onPushNextWeek }) {
   const { user } = useAuth()
   const [subInput, setSubInput] = useState('')
   const [notes, setNotes] = useState(task.notes || '')
@@ -126,6 +126,15 @@ export default function TaskExpansion({ task, goals, onUpdateField, onToggleSubt
           <button className="btn btn-career btn-xs" style={{ color: '#fff' }} onClick={addComment}><Send size={11} /></button>
         </div>
       </div>
+
+      {/* Push to next week */}
+      {!task.complete && onPushNextWeek && (
+        <div>
+          <button className="btn btn-ghost btn-sm" onClick={() => onPushNextWeek(task)}>
+            <SkipForward size={13} /> Push to next week
+          </button>
+        </div>
+      )}
     </div>
   )
 }

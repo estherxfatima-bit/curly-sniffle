@@ -1,4 +1,4 @@
-import { Check } from 'lucide-react'
+import { Check, Trash2 } from 'lucide-react'
 import { format, addDays } from 'date-fns'
 import ArcRing from '../../ui/ArcRing'
 import WeeklyQuote from '../WeeklyQuote'
@@ -27,7 +27,7 @@ const DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
 export default function WeeklyView({
   habits, weekTasks, momentum, habitScore, taskScore, moodScore, moodAvg, moodWeek,
   weekStart, savedQuote, userId,
-  onSaveQuote, onOpenPanel, cardOrder, onReorder, onToggleTask,
+  onSaveQuote, onOpenPanel, cardOrder, onReorder, onToggleTask, onRemoveTask,
   editing, onResize, onRemoveCard, onAddCard,
 }) {
   const order = cardOrder?.length ? cardOrder : DEFAULT_ORDER
@@ -102,15 +102,17 @@ export default function WeeklyView({
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {weekTasks.slice(0, 8).map(task => (
-              <div key={task.id} onClick={e => { e.stopPropagation(); onToggleTask(task) }}
-                style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
-                <div className={`toggle-dot ${task.complete ? 'done' : ''}`} style={{ flexShrink: 0 }}>
+              <div key={task.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div onClick={e => { e.stopPropagation(); onToggleTask(task) }} className={`toggle-dot ${task.complete ? 'done' : ''}`} style={{ flexShrink: 0, cursor: 'pointer' }}>
                   {task.complete && <Check size={10} color="white" strokeWidth={3} />}
                 </div>
                 <span style={{ flex: 1, fontSize: 13, textDecoration: task.complete ? 'line-through' : 'none', color: task.complete ? 'var(--text-3)' : 'var(--text)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {task.specific_task}
                 </span>
                 <span className="mono">{task.area}</span>
+                {onRemoveTask && (
+                  <button className="btn-icon btn" style={{ flexShrink: 0 }} onClick={e => { e.stopPropagation(); onRemoveTask(task.id) }}><Trash2 size={12} /></button>
+                )}
               </div>
             ))}
             {weekTasks.length > 8 && <p style={{ fontSize: 11, color: 'var(--text-3)', paddingTop: 2 }}>+{weekTasks.length - 8} more</p>}

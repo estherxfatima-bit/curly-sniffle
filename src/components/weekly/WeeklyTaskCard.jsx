@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, MessageSquare, SkipForward, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, MessageSquare, Trash2 } from 'lucide-react'
 import TaskExpansion from './TaskExpansion'
 
 const DAY_SHORT_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -56,9 +56,6 @@ export default function WeeklyTaskCard({ task, areaColor, goals, expanded, onTog
         {task.complete ? <span className="badge badge-success" style={{ fontSize: 9 }}>Done</span> : <span className="badge badge-muted" style={{ fontSize: 9 }}>Open</span>}
         {goal && <span style={{ fontSize: 9, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>{goal.primary_goal?.slice(0, 20)}</span>}
         <div style={{ flex: 1 }} />
-        {!task.complete && (
-          <button className="btn-icon btn" title="Push to next week" onClick={() => onPushNextWeek(task)}><SkipForward size={13} /></button>
-        )}
         <button className="btn-icon btn" onClick={() => onDelete(task.id)}><Trash2 size={13} /></button>
       </div>
 
@@ -71,6 +68,7 @@ export default function WeeklyTaskCard({ task, areaColor, goals, expanded, onTog
             onUpdateField={onUpdateField}
             onToggleSubtask={onToggleSubtask}
             onAddSubtask={onAddSubtask}
+            onPushNextWeek={onPushNextWeek}
           />
         </div>
       )}

@@ -3,7 +3,7 @@ import { format, startOfWeek, endOfWeek, addWeeks, subWeeks } from 'date-fns'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { TASK_AREAS, AREA_COLORS } from '../lib/constants'
-import { ChevronLeft, ChevronRight, ChevronDown, Plus, Trash2, RotateCcw, MessageSquare, Check, Target, SkipForward } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ChevronDown, Plus, Trash2, RotateCcw, MessageSquare, Check, Target } from 'lucide-react'
 import WeeklyReviewModal from '../components/weekly/WeeklyReviewModal'
 import PastReviews from '../components/weekly/PastReviews'
 import WeeklyQuote from '../components/dashboard/WeeklyQuote'
@@ -325,9 +325,6 @@ export default function WeeklyPage() {
                           <td>{task.complete ? <span className="badge badge-success">Done</span> : <span className="badge badge-muted">Open</span>}</td>
                           <td>
                             <div className="flex items-center gap-1">
-                              {!task.complete && (
-                                <button className="btn-icon btn" title="Push to next week" onClick={e => { e.stopPropagation(); pushToNextWeek(task) }}><SkipForward size={13} /></button>
-                              )}
                               <button className="btn-icon btn" onClick={e => { e.stopPropagation(); deleteTask(task.id) }}><Trash2 size={13} /></button>
                             </div>
                           </td>
@@ -341,6 +338,7 @@ export default function WeeklyPage() {
                                 onUpdateField={(field, value) => updateTaskField(task.id, field, value)}
                                 onToggleSubtask={subId => toggleSubtask(task, subId)}
                                 onAddSubtask={text => addSubtask(task, text)}
+                                onPushNextWeek={pushToNextWeek}
                               />
                             </td>
                           </tr>
