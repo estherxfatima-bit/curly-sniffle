@@ -2,7 +2,46 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
-import { Users, Copy, UserPlus, X, MessageSquare, BarChart2 } from 'lucide-react'
+import { Users, Copy, UserPlus, MessageSquare, BarChart2, Send } from 'lucide-react'
+
+function NudgeInline({ partnerId, taskId = null, onSent, label = 'Nudge' }) {
+  const { user } = useAuth()
+  const [open, setOpen] = useState(false)
+  const [text, setText] = useState('')
+  const [sending, setSending] = useState(false)
+
+  async function send() {
+    if (!text.trim()) return
+    setSending(true)
+    await supabase.from('comments').insert({ user_id: user.id, task_id: taskId, partner_id: partnerId, content: text.trim() })
+    setText('')
+    setOpen(false)
+    setSending(false)
+    onSent?.()
+  }
+
+  if (!open) {
+    return (
+      <button className="btn btn-ghost btn-xs" onClick={() => setOpen(true)} style={{ fontSize: 11 }}>
+        <MessageSquare size={11} /> {label}
+      </button>
+    )
+  }
+  return (
+    <div className="flex items-center gap-1" style={{ marginTop: 4 }}>
+      <input
+        autoFocus
+        value={text}
+        onChange={e => setText(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter') send(); if (e.key === 'Escape') setOpen(false) }}
+        placeholder="Write a nudge…"
+        style={{ fontSize: 12, flex: 1, padding: '3px 8px' }}
+      />
+      <button className="btn btn-xs btn-career" style={{ color: '#fff' }} onClick={send} disabled={sending}><Send size={11} /></button>
+      <button className="btn btn-xs btn-ghost" onClick={() => setOpen(false)}>✕</button>
+    </div>
+  )
+}
 
 export default function PartnersPage() {
   const { user } = useAuth()
@@ -13,7 +52,6 @@ export default function PartnersPage() {
   const [myCode, setMyCode] = useState('')
   const [loading, setLoading] = useState(true)
   const [copied, setCopied] = useState(false)
-  const [nudgeText, setNudgeText] = useState({})
 
   useEffect(() => {
     if (user) { loadMyCode(); loadPartners() }
@@ -88,19 +126,6 @@ export default function PartnersPage() {
 
     setInviteCode('')
     loadPartners()
-  }
-
-  async function leaveNudge(partnerId, taskId) {
-    const text = nudgeText[taskId]
-    if (!text?.trim()) return
-    await supabase.from('comments').insert({
-      user_id: user.id,
-      task_id: taskId,
-      partner_id: partnerId,
-      content: text,
-    })
-    setNudgeText(prev => ({ ...prev, [taskId]: '' }))
-    alert('Nudge sent!')
   }
 
   function copyCode() {
@@ -190,68 +215,52 @@ export default function PartnersPage() {
                 </div>
 
                 {/* Weekly tasks */}
-                {tasks.length > 0 && (
-                  <>
-                    <p className="mono mb-2" style={{ fontSize: 10 }}>This week's tasks</p>
-                    {tasks.slice(0, 10).map(task => (
-                      <div key={task.id} style={{ display: 'flex', flexDirection: 'column', gap: '6px', padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
+                <div style={{ marginBottom: 12 }}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <p className="mono" style={{ fontSize: 10, flex: 1 }}>This week's tasks</p>
+                    <NudgeInline partnerId={p.partner_id} label="Nudge on weekly plan" />
+                  </div>
+                  {tasks.length === 0 ? (
+                    <p style={{ fontSize: 12, color: 'var(--text-3)', fontStyle: 'italic' }}>Nothing planned this week.</p>
+                  ) : (
+                    tasks.slice(0, 10).map(task => (
+                      <div key={task.id} style={{ padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
                         <div className="flex items-center gap-2">
-                          <span style={{ fontSize: '13px', textDecoration: task.complete ? 'line-through' : 'none', color: task.complete ? 'var(--text-3)' : 'var(--text)' }}>
+                          <span style={{ fontSize: 13, textDecoration: task.complete ? 'line-through' : 'none', color: task.complete ? 'var(--text-3)' : 'var(--text)', flex: 1 }}>
                             {task.specific_task}
                           </span>
-                          {task.complete && <span className="badge badge-success">Done</span>}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <input
-                            value={nudgeText[task.id] || ''}
-                            onChange={e => setNudgeText(prev => ({ ...prev, [task.id]: e.target.value }))}
-                            placeholder="Leave a nudge…"
-                            style={{ fontSize: '12px', flex: 1 }}
-                            onKeyDown={e => e.key === 'Enter' && leaveNudge(p.partner_id, task.id)}
-                          />
-                          <button className="btn btn-ghost btn-sm" onClick={() => leaveNudge(p.partner_id, task.id)}>
-                            <MessageSquare size={12} />
-                            Nudge
-                          </button>
+                          {task.complete
+                            ? <span className="badge badge-success" style={{ fontSize: 9 }}>Done</span>
+                            : <NudgeInline partnerId={p.partner_id} taskId={task.id} label="Nudge" />
+                          }
                         </div>
                       </div>
-                    ))}
-                  </>
-                )}
+                    ))
+                  )}
+                </div>
 
                 {/* Today's daily todos */}
-                {todos.length > 0 && (
-                  <>
-                    <p className="mono mt-4 mb-2" style={{ fontSize: 10 }}>Today's to-dos</p>
-                    {todos.map(todo => (
-                      <div key={todo.id} style={{ display: 'flex', flexDirection: 'column', gap: '6px', padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <p className="mono" style={{ fontSize: 10, flex: 1 }}>Today's to-dos</p>
+                    <NudgeInline partnerId={p.partner_id} label="Nudge on today" />
+                  </div>
+                  {todos.length === 0 ? (
+                    <p style={{ fontSize: 12, color: 'var(--text-3)', fontStyle: 'italic' }}>Nothing planned for today.</p>
+                  ) : (
+                    todos.map(todo => (
+                      <div key={todo.id} style={{ padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
                         <div className="flex items-center gap-2">
                           <span style={{ fontSize: 13 }}>{todo.complete ? '✅' : '⬜'}</span>
-                          <span style={{ fontSize: '13px', textDecoration: todo.complete ? 'line-through' : 'none', color: todo.complete ? 'var(--text-3)' : 'var(--text)', flex: 1 }}>
+                          <span style={{ fontSize: 13, textDecoration: todo.complete ? 'line-through' : 'none', color: todo.complete ? 'var(--text-3)' : 'var(--text)', flex: 1 }}>
                             {todo.text}
                           </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <input
-                            value={nudgeText[todo.id] || ''}
-                            onChange={e => setNudgeText(prev => ({ ...prev, [todo.id]: e.target.value }))}
-                            placeholder="Leave a nudge…"
-                            style={{ fontSize: '12px', flex: 1 }}
-                            onKeyDown={e => e.key === 'Enter' && leaveNudge(p.partner_id, null)}
-                          />
-                          <button className="btn btn-ghost btn-sm" onClick={() => leaveNudge(p.partner_id, null)}>
-                            <MessageSquare size={12} />
-                            Nudge
-                          </button>
+                          {!todo.complete && <NudgeInline partnerId={p.partner_id} label="Nudge" />}
                         </div>
                       </div>
-                    ))}
-                  </>
-                )}
-
-                {tasks.length === 0 && todos.length === 0 && (
-                  <p className="text-dim" style={{ fontSize: '12px' }}>No tasks or to-dos visible yet.</p>
-                )}
+                    ))
+                  )}
+                </div>
               </div>
             )
           })}
