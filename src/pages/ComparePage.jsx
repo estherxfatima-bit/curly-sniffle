@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { format, startOfWeek } from 'date-fns'
-import { ArrowLeft, MessageSquare, Send, Flame, Target, CheckSquare } from 'lucide-react'
+import { ArrowLeft, MessageSquare, Send, Flame, Target, CheckSquare, ListTodo } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import ArcRing from '../components/ui/ArcRing'
@@ -99,7 +99,7 @@ function NudgeButton({ onSend, label = 'Nudge' }) {
 function CompareColumn({ name, data, onNudge, isSelf }) {
   if (!data) return <div className="card" style={{ flex: 1 }}><p className="text-dim" style={{ fontSize: 12 }}>Loading…</p></div>
 
-  const { goals, metrics, weekTasks, habits, habitLogs, moodLogs } = data
+  const { goals, metrics, weekTasks, habits, habitLogs, moodLogs, todos } = data
   const currentGoals = goals.filter(g => g.quarter === currentQuarter && g.year === currentYear)
   const weekDone = weekTasks.filter(t => t.complete).length
   const weekPct = weekTasks.length ? Math.round((weekDone / weekTasks.length) * 100) : 0
@@ -143,6 +143,31 @@ function CompareColumn({ name, data, onNudge, isSelf }) {
                   {t.complete && <span className="badge badge-success" style={{ fontSize: 9 }}>✓</span>}
                 </div>
                 <NudgeButton onSend={msg => onNudge(msg, t.id)} />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Daily Todos */}
+      <div className="card">
+        <div className="flex items-center gap-2 mb-3">
+          <ListTodo size={14} color="var(--personal)" />
+          <p style={{ fontSize: 12, fontWeight: 600 }}>Today's to-dos</p>
+        </div>
+        {todos.length === 0 ? (
+          <p style={{ fontSize: 11, color: 'var(--text-3)', fontStyle: 'italic' }}>No to-dos for today.</p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {todos.map(t => (
+              <div key={t.id}>
+                <div className="flex items-center gap-2">
+                  <span style={{ fontSize: 13 }}>{t.complete ? '✅' : '⬜'}</span>
+                  <span style={{ fontSize: 11, flex: 1, color: t.complete ? 'var(--text-3)' : 'var(--text-2)', textDecoration: t.complete ? 'line-through' : 'none' }}>
+                    {t.text}
+                  </span>
+                </div>
+                {!isSelf && <NudgeButton onSend={msg => onNudge(msg, null)} label="Nudge on to-do" />}
               </div>
             ))}
           </div>
@@ -222,13 +247,14 @@ export default function ComparePage() {
   const [nudgeSent, setNudgeSent] = useState(false)
 
   async function loadForUser(uid) {
-    const [goalsRes, metricsRes, weekTasksRes, habitsRes, habitLogsRes, moodRes] = await Promise.all([
+    const [goalsRes, metricsRes, weekTasksRes, habitsRes, habitLogsRes, moodRes, todosRes] = await Promise.all([
       supabase.from('goals').select('*').eq('user_id', uid),
       supabase.from('goal_metrics').select('*').eq('user_id', uid).order('recorded_at'),
       supabase.from('weekly_tasks').select('*').eq('user_id', uid).eq('week_start', weekStart),
       supabase.from('habits').select('*').eq('user_id', uid),
       supabase.from('habit_logs').select('*').eq('user_id', uid),
       supabase.from('mood_logs').select('*').eq('user_id', uid).gte('date', weekStart),
+      supabase.from('daily_todos').select('*').eq('user_id', uid).eq('date', today).eq('archived', false).order('sort_order'),
     ])
     return {
       goals: goalsRes.data || [],
@@ -237,6 +263,7 @@ export default function ComparePage() {
       habits: habitsRes.data || [],
       habitLogs: habitLogsRes.data || [],
       moodLogs: moodRes.data || [],
+      todos: todosRes.data || [],
     }
   }
 

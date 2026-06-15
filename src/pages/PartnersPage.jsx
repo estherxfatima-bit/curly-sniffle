@@ -7,7 +7,8 @@ import { Users, Copy, UserPlus, X, MessageSquare, BarChart2 } from 'lucide-react
 export default function PartnersPage() {
   const { user } = useAuth()
   const [partners, setPartners] = useState([])
-  const [partnerTasks, setPartnerTasks] = useState({}) // userId -> tasks
+  const [partnerTasks, setPartnerTasks] = useState({}) // userId -> weekly tasks
+  const [partnerTodos, setPartnerTodos] = useState({}) // userId -> today's daily todos
   const [inviteCode, setInviteCode] = useState('')
   const [myCode, setMyCode] = useState('')
   const [loading, setLoading] = useState(true)
@@ -47,21 +48,29 @@ export default function PartnersPage() {
       const profilesById = Object.fromEntries((profileRows || []).map(p => [p.id, p]))
       setPartners(partnerRows.map(row => ({ ...row, partner: profilesById[row.partner_id] })))
 
-      // Load each partner's tasks
+      const todayStr = new Date().toISOString().slice(0, 10)
+      const weekStartStr = (() => {
+        const d = new Date()
+        const day = d.getDay()
+        const diff = (day === 0 ? -6 : 1 - day)
+        const ws = new Date(d); ws.setDate(d.getDate() + diff)
+        return ws.toISOString().slice(0, 10)
+      })()
+
       const taskPromises = partnerRows.map(async (row) => {
-        const { data } = await supabase
-          .from('weekly_tasks')
-          .select('*')
-          .eq('user_id', row.partner_id)
-          .order('created_at', { ascending: false })
-          .limit(20)
-        return [row.partner_id, data || []]
+        const [taskRes, todoRes] = await Promise.all([
+          supabase.from('weekly_tasks').select('*').eq('user_id', row.partner_id).eq('week_start', weekStartStr).order('created_at', { ascending: false }).limit(20),
+          supabase.from('daily_todos').select('*').eq('user_id', row.partner_id).eq('date', todayStr).eq('archived', false).order('sort_order'),
+        ])
+        return [row.partner_id, taskRes.data || [], todoRes.data || []]
       })
       const results = await Promise.all(taskPromises)
-      setPartnerTasks(Object.fromEntries(results))
+      setPartnerTasks(Object.fromEntries(results.map(([id, tasks]) => [id, tasks])))
+      setPartnerTodos(Object.fromEntries(results.map(([id, , todos]) => [id, todos])))
     } else {
       setPartners([])
       setPartnerTasks({})
+      setPartnerTodos({})
     }
     setLoading(false)
   }
@@ -165,11 +174,12 @@ export default function PartnersPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           {partners.map(p => {
             const tasks = partnerTasks[p.partner_id] || []
+            const todos = partnerTodos[p.partner_id] || []
             const partnerName = p.partner?.display_name || p.partner?.email?.split('@')[0] || 'Partner'
             return (
               <div key={p.id} className="card">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 style={{ fontSize: '1rem' }}>{partnerName}'s tasks</h3>
+                  <h3 style={{ fontSize: '1rem' }}>{partnerName}</h3>
                   <Link
                     to={`/partners/${p.partner_id}/compare`}
                     className="btn btn-ghost btn-sm"
@@ -178,32 +188,69 @@ export default function PartnersPage() {
                     <BarChart2 size={13} /> Compare
                   </Link>
                 </div>
-                {tasks.length === 0 ? (
-                  <p className="text-dim" style={{ fontSize: '12px' }}>No tasks visible yet.</p>
-                ) : (
-                  tasks.slice(0, 10).map(task => (
-                    <div key={task.id} style={{ display: 'flex', flexDirection: 'column', gap: '6px', padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
-                      <div className="flex items-center gap-2">
-                        <span style={{ fontSize: '13px', textDecoration: task.complete ? 'line-through' : 'none', color: task.complete ? 'var(--text-3)' : 'var(--text)' }}>
-                          {task.specific_task}
-                        </span>
-                        {task.complete && <span className="badge badge-success">Done</span>}
+
+                {/* Weekly tasks */}
+                {tasks.length > 0 && (
+                  <>
+                    <p className="mono mb-2" style={{ fontSize: 10 }}>This week's tasks</p>
+                    {tasks.slice(0, 10).map(task => (
+                      <div key={task.id} style={{ display: 'flex', flexDirection: 'column', gap: '6px', padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
+                        <div className="flex items-center gap-2">
+                          <span style={{ fontSize: '13px', textDecoration: task.complete ? 'line-through' : 'none', color: task.complete ? 'var(--text-3)' : 'var(--text)' }}>
+                            {task.specific_task}
+                          </span>
+                          {task.complete && <span className="badge badge-success">Done</span>}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            value={nudgeText[task.id] || ''}
+                            onChange={e => setNudgeText(prev => ({ ...prev, [task.id]: e.target.value }))}
+                            placeholder="Leave a nudge…"
+                            style={{ fontSize: '12px', flex: 1 }}
+                            onKeyDown={e => e.key === 'Enter' && leaveNudge(p.partner_id, task.id)}
+                          />
+                          <button className="btn btn-ghost btn-sm" onClick={() => leaveNudge(p.partner_id, task.id)}>
+                            <MessageSquare size={12} />
+                            Nudge
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <input
-                          value={nudgeText[task.id] || ''}
-                          onChange={e => setNudgeText(prev => ({ ...prev, [task.id]: e.target.value }))}
-                          placeholder="Leave a nudge…"
-                          style={{ fontSize: '12px', flex: 1 }}
-                          onKeyDown={e => e.key === 'Enter' && leaveNudge(p.partner_id, task.id)}
-                        />
-                        <button className="btn btn-ghost btn-sm" onClick={() => leaveNudge(p.partner_id, task.id)}>
-                          <MessageSquare size={12} />
-                          Nudge
-                        </button>
+                    ))}
+                  </>
+                )}
+
+                {/* Today's daily todos */}
+                {todos.length > 0 && (
+                  <>
+                    <p className="mono mt-4 mb-2" style={{ fontSize: 10 }}>Today's to-dos</p>
+                    {todos.map(todo => (
+                      <div key={todo.id} style={{ display: 'flex', flexDirection: 'column', gap: '6px', padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
+                        <div className="flex items-center gap-2">
+                          <span style={{ fontSize: 13 }}>{todo.complete ? '✅' : '⬜'}</span>
+                          <span style={{ fontSize: '13px', textDecoration: todo.complete ? 'line-through' : 'none', color: todo.complete ? 'var(--text-3)' : 'var(--text)', flex: 1 }}>
+                            {todo.text}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            value={nudgeText[todo.id] || ''}
+                            onChange={e => setNudgeText(prev => ({ ...prev, [todo.id]: e.target.value }))}
+                            placeholder="Leave a nudge…"
+                            style={{ fontSize: '12px', flex: 1 }}
+                            onKeyDown={e => e.key === 'Enter' && leaveNudge(p.partner_id, null)}
+                          />
+                          <button className="btn btn-ghost btn-sm" onClick={() => leaveNudge(p.partner_id, null)}>
+                            <MessageSquare size={12} />
+                            Nudge
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ))
+                    ))}
+                  </>
+                )}
+
+                {tasks.length === 0 && todos.length === 0 && (
+                  <p className="text-dim" style={{ fontSize: '12px' }}>No tasks or to-dos visible yet.</p>
                 )}
               </div>
             )

@@ -25,6 +25,39 @@ async function generateNudgeNotifications(user) {
   await supabase.from('notifications').upsert(rows, { onConflict: 'user_id,type,source_id', ignoreDuplicates: true })
 }
 
+async function generateMorningReminder(user) {
+  const now = new Date()
+  const h = now.getHours()
+  if (h < 6 || h >= 12) return // only generate in the morning
+  const todayStr = format(now, 'yyyy-MM-dd')
+  await supabase.from('notifications').upsert([{
+    user_id: user.id,
+    type: 'morning_reminder',
+    title: 'Good morning — ready to plan your day?',
+    body: 'Check your daily to-dos and set your priorities for today.',
+    link: '/',
+    source_id: `${todayStr}:morning`,
+  }], { onConflict: 'user_id,type,source_id', ignoreDuplicates: true })
+}
+
+async function generateReflectionReminder(user) {
+  const now = new Date()
+  const h = now.getHours()
+  if (h < 17) return // only generate in the evening
+  const todayStr = format(now, 'yyyy-MM-dd')
+  // Skip if they've already done today's reflection
+  const { data } = await supabase.from('daily_reflections').select('id').eq('user_id', user.id).eq('date', todayStr).maybeSingle()
+  if (data) return
+  await supabase.from('notifications').upsert([{
+    user_id: user.id,
+    type: 'reflection',
+    title: 'Time for your daily reflection',
+    body: 'Rate your day, jot what went well, and set tomorrow\'s priorities.',
+    link: '/?reflect=1',
+    source_id: `${todayStr}:reflection`,
+  }], { onConflict: 'user_id,type,source_id', ignoreDuplicates: true })
+}
+
 async function generateReviewReminder(user) {
   const today = new Date()
   if (today.getDay() !== 0) return // Only nudge for a review on Sundays
@@ -95,6 +128,8 @@ export function useNotifications() {
         generatedRef.current = true
         await Promise.all([
           generateNudgeNotifications(user),
+          generateMorningReminder(user),
+          generateReflectionReminder(user),
           generateReviewReminder(user),
           generateStreakWarnings(user),
         ])
