@@ -126,11 +126,12 @@ export const PRIORITY_COLORS = {
   low: '#9a9089',
 }
 
-// Cycles Urgent -> High -> Medium -> Low -> None (null) -> Urgent...
-export function cyclePriority(current) {
-  const idx = PRIORITY_LEVELS.indexOf(current)
-  if (idx === -1) return PRIORITY_LEVELS[0]
-  return PRIORITY_LEVELS[idx + 1] || null
+// Exclamation-mark badges: Urgent = !!!!, High = !!!, Medium = !!, Low = !.
+export const PRIORITY_MARKS = {
+  urgent: '!!!!',
+  high: '!!!',
+  medium: '!!',
+  low: '!',
 }
 
 // Sort comparator: items with a priority_level sort before items without one,
