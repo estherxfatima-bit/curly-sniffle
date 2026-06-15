@@ -23,6 +23,17 @@ export const CAT_EMOJI = {
   Other: '📦',
 }
 
+// Filters free-typed input down to a valid decimal amount (digits + one '.').
+// Used instead of type="number" since some mobile keyboards (depending on
+// locale/inputMode support) won't let you type a decimal point into a
+// number input, making amount fields appear broken.
+export function sanitizeAmountInput(value) {
+  let v = value.replace(/[^0-9.]/g, '')
+  const dot = v.indexOf('.')
+  if (dot !== -1) v = v.slice(0, dot + 1) + v.slice(dot + 1).replace(/\./g, '')
+  return v
+}
+
 export function toMonthly(amount, frequency) {
   if (frequency === 'monthly')  return amount
   if (frequency === 'weekly')   return amount * 52 / 12

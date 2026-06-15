@@ -10,7 +10,7 @@ import QuickAddFab from '../components/finance/QuickAddFab'
 import SpendingReminderBanner from '../components/finance/SpendingReminderBanner'
 import { SortableCard, DraggableCardList } from '../components/dashboard/DraggableCard'
 import AddWidgetMenu from '../components/dashboard/AddWidgetMenu'
-import { VARIABLE_CATS, CAT_COLORS, CAT_EMOJI, toMonthly, shouldShowSpendingReminder, isReminderDismissedToday, dismissReminderToday } from '../lib/financeUtils'
+import { VARIABLE_CATS, CAT_COLORS, CAT_EMOJI, toMonthly, sanitizeAmountInput, shouldShowSpendingReminder, isReminderDismissedToday, dismissReminderToday } from '../lib/financeUtils'
 import PeriodNav from '../components/ui/PeriodNav'
 import { getCurrentPeriodBounds, getTrailingBounds } from '../lib/periodNav'
 import { Plus, Trash2, Sparkles, Pencil, Check as CheckIcon, X as XIcon } from 'lucide-react'
@@ -334,7 +334,7 @@ export default function FinancePage() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
         <input placeholder="Source name" value={newIncome.name} onChange={e => setNewIncome(p => ({ ...p, name: e.target.value }))} style={{ fontSize: 12 }} />
         <div style={{ display: 'flex', gap: 6 }}>
-          <input type="number" inputMode="decimal" step="0.01" min="0" placeholder="Amount £" value={newIncome.amount} onChange={e => setNewIncome(p => ({ ...p, amount: e.target.value }))} style={{ fontSize: 12, flex: 1 }} />
+          <input type="text" inputMode="decimal" placeholder="Amount £" value={newIncome.amount} onChange={e => setNewIncome(p => ({ ...p, amount: sanitizeAmountInput(e.target.value) }))} style={{ fontSize: 12, flex: 1 }} />
           <select value={newIncome.frequency} onChange={e => setNewIncome(p => ({ ...p, frequency: e.target.value }))} style={{ fontSize: 12 }}>
             {FREQUENCIES.map(f => <option key={f}>{f}</option>)}
           </select>
@@ -368,7 +368,7 @@ export default function FinancePage() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
         <input placeholder="Expense name" value={newFixed.name} onChange={e => setNewFixed(p => ({ ...p, name: e.target.value }))} style={{ fontSize: 12 }} />
         <div style={{ display: 'flex', gap: 6 }}>
-          <input type="number" inputMode="decimal" step="0.01" min="0" placeholder="Amount £" value={newFixed.amount} onChange={e => setNewFixed(p => ({ ...p, amount: e.target.value }))} style={{ fontSize: 12, flex: 1 }} />
+          <input type="text" inputMode="decimal" placeholder="Amount £" value={newFixed.amount} onChange={e => setNewFixed(p => ({ ...p, amount: sanitizeAmountInput(e.target.value) }))} style={{ fontSize: 12, flex: 1 }} />
           <select value={newFixed.category} onChange={e => setNewFixed(p => ({ ...p, category: e.target.value }))} style={{ fontSize: 12 }}>
             {EXPENSE_CATS.map(c => <option key={c}>{c}</option>)}
           </select>
@@ -396,12 +396,12 @@ export default function FinancePage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 12 }}>
             <div onClick={e => e.stopPropagation()}>
               <label style={{ fontSize: 11, color: 'var(--text-3)', display: 'block', marginBottom: 4 }}>Overall monthly limit</label>
-              <input type="number" inputMode="decimal" step="0.01" min="0" placeholder="£" value={budgetInputs.overall || ''} onChange={e => setBudgetInputs(p => ({ ...p, overall: e.target.value }))} style={{ fontSize: 12, width: '100%' }} />
+              <input type="text" inputMode="decimal" placeholder="£" value={budgetInputs.overall || ''} onChange={e => setBudgetInputs(p => ({ ...p, overall: sanitizeAmountInput(e.target.value) }))} style={{ fontSize: 12, width: '100%' }} />
             </div>
             {VARIABLE_CATS.map(cat => (
               <div key={cat} onClick={e => e.stopPropagation()}>
                 <label style={{ fontSize: 11, color: 'var(--text-3)', display: 'block', marginBottom: 4 }}>{CAT_EMOJI[cat]} {cat}</label>
-                <input type="number" inputMode="decimal" step="0.01" min="0" placeholder="£" value={budgetInputs[cat] || ''} onChange={e => setBudgetInputs(p => ({ ...p, [cat]: e.target.value }))} style={{ fontSize: 12, width: '100%' }} />
+                <input type="text" inputMode="decimal" placeholder="£" value={budgetInputs[cat] || ''} onChange={e => setBudgetInputs(p => ({ ...p, [cat]: sanitizeAmountInput(e.target.value) }))} style={{ fontSize: 12, width: '100%' }} />
               </div>
             ))}
           </div>
@@ -429,7 +429,7 @@ export default function FinancePage() {
         </div>
         <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }} onClick={e => e.stopPropagation()}>
           <input placeholder="Description" value={newVariable.name} onChange={e => setNewVariable(p => ({ ...p, name: e.target.value }))} style={{ fontSize: 12, flex: 2, minWidth: 120 }} />
-          <input type="number" inputMode="decimal" step="0.01" min="0" placeholder="£" value={newVariable.amount} onChange={e => setNewVariable(p => ({ ...p, amount: e.target.value }))} style={{ fontSize: 12, width: 80 }} />
+          <input type="text" inputMode="decimal" placeholder="£" value={newVariable.amount} onChange={e => setNewVariable(p => ({ ...p, amount: sanitizeAmountInput(e.target.value) }))} style={{ fontSize: 12, width: 80 }} />
           <select value={newVariable.category} onChange={e => setNewVariable(p => ({ ...p, category: e.target.value }))} style={{ fontSize: 12 }}>
             {VARIABLE_CATS.map(c => <option key={c}>{c}</option>)}
           </select>

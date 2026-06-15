@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Check } from 'lucide-react'
-import { VARIABLE_CATS, CAT_COLORS, CAT_EMOJI } from '../../lib/financeUtils'
+import { VARIABLE_CATS, CAT_COLORS, CAT_EMOJI, sanitizeAmountInput } from '../../lib/financeUtils'
 
 // Effortless expense logging: type an amount, tap a category pill, done.
 // Optional note field can be expanded before picking a category.
@@ -37,13 +37,11 @@ export default function QuickAddExpense({ onAdd, compact }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <div style={{ display: 'flex', gap: 8 }}>
         <input
-          type="number"
+          type="text"
           inputMode="decimal"
-          step="0.01"
-          min="0"
           placeholder="£ amount"
           value={amount}
-          onChange={e => setAmount(e.target.value)}
+          onChange={e => setAmount(sanitizeAmountInput(e.target.value))}
           style={{ fontSize: 14, flex: 1 }}
           autoFocus={!compact}
         />
