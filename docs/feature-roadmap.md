@@ -28,6 +28,16 @@ enhance day-to-day use of the app vs. nice-to-haves that can wait.
   Requires `supabase/phase28_schema.sql` (adds `goals.parent_goal_id`).
 - **Finance amount display sizing** — income/fixed-expense monthly
   amounts are now larger and no longer get clipped by long item names.
+- **Finance: edit entries, savings/investments, removable budget
+  categories** — income, fixed expenses and variable expenses can now be
+  edited in place (not just deleted). A new "Savings & investments" card
+  (`savings_allocations` table, see `supabase/phase30_schema.sql`) lets
+  you allocate recurring savings/investment amounts, which now factor into
+  take-home and disposable income. Amount inputs are bigger on mobile.
+  The "Total spent" hero numbers scale down on small screens. Category
+  budgets can be hidden/restored via a toggle in edit mode
+  (`user_preferences.hidden_budget_categories`), and the budget editor
+  shows how much of the overall limit is still unallocated as you type.
 - **Dashboard priority card** — the "One priority" card on the daily
   dashboard now surfaces the starred (priority) weekly task first.
 - **AI chat full upgrade** — Settings has a "My context" field

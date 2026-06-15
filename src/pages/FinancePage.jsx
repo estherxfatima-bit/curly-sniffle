@@ -19,6 +19,7 @@ const TAX_RATE = 0.25 // 25% tax pot estimate for self-employed
 
 const EXPENSE_CATS = ['Housing', 'Transport', 'Food', 'Subscriptions', 'Health', 'Education', 'Entertainment', 'Other']
 const FREQUENCIES = ['monthly', 'weekly', 'annual', 'one-off']
+const SAVINGS_KINDS = ['Savings', 'Investment']
 
 const CARD_LABELS = {
   'category-budgets': 'Category budgets',
@@ -57,6 +58,7 @@ export default function FinancePage() {
   const [income, setIncome]     = useState([])
   const [fixed, setFixed]       = useState([])
   const [variable, setVariable] = useState([])
+  const [savings, setSavings]   = useState([])
   const [budgets, setBudgets]   = useState([])
   const [loading, setLoading]   = useState(true)
   const [aiLoading, setAiLoading] = useState(false)
@@ -66,6 +68,11 @@ export default function FinancePage() {
   const [newIncome, setNewIncome]     = useState({ name: '', amount: '', frequency: 'monthly', is_self_employed: false })
   const [newFixed, setNewFixed]       = useState({ name: '', amount: '', category: 'Other' })
   const [newVariable, setNewVariable] = useState({ name: '', amount: '', category: 'Other', date: new Date().toISOString().slice(0, 10) })
+  const [newSavings, setNewSavings]   = useState({ name: '', amount: '', frequency: 'monthly', kind: 'Savings' })
+
+  // Inline row editing (income/fixed/variable/savings)
+  const [editingRow, setEditingRow] = useState(null) // { type, id }
+  const [editDraft, setEditDraft] = useState({})
 
   // Card layout
   const [cardOrder, setCardOrder] = useState(null)
@@ -74,6 +81,7 @@ export default function FinancePage() {
   // Budget editing
   const [editingBudgets, setEditingBudgets] = useState(false)
   const [budgetInputs, setBudgetInputs] = useState({})
+  const [hiddenCats, setHiddenCats] = useState([])
 
   // Category filter for variable expenses list
   const [filterCat, setFilterCat] = useState(null)
@@ -93,18 +101,22 @@ export default function FinancePage() {
 
   async function load() {
     setLoading(true)
-    const [incRes, fixRes, varRes, budRes, layoutRes] = await Promise.all([
+    const [incRes, fixRes, varRes, savRes, budRes, layoutRes, prefRes] = await Promise.all([
       supabase.from('income_sources').select('*').eq('user_id', user.id).order('created_at'),
       supabase.from('fixed_expenses').select('*').eq('user_id', user.id).order('created_at'),
       supabase.from('variable_expenses').select('*').eq('user_id', user.id).order('date', { ascending: false }),
+      supabase.from('savings_allocations').select('*').eq('user_id', user.id).order('created_at'),
       supabase.from('budgets').select('*').eq('user_id', user.id),
       supabase.from('dashboard_layout').select('card_order').eq('user_id', user.id).eq('view', 'finance').maybeSingle(),
+      supabase.from('user_preferences').select('hidden_budget_categories').eq('user_id', user.id).maybeSingle(),
     ])
     setIncome(incRes.data || [])
     setFixed(fixRes.data || [])
     setVariable(varRes.data || [])
+    setSavings(savRes.data || [])
     setBudgets(budRes.data || [])
     setCardOrder(normalizeOrder(layoutRes.data?.card_order))
+    setHiddenCats(prefRes.data?.hidden_budget_categories || [])
     setLoading(false)
   }
 
@@ -153,6 +165,16 @@ export default function FinancePage() {
     setVariable(prev => [data, ...prev])
   }
 
+  async function addSavings() {
+    if (!newSavings.name || !newSavings.amount) return
+    const { data } = await supabase.from('savings_allocations').insert({
+      user_id: user.id, name: newSavings.name, amount: parseFloat(newSavings.amount),
+      frequency: newSavings.frequency, kind: newSavings.kind,
+    }).select().single()
+    setSavings(prev => [...prev, data])
+    setNewSavings({ name: '', amount: '', frequency: 'monthly', kind: 'Savings' })
+  }
+
   async function deleteIncome(id) {
     await supabase.from('income_sources').delete().eq('id', id)
     setIncome(prev => prev.filter(i => i.id !== id))
@@ -164,6 +186,57 @@ export default function FinancePage() {
   async function deleteVariable(id) {
     await supabase.from('variable_expenses').delete().eq('id', id)
     setVariable(prev => prev.filter(i => i.id !== id))
+  }
+  async function deleteSavings(id) {
+    await supabase.from('savings_allocations').delete().eq('id', id)
+    setSavings(prev => prev.filter(i => i.id !== id))
+  }
+
+  // Inline row editing — income/fixed/variable/savings
+  function startEdit(type, item) {
+    setEditingRow({ type, id: item.id })
+    if (type === 'income') setEditDraft({ name: item.name, amount: item.amount.toString(), frequency: item.frequency, is_self_employed: item.is_self_employed })
+    else if (type === 'fixed') setEditDraft({ name: item.name, amount: item.amount.toString(), category: item.category })
+    else if (type === 'variable') setEditDraft({ name: item.name, amount: item.amount.toString(), category: item.category, date: item.date })
+    else if (type === 'savings') setEditDraft({ name: item.name, amount: item.amount.toString(), frequency: item.frequency, kind: item.kind })
+  }
+
+  function cancelEdit() {
+    setEditingRow(null)
+    setEditDraft({})
+  }
+
+  async function saveEdit() {
+    const { type, id } = editingRow
+    const amount = parseFloat(editDraft.amount) || 0
+    if (type === 'income') {
+      const payload = { name: editDraft.name, amount, frequency: editDraft.frequency, is_self_employed: editDraft.is_self_employed }
+      await supabase.from('income_sources').update(payload).eq('id', id)
+      setIncome(prev => prev.map(i => i.id === id ? { ...i, ...payload } : i))
+    } else if (type === 'fixed') {
+      const payload = { name: editDraft.name, amount, category: editDraft.category }
+      await supabase.from('fixed_expenses').update(payload).eq('id', id)
+      setFixed(prev => prev.map(i => i.id === id ? { ...i, ...payload } : i))
+    } else if (type === 'variable') {
+      const payload = { name: editDraft.name, amount, category: editDraft.category, date: editDraft.date }
+      await supabase.from('variable_expenses').update(payload).eq('id', id)
+      setVariable(prev => prev.map(i => i.id === id ? { ...i, ...payload } : i))
+    } else if (type === 'savings') {
+      const payload = { name: editDraft.name, amount, frequency: editDraft.frequency, kind: editDraft.kind }
+      await supabase.from('savings_allocations').update(payload).eq('id', id)
+      setSavings(prev => prev.map(i => i.id === id ? { ...i, ...payload } : i))
+    }
+    cancelEdit()
+  }
+
+  // Show/hide a variable-expense category from the Category budgets card
+  async function toggleCategoryHidden(cat) {
+    const next = hiddenCats.includes(cat) ? hiddenCats.filter(c => c !== cat) : [...hiddenCats, cat]
+    setHiddenCats(next)
+    await supabase.from('user_preferences').upsert(
+      { user_id: user.id, hidden_budget_categories: next },
+      { onConflict: 'user_id' }
+    )
   }
 
   async function runAISummary() {
@@ -225,9 +298,10 @@ export default function FinancePage() {
   const selfEmpIncome = income.filter(i => i.is_self_employed).reduce((s, i) => s + toMonthly(i.amount, i.frequency), 0)
   const taxPot        = selfEmpIncome * TAX_RATE
   const totalFixed    = fixed.reduce((s, i) => s + i.amount, 0)
+  const totalSavings  = savings.reduce((s, i) => s + toMonthly(i.amount, i.frequency), 0)
   const varThisMonth  = variable.filter(v => v.date.startsWith(thisMonth))
   const totalVariable = varThisMonth.reduce((s, i) => s + i.amount, 0)
-  const takeHome      = totalIncome - taxPot - totalFixed - totalVariable
+  const takeHome      = totalIncome - taxPot - totalFixed - totalSavings - totalVariable
 
   const monthBudgets = budgets.filter(b => b.month_year === refMonthYear)
   const overallBudget = monthBudgets.find(b => b.category === null)?.amount || 0
@@ -253,7 +327,7 @@ export default function FinancePage() {
 
   // Disposable income for the selected period: income/tax/fixed costs are monthly
   // constants, scaled to the period, minus that period's actual variable spending.
-  const monthlyDisposableBase = totalIncome - taxPot - totalFixed
+  const monthlyDisposableBase = totalIncome - taxPot - totalFixed - totalSavings
   const periodIncome = totalIncome * BUDGET_SCALE[activeView]
   const periodDisposableAllowance = monthlyDisposableBase * BUDGET_SCALE[activeView]
   const periodTakeHome = periodDisposableAllowance - periodTotal
@@ -315,26 +389,47 @@ export default function FinancePage() {
       <h3 style={{ fontSize: '0.9rem', marginBottom: 14 }}>Income sources {monthlyBadge}</h3>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
         {income.map(i => (
-          <div key={i.id} className="flex items-center justify-between gap-2">
-            <div style={{ minWidth: 0, overflow: 'hidden' }}>
-              <p style={{ fontSize: 13 }}>{i.name}</p>
-              <p className="mono" style={{ fontSize: 10, color: 'var(--text-3)' }}>
-                £{i.amount.toFixed(2)} / {i.frequency}{i.is_self_employed ? ' · self-emp' : ''}
-              </p>
+          editingRow?.type === 'income' && editingRow.id === i.id ? (
+            <div key={i.id} style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
+              <input placeholder="Source name" value={editDraft.name} onChange={e => setEditDraft(p => ({ ...p, name: e.target.value }))} style={{ fontSize: 12 }} />
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                <input type="text" inputMode="decimal" placeholder="Amount £" value={editDraft.amount} onChange={e => setEditDraft(p => ({ ...p, amount: sanitizeAmountInput(e.target.value) }))} style={{ fontSize: 14, flex: '1 1 90px', minWidth: 80 }} />
+                <select value={editDraft.frequency} onChange={e => setEditDraft(p => ({ ...p, frequency: e.target.value }))} style={{ fontSize: 12 }}>
+                  {FREQUENCIES.map(f => <option key={f}>{f}</option>)}
+                </select>
+              </div>
+              <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-2)' }}>
+                <input type="checkbox" checked={editDraft.is_self_employed} onChange={e => setEditDraft(p => ({ ...p, is_self_employed: e.target.checked }))} />
+                Self-employed (tax pot applies)
+              </label>
+              <div className="flex items-center gap-2 justify-end">
+                <button className="btn btn-sm btn-finance" style={{ color: '#fff' }} onClick={saveEdit}><CheckIcon size={12} /> Save</button>
+                <button className="btn-icon btn" onClick={cancelEdit}><XIcon size={12} /></button>
+              </div>
             </div>
-            <div className="flex items-center gap-2" style={{ flexShrink: 0 }}>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, color: 'var(--finance)', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                £{toMonthly(i.amount, i.frequency).toFixed(0)}/mo
-              </span>
-              <button className="btn-icon btn" onClick={() => deleteIncome(i.id)}><Trash2 size={12} /></button>
+          ) : (
+            <div key={i.id} className="flex items-center justify-between gap-2">
+              <div style={{ minWidth: 0, overflow: 'hidden' }}>
+                <p style={{ fontSize: 13 }}>{i.name}</p>
+                <p className="mono" style={{ fontSize: 10, color: 'var(--text-3)' }}>
+                  £{i.amount.toFixed(2)} / {i.frequency}{i.is_self_employed ? ' · self-emp' : ''}
+                </p>
+              </div>
+              <div className="flex items-center gap-2" style={{ flexShrink: 0 }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, color: 'var(--finance)', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                  £{toMonthly(i.amount, i.frequency).toFixed(0)}/mo
+                </span>
+                <button className="btn-icon btn" onClick={() => startEdit('income', i)}><Pencil size={12} /></button>
+                <button className="btn-icon btn" onClick={() => deleteIncome(i.id)}><Trash2 size={12} /></button>
+              </div>
             </div>
-          </div>
+          )
         ))}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
         <input placeholder="Source name" value={newIncome.name} onChange={e => setNewIncome(p => ({ ...p, name: e.target.value }))} style={{ fontSize: 12 }} />
-        <div style={{ display: 'flex', gap: 6 }}>
-          <input type="text" inputMode="decimal" placeholder="Amount £" value={newIncome.amount} onChange={e => setNewIncome(p => ({ ...p, amount: sanitizeAmountInput(e.target.value) }))} style={{ fontSize: 12, flex: 1 }} />
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <input type="text" inputMode="decimal" placeholder="Amount £" value={newIncome.amount} onChange={e => setNewIncome(p => ({ ...p, amount: sanitizeAmountInput(e.target.value) }))} style={{ fontSize: 14, flex: '1 1 90px', minWidth: 80 }} />
           <select value={newIncome.frequency} onChange={e => setNewIncome(p => ({ ...p, frequency: e.target.value }))} style={{ fontSize: 12 }}>
             {FREQUENCIES.map(f => <option key={f}>{f}</option>)}
           </select>
@@ -353,27 +448,102 @@ export default function FinancePage() {
       <h3 style={{ fontSize: '0.9rem', marginBottom: 14 }}>Fixed expenses <span className="mono" style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 400 }}>£{totalFixed.toFixed(0)}/mo</span> {monthlyBadge}</h3>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
         {fixed.map(i => (
-          <div key={i.id} className="flex items-center justify-between gap-2">
-            <div style={{ minWidth: 0, overflow: 'hidden' }}>
-              <p style={{ fontSize: 13 }}>{i.name}</p>
-              <p className="mono" style={{ fontSize: 10, color: 'var(--text-3)' }}>{i.category}</p>
+          editingRow?.type === 'fixed' && editingRow.id === i.id ? (
+            <div key={i.id} style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
+              <input placeholder="Expense name" value={editDraft.name} onChange={e => setEditDraft(p => ({ ...p, name: e.target.value }))} style={{ fontSize: 12 }} />
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                <input type="text" inputMode="decimal" placeholder="Amount £" value={editDraft.amount} onChange={e => setEditDraft(p => ({ ...p, amount: sanitizeAmountInput(e.target.value) }))} style={{ fontSize: 14, flex: '1 1 90px', minWidth: 80 }} />
+                <select value={editDraft.category} onChange={e => setEditDraft(p => ({ ...p, category: e.target.value }))} style={{ fontSize: 12 }}>
+                  {EXPENSE_CATS.map(c => <option key={c}>{c}</option>)}
+                </select>
+              </div>
+              <div className="flex items-center gap-2 justify-end">
+                <button className="btn btn-sm btn-finance" style={{ color: '#fff' }} onClick={saveEdit}><CheckIcon size={12} /> Save</button>
+                <button className="btn-icon btn" onClick={cancelEdit}><XIcon size={12} /></button>
+              </div>
             </div>
-            <div className="flex items-center gap-2" style={{ flexShrink: 0 }}>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, color: 'var(--text)', fontWeight: 600, whiteSpace: 'nowrap' }}>£{i.amount.toFixed(2)}</span>
-              <button className="btn-icon btn" onClick={() => deleteFixed(i.id)}><Trash2 size={12} /></button>
+          ) : (
+            <div key={i.id} className="flex items-center justify-between gap-2">
+              <div style={{ minWidth: 0, overflow: 'hidden' }}>
+                <p style={{ fontSize: 13 }}>{i.name}</p>
+                <p className="mono" style={{ fontSize: 10, color: 'var(--text-3)' }}>{i.category}</p>
+              </div>
+              <div className="flex items-center gap-2" style={{ flexShrink: 0 }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, color: 'var(--text)', fontWeight: 600, whiteSpace: 'nowrap' }}>£{i.amount.toFixed(2)}</span>
+                <button className="btn-icon btn" onClick={() => startEdit('fixed', i)}><Pencil size={12} /></button>
+                <button className="btn-icon btn" onClick={() => deleteFixed(i.id)}><Trash2 size={12} /></button>
+              </div>
             </div>
-          </div>
+          )
         ))}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
         <input placeholder="Expense name" value={newFixed.name} onChange={e => setNewFixed(p => ({ ...p, name: e.target.value }))} style={{ fontSize: 12 }} />
-        <div style={{ display: 'flex', gap: 6 }}>
-          <input type="text" inputMode="decimal" placeholder="Amount £" value={newFixed.amount} onChange={e => setNewFixed(p => ({ ...p, amount: sanitizeAmountInput(e.target.value) }))} style={{ fontSize: 12, flex: 1 }} />
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <input type="text" inputMode="decimal" placeholder="Amount £" value={newFixed.amount} onChange={e => setNewFixed(p => ({ ...p, amount: sanitizeAmountInput(e.target.value) }))} style={{ fontSize: 14, flex: '1 1 90px', minWidth: 80 }} />
           <select value={newFixed.category} onChange={e => setNewFixed(p => ({ ...p, category: e.target.value }))} style={{ fontSize: 12 }}>
             {EXPENSE_CATS.map(c => <option key={c}>{c}</option>)}
           </select>
         </div>
         <button className="btn btn-sm btn-ghost" onClick={addFixed}><Plus size={12} /> Add fixed expense</button>
+      </div>
+    </div>
+  )
+
+  const savingsCard = (
+    <div className="card">
+      <h3 style={{ fontSize: '0.9rem', marginBottom: 14 }}>Savings &amp; investments <span className="mono" style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 400 }}>£{totalSavings.toFixed(0)}/mo</span> {monthlyBadge}</h3>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+        {savings.map(i => (
+          editingRow?.type === 'savings' && editingRow.id === i.id ? (
+            <div key={i.id} style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
+              <input placeholder="Name" value={editDraft.name} onChange={e => setEditDraft(p => ({ ...p, name: e.target.value }))} style={{ fontSize: 12 }} />
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                <input type="text" inputMode="decimal" placeholder="Amount £" value={editDraft.amount} onChange={e => setEditDraft(p => ({ ...p, amount: sanitizeAmountInput(e.target.value) }))} style={{ fontSize: 14, flex: '1 1 90px', minWidth: 80 }} />
+                <select value={editDraft.frequency} onChange={e => setEditDraft(p => ({ ...p, frequency: e.target.value }))} style={{ fontSize: 12 }}>
+                  {FREQUENCIES.map(f => <option key={f}>{f}</option>)}
+                </select>
+                <select value={editDraft.kind} onChange={e => setEditDraft(p => ({ ...p, kind: e.target.value }))} style={{ fontSize: 12 }}>
+                  {SAVINGS_KINDS.map(k => <option key={k}>{k}</option>)}
+                </select>
+              </div>
+              <div className="flex items-center gap-2 justify-end">
+                <button className="btn btn-sm btn-finance" style={{ color: '#fff' }} onClick={saveEdit}><CheckIcon size={12} /> Save</button>
+                <button className="btn-icon btn" onClick={cancelEdit}><XIcon size={12} /></button>
+              </div>
+            </div>
+          ) : (
+            <div key={i.id} className="flex items-center justify-between gap-2">
+              <div style={{ minWidth: 0, overflow: 'hidden' }}>
+                <p style={{ fontSize: 13 }}>{i.name}</p>
+                <p className="mono" style={{ fontSize: 10, color: 'var(--text-3)' }}>{i.kind} · {i.frequency}</p>
+              </div>
+              <div className="flex items-center gap-2" style={{ flexShrink: 0 }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, color: 'var(--text)', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                  £{toMonthly(i.amount, i.frequency).toFixed(0)}/mo
+                </span>
+                <button className="btn-icon btn" onClick={() => startEdit('savings', i)}><Pencil size={12} /></button>
+                <button className="btn-icon btn" onClick={() => deleteSavings(i.id)}><Trash2 size={12} /></button>
+              </div>
+            </div>
+          )
+        ))}
+        {savings.length === 0 && (
+          <p style={{ fontSize: 12, color: 'var(--text-3)', fontStyle: 'italic' }}>Nothing allocated yet.</p>
+        )}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+        <input placeholder="e.g. ISA, pension top-up" value={newSavings.name} onChange={e => setNewSavings(p => ({ ...p, name: e.target.value }))} style={{ fontSize: 12 }} />
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <input type="text" inputMode="decimal" placeholder="Amount £" value={newSavings.amount} onChange={e => setNewSavings(p => ({ ...p, amount: sanitizeAmountInput(e.target.value) }))} style={{ fontSize: 14, flex: '1 1 90px', minWidth: 80 }} />
+          <select value={newSavings.frequency} onChange={e => setNewSavings(p => ({ ...p, frequency: e.target.value }))} style={{ fontSize: 12 }}>
+            {FREQUENCIES.map(f => <option key={f}>{f}</option>)}
+          </select>
+          <select value={newSavings.kind} onChange={e => setNewSavings(p => ({ ...p, kind: e.target.value }))} style={{ fontSize: 12 }}>
+            {SAVINGS_KINDS.map(k => <option key={k}>{k}</option>)}
+          </select>
+        </div>
+        <button className="btn btn-sm btn-ghost" onClick={addSavings}><Plus size={12} /> Add allocation</button>
       </div>
     </div>
   )
@@ -393,21 +563,43 @@ export default function FinancePage() {
           )}
         </div>
         {editingBudgets ? (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 12 }}>
-            <div onClick={e => e.stopPropagation()}>
-              <label style={{ fontSize: 11, color: 'var(--text-3)', display: 'block', marginBottom: 4 }}>Overall monthly limit</label>
-              <input type="text" inputMode="decimal" placeholder="£" value={budgetInputs.overall || ''} onChange={e => setBudgetInputs(p => ({ ...p, overall: sanitizeAmountInput(e.target.value) }))} style={{ fontSize: 12, width: '100%' }} />
-            </div>
-            {VARIABLE_CATS.map(cat => (
-              <div key={cat} onClick={e => e.stopPropagation()}>
-                <label style={{ fontSize: 11, color: 'var(--text-3)', display: 'block', marginBottom: 4 }}>{CAT_EMOJI[cat]} {cat}</label>
-                <input type="text" inputMode="decimal" placeholder="£" value={budgetInputs[cat] || ''} onChange={e => setBudgetInputs(p => ({ ...p, [cat]: sanitizeAmountInput(e.target.value) }))} style={{ fontSize: 12, width: '100%' }} />
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 12 }}>
+              <div onClick={e => e.stopPropagation()}>
+                <label style={{ fontSize: 11, color: 'var(--text-3)', display: 'block', marginBottom: 4 }}>Overall monthly limit</label>
+                <input type="text" inputMode="decimal" placeholder="£" value={budgetInputs.overall || ''} onChange={e => setBudgetInputs(p => ({ ...p, overall: sanitizeAmountInput(e.target.value) }))} style={{ fontSize: 12, width: '100%' }} />
               </div>
-            ))}
-          </div>
+              {VARIABLE_CATS.map(cat => (
+                <div key={cat} onClick={e => e.stopPropagation()} style={{ opacity: hiddenCats.includes(cat) ? 0.45 : 1 }}>
+                  <label style={{ fontSize: 11, color: 'var(--text-3)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <span>{CAT_EMOJI[cat]} {cat}</span>
+                    <button
+                      className="btn-icon"
+                      style={{ padding: 1 }}
+                      title={hiddenCats.includes(cat) ? 'Show this category again' : 'Remove this category from budgets'}
+                      onClick={() => toggleCategoryHidden(cat)}
+                    >
+                      {hiddenCats.includes(cat) ? <Plus size={11} /> : <XIcon size={11} />}
+                    </button>
+                  </label>
+                  <input type="text" inputMode="decimal" placeholder="£" value={budgetInputs[cat] || ''} onChange={e => setBudgetInputs(p => ({ ...p, [cat]: sanitizeAmountInput(e.target.value) }))} style={{ fontSize: 12, width: '100%' }} disabled={hiddenCats.includes(cat)} />
+                </div>
+              ))}
+            </div>
+            {budgetInputs.overall && (
+              <p className="mono" style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 12 }}>
+                {(() => {
+                  const overallVal = parseFloat(budgetInputs.overall) || 0
+                  const allocated = VARIABLE_CATS.filter(c => !hiddenCats.includes(c)).reduce((s, c) => s + (parseFloat(budgetInputs[c]) || 0), 0)
+                  const remaining = overallVal - allocated
+                  return `£${allocated.toFixed(0)} allocated of £${overallVal.toFixed(0)} — £${remaining.toFixed(0)} ${remaining >= 0 ? 'left to allocate' : 'over the overall limit'}`
+                })()}
+              </p>
+            )}
+          </>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 12 }}>
-            {VARIABLE_CATS.map(cat => (
+            {VARIABLE_CATS.filter(cat => !hiddenCats.includes(cat)).map(cat => (
               <div key={cat} onClick={e => { e.stopPropagation(); setFilterCat(filterCat === cat ? null : cat) }} style={{ outline: filterCat === cat ? `2px solid ${CAT_COLORS[cat]}` : 'none', borderRadius: 'var(--radius)' }}>
                 <BudgetRing label={`${CAT_EMOJI[cat]} ${cat}`} spent={periodCategorySpend[cat]} budget={periodCategoryBudget[cat]} size={84} />
               </div>
@@ -438,14 +630,28 @@ export default function FinancePage() {
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }} onClick={e => e.stopPropagation()}>
           {filteredVariable.slice(0, 20).map(i => (
-            <div key={i.id} className="flex items-center justify-between gap-2" style={{ fontSize: 13 }}>
-              <span style={{ color: 'var(--text-2)' }}>{CAT_EMOJI[i.category] || '📦'} {i.name}</span>
-              <div className="flex items-center gap-3">
-                <span className="mono" style={{ fontSize: 10, color: 'var(--text-3)' }}>{i.category} · {i.date}</span>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 500 }}>£{i.amount.toFixed(2)}</span>
-                <button className="btn-icon btn" onClick={() => deleteVariable(i.id)}><Trash2 size={12} /></button>
+            editingRow?.type === 'variable' && editingRow.id === i.id ? (
+              <div key={i.id} style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', padding: '4px 0' }}>
+                <input value={editDraft.name} onChange={e => setEditDraft(p => ({ ...p, name: e.target.value }))} style={{ fontSize: 12, flex: 2, minWidth: 120 }} />
+                <input type="text" inputMode="decimal" value={editDraft.amount} onChange={e => setEditDraft(p => ({ ...p, amount: sanitizeAmountInput(e.target.value) }))} style={{ fontSize: 14, width: 80 }} />
+                <select value={editDraft.category} onChange={e => setEditDraft(p => ({ ...p, category: e.target.value }))} style={{ fontSize: 12 }}>
+                  {VARIABLE_CATS.map(c => <option key={c}>{c}</option>)}
+                </select>
+                <input type="date" value={editDraft.date} onChange={e => setEditDraft(p => ({ ...p, date: e.target.value }))} style={{ fontSize: 12 }} />
+                <button className="btn btn-sm btn-finance" style={{ color: '#fff' }} onClick={saveEdit}><CheckIcon size={12} /></button>
+                <button className="btn-icon btn" onClick={cancelEdit}><XIcon size={12} /></button>
               </div>
-            </div>
+            ) : (
+              <div key={i.id} className="flex items-center justify-between gap-2" style={{ fontSize: 13 }}>
+                <span style={{ color: 'var(--text-2)' }}>{CAT_EMOJI[i.category] || '📦'} {i.name}</span>
+                <div className="flex items-center gap-3">
+                  <span className="mono" style={{ fontSize: 10, color: 'var(--text-3)' }}>{i.category} · {i.date}</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 500 }}>£{i.amount.toFixed(2)}</span>
+                  <button className="btn-icon btn" onClick={() => startEdit('variable', i)}><Pencil size={12} /></button>
+                  <button className="btn-icon btn" onClick={() => deleteVariable(i.id)}><Trash2 size={12} /></button>
+                </div>
+              </div>
+            )
           ))}
           {filteredVariable.length === 0 && (
             <p style={{ fontSize: 12, color: 'var(--text-3)', fontStyle: 'italic' }}>No expenses logged{filterCat ? ` for ${filterCat}` : ''}.</p>
@@ -555,12 +761,12 @@ export default function FinancePage() {
       <div className="card card-finance mb-6" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 28, padding: '24px 28px' }}>
         <div>
           <p className="mono" style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 6 }}>Total spent {periodLabel}</p>
-          <p style={{ fontFamily: 'var(--font-serif)', fontSize: '2.6rem', fontWeight: 700, letterSpacing: '-0.02em' }}>£{periodTotal.toFixed(0)}</p>
+          <p style={{ fontFamily: 'var(--font-serif)', fontSize: 'clamp(1.7rem, 8vw, 2.6rem)', fontWeight: 700, letterSpacing: '-0.02em' }}>£{periodTotal.toFixed(0)}</p>
         </div>
         <BudgetRing label="Budget" spent={periodTotal} budget={periodOverallBudget} size={120} />
         <div>
           <p className="mono" style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 6 }}>Disposable income remaining</p>
-          <p style={{ fontFamily: 'var(--font-serif)', fontSize: '2.2rem', fontWeight: 700, letterSpacing: '-0.02em', color: disposableColor }}>£{periodTakeHome.toFixed(0)}</p>
+          <p style={{ fontFamily: 'var(--font-serif)', fontSize: 'clamp(1.5rem, 7vw, 2.2rem)', fontWeight: 700, letterSpacing: '-0.02em', color: disposableColor }}>£{periodTakeHome.toFixed(0)}</p>
           <p className="mono" style={{ fontSize: 11, color: disposableColor, marginTop: 4 }}>
             {periodOverallBudget > 0
               ? (periodTotal <= periodOverallBudget ? `£${(periodOverallBudget - periodTotal).toFixed(0)} left of budget` : `£${(periodTotal - periodOverallBudget).toFixed(0)} over budget`)
@@ -569,11 +775,12 @@ export default function FinancePage() {
         </div>
       </div>
 
-      {/* Income & Fixed expenses — always monthly, only shown in the Monthly view */}
+      {/* Income, fixed expenses & savings — always monthly, only shown in the Monthly view */}
       {activeView === 'monthly' && (
         <div className="mb-6" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
           {incomeCard}
           {fixedCard}
+          {savingsCard}
         </div>
       )}
 
