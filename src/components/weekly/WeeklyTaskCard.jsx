@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, MessageSquare, Star, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, MessageSquare, Repeat, Star, Trash2 } from 'lucide-react'
 import TaskExpansion from './TaskExpansion'
 
 const DAY_SHORT_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -52,6 +52,7 @@ export default function WeeklyTaskCard({ task, areaColor, goals, expanded, onTog
       <div className="flex items-center gap-2 wrap" style={{ marginTop: 8, paddingLeft: 25 }}>
         <span className="badge" style={{ background: `${areaColor(task.area)}22`, color: areaColor(task.area), fontSize: 9 }}>{task.area}</span>
         <span className="mono" style={{ fontSize: 9 }}>{task.frequency}</span>
+        {task.recurring && <Repeat size={11} color="var(--career)" title="Recurring every week" />}
         {task.carried_forward && <span className="badge badge-warning" style={{ fontSize: 9 }}>carried</span>}
         {task.day_of_week != null && <span className="badge" style={{ fontSize: 9, background: 'var(--career-tint)', color: 'var(--career)' }}>{DAY_SHORT_LABELS[task.day_of_week]}</span>}
         {task.complete ? <span className="badge badge-success" style={{ fontSize: 9 }}>Done</span> : <span className="badge badge-muted" style={{ fontSize: 9 }}>Open</span>}

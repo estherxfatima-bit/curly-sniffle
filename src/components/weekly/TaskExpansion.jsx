@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { format } from 'date-fns'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
-import { Plus, Check, Clock, Target, Send, CalendarDays, SkipForward } from 'lucide-react'
+import { Plus, Check, Clock, Target, Send, CalendarDays, SkipForward, Repeat } from 'lucide-react'
 
 const TIME_OPTS = ['15 min', '30 min', '45 min', '1 hr', '1.5 hr', '2 hr', '3 hr']
 const DAY_LABELS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
@@ -87,6 +87,14 @@ export default function TaskExpansion({ task, goals, onUpdateField, onToggleSubt
             {DAY_LABELS.map((label, i) => <option key={i} value={i}>{label}</option>)}
           </select>
         </div>
+        <button
+          className={`btn btn-xs ${task.recurring ? 'btn-career' : 'btn-ghost'}`}
+          style={task.recurring ? { color: '#fff' } : {}}
+          onClick={() => onUpdateField('recurring', !task.recurring)}
+          title="Automatically re-create this task every week"
+        >
+          <Repeat size={12} /> {task.recurring ? 'Recurring weekly' : 'Make recurring'}
+        </button>
       </div>
 
       {/* Notes */}

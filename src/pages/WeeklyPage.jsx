@@ -3,7 +3,7 @@ import { format, startOfWeek, endOfWeek, addWeeks, subWeeks } from 'date-fns'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { TASK_AREAS, AREA_COLORS } from '../lib/constants'
-import { ChevronLeft, ChevronRight, ChevronDown, Plus, Trash2, RotateCcw, MessageSquare, Check, Target, Star } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ChevronDown, Plus, Trash2, RotateCcw, Repeat, MessageSquare, Check, Target, Star } from 'lucide-react'
 import WeeklyReviewModal from '../components/weekly/WeeklyReviewModal'
 import PastReviews from '../components/weekly/PastReviews'
 import WeeklyQuote from '../components/dashboard/WeeklyQuote'
@@ -60,7 +60,7 @@ export default function WeeklyPage() {
   const [showPastReviews, setShowPastReviews] = useState(false)
   const [expandedTask, setExpandedTask] = useState(null)
   const [groupBy, setGroupBy] = useState('area')
-  const [newTask, setNewTask] = useState({ area: 'Career', action: '', frequency: 'Weekly', specific_task: '', goal_id: '' })
+  const [newTask, setNewTask] = useState({ area: 'Career', action: '', frequency: 'Weekly', specific_task: '', goal_id: '', recurring: false })
   const [savedQuote, setSavedQuote] = useState(null)
 
   const weekStart = startOfWeek(currentWeek, { weekStartsOn: 1 })
@@ -79,8 +79,35 @@ export default function WeeklyPage() {
     setLoading(true)
     const { data } = await supabase.from('weekly_tasks').select('*')
       .eq('user_id', user.id).eq('week_start', weekStartStr).eq('archived', false).order('created_at')
-    setTasks(data || [])
+    const loaded = data || []
+    setTasks(loaded)
     setLoading(false)
+    await ensureRecurringTasks(loaded)
+  }
+
+  // If viewing the current week, auto-create instances of last week's recurring tasks (once).
+  async function ensureRecurringTasks(currentTasks) {
+    const thisWeekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
+    if (weekStartStr !== thisWeekStart) return
+
+    const prevWeekStart = format(subWeeks(weekStart, 1), 'yyyy-MM-dd')
+    const { data: prevRecurring } = await supabase.from('weekly_tasks').select('*')
+      .eq('user_id', user.id).eq('week_start', prevWeekStart).eq('recurring', true)
+    if (!prevRecurring?.length) return
+
+    const toCreate = prevRecurring.filter(pt =>
+      !currentTasks.some(t => t.recurring && t.area === pt.area && t.specific_task === pt.specific_task)
+    )
+    if (!toCreate.length) return
+
+    const { data: created } = await supabase.from('weekly_tasks').insert(
+      toCreate.map(t => ({
+        user_id: user.id, week_start: weekStartStr, area: t.area, action: t.action,
+        frequency: t.frequency, specific_task: t.specific_task, goal_id: t.goal_id,
+        complete: false, carried_forward: false, recurring: true, day_of_week: t.day_of_week,
+      }))
+    ).select()
+    if (created?.length) setTasks(prev => [...prev, ...created])
   }
 
   async function loadGoals() {
@@ -97,7 +124,7 @@ export default function WeeklyPage() {
       goal_id: newTask.goal_id || null, complete: false, carried_forward: false,
     }).select().single()
     if (data) setTasks(prev => [...prev, data])
-    setNewTask({ area: 'Career', action: '', frequency: 'Weekly', specific_task: '', goal_id: '' })
+    setNewTask({ area: 'Career', action: '', frequency: 'Weekly', specific_task: '', goal_id: '', recurring: false })
     setShowAddRow(false)
   }
 
@@ -275,7 +302,16 @@ export default function WeeklyPage() {
                     {goals.map(g => <option key={g.id} value={g.id}>{g.category}: {g.primary_goal?.slice(0, 28)}</option>)}
                   </select>
                 </td>
-                <td />
+                <td>
+                  <button
+                    className="btn-icon btn"
+                    onClick={() => setNewTask(p => ({ ...p, recurring: !p.recurring }))}
+                    title={newTask.recurring ? 'Recurring weekly — click to make one-off' : 'Make this task recur every week'}
+                    style={{ color: newTask.recurring ? 'var(--career)' : undefined }}
+                  >
+                    <Repeat size={13} />
+                  </button>
+                </td>
                 <td><div className="flex gap-1"><button className="btn btn-career btn-sm" style={{ color: '#fff' }} onClick={addTask}>Add</button><button className="btn btn-ghost btn-sm" onClick={() => setShowAddRow(false)}>✕</button></div></td>
               </tr>
             )}
@@ -321,6 +357,7 @@ export default function WeeklyPage() {
                               <ChevronDown size={12} color="var(--text-3)" style={{ flexShrink: 0, transform: expanded ? 'none' : 'rotate(-90deg)', transition: 'transform 0.15s' }} />
                               {task.priority && <Star size={12} color="var(--warning)" fill="var(--warning)" style={{ flexShrink: 0 }} />}
                               <span style={{ textDecoration: task.complete ? 'line-through' : 'none', fontSize: 13 }}>{task.specific_task}</span>
+                              {task.recurring && <Repeat size={11} color="var(--career)" style={{ flexShrink: 0 }} title="Recurring every week" />}
                               {task.carried_forward && <span className="badge badge-warning" style={{ marginLeft: 6, fontSize: 9 }}>carried</span>}
                               {task.day_of_week != null && <span className="badge" style={{ marginLeft: 6, fontSize: 9, background: 'var(--career-tint)', color: 'var(--career)' }}>{DAY_SHORT_LABELS[task.day_of_week]}</span>}
                               {task.notes && <MessageSquare size={11} color="var(--creative)" style={{ flexShrink: 0 }} />}
@@ -385,6 +422,13 @@ export default function WeeklyPage() {
               <option value="">No goal</option>
               {goals.map(g => <option key={g.id} value={g.id}>{g.category}: {g.primary_goal?.slice(0, 28)}</option>)}
             </select>
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => setNewTask(p => ({ ...p, recurring: !p.recurring }))}
+              style={{ alignSelf: 'flex-start', color: newTask.recurring ? 'var(--career)' : undefined }}
+            >
+              <Repeat size={13} /> {newTask.recurring ? 'Repeats every week' : 'Make recurring'}
+            </button>
             <div className="flex gap-2 justify-end">
               <button className="btn btn-ghost btn-sm" onClick={() => setShowAddRow(false)}>Cancel</button>
               <button className="btn btn-career btn-sm" style={{ color: '#fff' }} onClick={addTask}>Add</button>
