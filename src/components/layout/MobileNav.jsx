@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, CalendarDays, Film, Heart, MoreHorizontal } from 'lucide-react'
+import { LayoutDashboard, CalendarDays, Film, Heart, MoreHorizontal, Search } from 'lucide-react'
 import { useState } from 'react'
 
 // Phase 7: primary 4 tabs — Dashboard, Week, Content, Wellness
@@ -20,7 +20,7 @@ const overflowItems = [
   { to: '/settings', label: 'Settings' },
 ]
 
-export default function MobileNav() {
+export default function MobileNav({ onOpenSearch }) {
   const [showOverflow, setShowOverflow] = useState(false)
   const navigate = useNavigate()
 
@@ -87,6 +87,21 @@ export default function MobileNav() {
             {label}
           </NavLink>
         ))}
+
+        <button
+          onClick={onOpenSearch}
+          style={{
+            flex: 1, display: 'flex', flexDirection: 'column',
+            alignItems: 'center', gap: '3px', padding: '8px 0',
+            background: 'transparent',
+            color: 'var(--text-3)',
+            fontSize: '10px', fontFamily: 'var(--font-mono)',
+            letterSpacing: '0.04em', textTransform: 'uppercase',
+          }}
+        >
+          <Search size={18} />
+          Search
+        </button>
 
         <button
           onClick={() => setShowOverflow(v => !v)}

@@ -2,12 +2,14 @@ import { useState, useEffect } from 'react'
 import Sidebar from './Sidebar'
 import MobileNav from './MobileNav'
 import AIPlanningPanel from './AIPlanningPanel'
+import GlobalSearch from './GlobalSearch'
 import ActiveTimerBar from '../timer/ActiveTimerBar'
 import { Sparkles } from 'lucide-react'
 
 export default function AppLayout({ children }) {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 769)
   const [showAI, setShowAI] = useState(false)
+  const [showSearch, setShowSearch] = useState(false)
 
   useEffect(() => {
     const handler = () => setIsMobile(window.innerWidth < 769)
@@ -15,13 +17,26 @@ export default function AppLayout({ children }) {
     return () => window.removeEventListener('resize', handler)
   }, [])
 
+  useEffect(() => {
+    function onKeyDown(e) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setShowSearch(v => !v)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
   return (
     <div className="app-layout">
-      {!isMobile && <Sidebar />}
+      {!isMobile && <Sidebar onOpenSearch={() => setShowSearch(true)} />}
       <main className="main-content fade-in">
         {children}
       </main>
-      {isMobile && <MobileNav />}
+      {isMobile && <MobileNav onOpenSearch={() => setShowSearch(true)} />}
+
+      {showSearch && <GlobalSearch onClose={() => setShowSearch(false)} />}
 
       <ActiveTimerBar isMobile={isMobile} />
 

@@ -10,15 +10,16 @@ enhance day-to-day use of the app vs. nice-to-haves that can wait.
   from last week that doesn't have a matching instance yet is
   auto-created. Shown with a ↺ icon. Requires `supabase/phase26_schema.sql`
   (adds `weekly_tasks.recurring`).
+- **Global search** (item 3) — Cmd/Ctrl+K, or the Search button in the
+  sidebar (desktop) / bottom nav (mobile). Searches weekly tasks, daily
+  todos, goals, content ideas, brain-dump ideas, habits, saved meals and
+  books, grouped by type. Clicking a result navigates to that section.
+  (Note: "recurring fixed expenses" from item 9 was skipped — fixed
+  expenses are already treated as ongoing monthly costs with no
+  per-month instance concept, so there's nothing to auto-create.)
 
 ## High impact — do next
 
-- **Recurring fixed expenses** (item 9) — same pattern as recurring
-  weekly tasks, applied to fixed monthly expenses. Auto-create next
-  month's instance on page load if missing.
-- **Global search** (item 3) — Cmd+K / search icon, searches weekly
-  tasks, daily todos, goals, content ideas, brain dump notes, habits,
-  meals, books. Big usability win once data volume grows.
 - **Notifications inbox** (item 5) — bell icon + unread badge, surfaces
   partner nudges, review reminders, streak warnings. Foundational for
   the partner features below.

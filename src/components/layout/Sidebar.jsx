@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, CalendarDays, Target, CheckSquare, Film,
   TrendingUp, Users, LogOut, Sun, Moon, Sparkles, PiggyBank, Heart, Settings,
-  BookOpen, ListChecks,
+  BookOpen, ListChecks, Search,
 } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { useTheme } from '../../hooks/useTheme'
@@ -31,7 +31,7 @@ const SECTION_COLORS = {
   personal: 'var(--personal)',
 }
 
-export default function Sidebar() {
+export default function Sidebar({ onOpenSearch }) {
   const { user, signOut } = useAuth()
   const { theme, toggle } = useTheme()
   const name = user?.user_metadata?.full_name || user?.email?.split('@')[0] || ''
@@ -70,6 +70,23 @@ export default function Sidebar() {
             {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
           </button>
         </div>
+      </div>
+
+      {/* Search */}
+      <div style={{ padding: '12px 10px 0' }}>
+        <button
+          onClick={onOpenSearch}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+            padding: '8px 12px', borderRadius: '8px',
+            background: 'var(--bg-2)', color: 'var(--text-3)',
+            fontSize: '13px', border: '1px solid var(--border)',
+          }}
+        >
+          <Search size={14} />
+          Search
+          <span className="mono" style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--text-3)' }}>⌘K</span>
+        </button>
       </div>
 
       {/* Nav */}
