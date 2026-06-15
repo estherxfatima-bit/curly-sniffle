@@ -12,6 +12,7 @@ import BudgetRing from '../../finance/BudgetRing'
 import QuickAddExpense from '../../finance/QuickAddExpense'
 import DailyQuote from '../DailyQuote'
 import BrainDump from '../../shared/BrainDump'
+import NoteForTomorrow from '../NoteForTomorrow'
 
 export const CARD_LABELS = {
   quote: 'Daily quote',
@@ -25,6 +26,7 @@ export const CARD_LABELS = {
   'finance-snapshot': 'Finance snapshot',
   'quick-add-expense': 'Quick add expense',
   'brain-dump': 'Brain dump',
+  'note-tomorrow': 'Note for tomorrow',
 }
 
 export const DEFAULT_ORDER = [
@@ -37,6 +39,7 @@ export const DEFAULT_ORDER = [
   { id: 'reading', size: 'square' },
   { id: 'calendar', size: 'wide' },
   { id: 'brain-dump', size: 'wide' },
+  { id: 'note-tomorrow', size: 'square' },
 ]
 const HYDRATION_GOAL = 2500
 
@@ -194,6 +197,12 @@ export default function DailyView({
         <BrainDump />
       </div>
     ),
+
+    'note-tomorrow': (
+      <div onClick={e => e.stopPropagation()}>
+        <NoteForTomorrow today={today} />
+      </div>
+    ),
   }
 
   const available = Object.entries(CARD_LABELS)
@@ -216,7 +225,7 @@ export default function DailyView({
             editing={editing}
             onResize={s => onResize(id, s)}
             onRemove={() => onRemoveCard(id)}
-            onClick={id !== 'quote' && id !== 'todos' && id !== 'mood' && id !== 'reading' && id !== 'calendar' && id !== 'finance-snapshot' && id !== 'quick-add-expense' && id !== 'brain-dump' ? () => openPanel(id === 'habits' ? 'habits' : id === 'water' ? 'water' : id === 'priority' ? 'tasks' : id, { habits, tasks: weekTasks, hydration }) : undefined}
+            onClick={id !== 'quote' && id !== 'todos' && id !== 'mood' && id !== 'reading' && id !== 'calendar' && id !== 'finance-snapshot' && id !== 'quick-add-expense' && id !== 'brain-dump' && id !== 'note-tomorrow' ? () => openPanel(id === 'habits' ? 'habits' : id === 'water' ? 'water' : id === 'priority' ? 'tasks' : id, { habits, tasks: weekTasks, hydration }) : undefined}
           >
             {CARDS[id] || null}
           </SortableCard>

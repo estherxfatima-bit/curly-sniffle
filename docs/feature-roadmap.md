@@ -45,6 +45,14 @@ enhance day-to-day use of the app vs. nice-to-haves that can wait.
   fed to the AI along with live goal/task/habit/wins data. The AI can
   suggest weekly tasks and daily to-dos via a JSON block, which renders
   as "Add to plan" cards in the AI Planning panel.
+- **Note for tomorrow** — new "Notes" card on the daily dashboard
+  (`src/components/dashboard/NoteForTomorrow.jsx`) with a textarea to leave
+  yourself a note for the next day. The next day, it's surfaced at the top
+  of the card as "Note from yesterday" with a dismiss option. Requires
+  `supabase/phase31_schema.sql` (adds `daily_reflections.note_for_tomorrow`).
+  Also fixed a bug where Today's to-dos could briefly show the wrong day's
+  items after navigating with the day arrows (a slower in-flight load for
+  one day could overwrite the list after a faster load for another day).
 - **Brain dump rework** — "Idea parking lot" renamed to "Brain dump" and
   moved out of the Goals page into a shared `BrainDump` component
   (`src/components/shared/BrainDump.jsx`), available as a dashboard widget

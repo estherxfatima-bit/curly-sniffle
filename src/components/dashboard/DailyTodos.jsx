@@ -71,6 +71,7 @@ export default function DailyTodos({ compact = false }) {
   const inputRef = useRef(null)
   const timerCtx = useTimer()
   const carriedRef = useRef(false)
+  const latestViewDateRef = useRef(viewDate)
 
   const isToday = viewDate === today
   const viewDayOfWeek = (getDay(parseISO(viewDate)) + 6) % 7 // 0=Mon..6=Sun
@@ -82,6 +83,7 @@ export default function DailyTodos({ compact = false }) {
   // Carry over yesterday's incomplete tasks (once, only when viewing today), then load todos for viewDate
   useEffect(() => {
     if (!user) return
+    latestViewDateRef.current = viewDate
     ;(async () => {
       if (viewDate === today && !carriedRef.current) {
         carriedRef.current = true
@@ -162,6 +164,7 @@ export default function DailyTodos({ compact = false }) {
   }
 
   async function loadTodosForDate(date) {
+    if (latestViewDateRef.current !== date) return
     setLoading(true)
     const { data: td } = await supabase
       .from('daily_todos')
@@ -171,6 +174,8 @@ export default function DailyTodos({ compact = false }) {
       .eq('archived', false)
       .order('created_at')
 
+    // Bail if the user navigated to a different day while this request was in flight.
+    if (latestViewDateRef.current !== date) return
     setTodos(td || [])
     setLoading(false)
   }
