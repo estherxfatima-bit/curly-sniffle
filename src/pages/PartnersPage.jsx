@@ -69,7 +69,12 @@ export default function PartnersPage() {
     if (!inviteCode.trim()) return
     const code = inviteCode.trim().toUpperCase()
     const { error } = await supabase.rpc('connect_accountability_partner', { p_code: code })
-    if (error) { alert(error.message.includes('own code') ? "That's your own code!" : 'No user found with that code.'); return }
+    if (error) {
+      if (error.message.includes('own code')) alert("That's your own code!")
+      else if (error.message.includes('No user found')) alert('No user found with that code.')
+      else alert(`Failed to connect: ${error.message}`)
+      return
+    }
 
     setInviteCode('')
     loadPartners()
