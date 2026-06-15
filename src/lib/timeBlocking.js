@@ -4,21 +4,21 @@
 
 import { priorityRank } from './constants'
 
-function toMinutes(hhmm, fallback) {
+export function toMinutes(hhmm, fallback) {
   if (!hhmm) return fallback
   const [h, m] = hhmm.split(':').map(Number)
   if (Number.isNaN(h) || Number.isNaN(m)) return fallback
   return h * 60 + m
 }
 
-function minutesToTimeString(minutes) {
+export function minutesToTimeString(minutes) {
   const h = Math.floor(minutes / 60) % 24
   const m = minutes % 60
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
 }
 
 // `date` is a yyyy-MM-dd string. Returns an ISO datetime string for that date at `minutes` past midnight, local time.
-function dateAndMinutesToISO(date, minutes) {
+export function dateAndMinutesToISO(date, minutes) {
   const h = Math.floor(minutes / 60)
   const m = minutes % 60
   const d = new Date(`${date}T00:00:00`)
@@ -117,6 +117,8 @@ export function proposeTimeBlocks(todos, busyEvents, workingHours, date) {
       todoId: r.todoId,
       todoText: r.todoText,
       durationMinutes: r.durationMinutes,
+      startMin: r.startMin,
+      endMin: r.endMin,
       start: dateAndMinutesToISO(date, r.startMin),
       end: dateAndMinutesToISO(date, r.endMin),
       startLabel: minutesToTimeString(r.startMin),
