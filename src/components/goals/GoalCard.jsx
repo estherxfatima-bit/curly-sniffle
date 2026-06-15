@@ -11,7 +11,7 @@ const STATUS_BADGE = {
   'Complete':    'badge-success',
 }
 
-export default function GoalCard({ goal, color, linkedTasks, metricHistory, onEdit, onDelete, onAddMetric }) {
+export default function GoalCard({ goal, color, linkedTasks, metricHistory, parentGoal, onEdit, onDelete, onAddMetric }) {
   const [updating, setUpdating] = useState(false)
   const [newValue, setNewValue] = useState('')
 
@@ -63,6 +63,11 @@ export default function GoalCard({ goal, color, linkedTasks, metricHistory, onEd
             <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-3)' }}>
               Updated {format(new Date(lastUpdated), 'd MMM yyyy')}
             </span>
+            {parentGoal && (
+              <span style={{ fontSize: 9, color: 'var(--text-3)', fontStyle: 'italic' }}>
+                Part of: {parentGoal.primary_goal}
+              </span>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-1" style={{ flexShrink: 0 }}>

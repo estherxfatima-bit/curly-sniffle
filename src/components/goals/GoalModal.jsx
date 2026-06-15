@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
-import { GOAL_CATEGORIES, QUARTERS, getCurrentQuarter } from '../../lib/constants'
+import { GOAL_CATEGORIES, GOAL_TIMEFRAMES, getCurrentQuarter } from '../../lib/constants'
 import { X, Plus, Trash2 } from 'lucide-react'
 
-export default function GoalModal({ goal, defaults, onClose, onSave }) {
+export default function GoalModal({ goal, defaults, goals, onClose, onSave }) {
   const { user } = useAuth()
   const isNew = !goal?.id
   const [form, setForm] = useState({
@@ -14,6 +14,7 @@ export default function GoalModal({ goal, defaults, onClose, onSave }) {
     success_metrics: goal?.success_metrics || '',
     quarter: goal?.quarter || defaults?.quarter || getCurrentQuarter(),
     year: goal?.year || defaults?.year || new Date().getFullYear(),
+    parent_goal_id: goal?.parent_goal_id || '',
     tracking_type: goal?.tracking_type || 'tasks',
     metric_name: goal?.metric_name || '',
     metric_start: goal?.metric_start ?? '',
@@ -45,6 +46,7 @@ export default function GoalModal({ goal, defaults, onClose, onSave }) {
       success_metrics: form.success_metrics,
       quarter: form.quarter,
       year: Number(form.year),
+      parent_goal_id: form.quarter !== 'Year' && form.parent_goal_id ? form.parent_goal_id : null,
       tracking_type: form.tracking_type,
       metric_name: form.tracking_type === 'metric' ? form.metric_name : null,
       metric_start: form.tracking_type === 'metric' && form.metric_start !== '' ? Number(form.metric_start) : null,
@@ -73,12 +75,24 @@ export default function GoalModal({ goal, defaults, onClose, onSave }) {
             <input type="number" value={form.year} onChange={e => set('year', e.target.value)} />
           </div>
           <div className="form-group" style={{ flex: 1 }}>
-            <label>Quarter</label>
+            <label>Timeframe</label>
             <select value={form.quarter} onChange={e => set('quarter', e.target.value)}>
-              {QUARTERS.map(q => <option key={q}>{q}</option>)}
+              {GOAL_TIMEFRAMES.map(q => <option key={q} value={q}>{q === 'Year' ? 'Year (whole year)' : q}</option>)}
             </select>
           </div>
         </div>
+
+        {form.quarter !== 'Year' && (
+          <div className="form-group">
+            <label>Break down from yearly goal</label>
+            <select value={form.parent_goal_id} onChange={e => set('parent_goal_id', e.target.value)}>
+              <option value="">None</option>
+              {(goals || [])
+                .filter(g => g.quarter === 'Year' && g.year === Number(form.year) && g.id !== goal?.id)
+                .map(g => <option key={g.id} value={g.id}>{g.primary_goal}</option>)}
+            </select>
+          </div>
+        )}
 
         <div className="form-group">
           <label>Category</label>

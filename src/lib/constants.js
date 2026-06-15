@@ -90,6 +90,10 @@ export function parseTimeAllocationToMinutes(value) {
 
 export const QUARTERS = ['Q1', 'Q2', 'Q3', 'Q4']
 
+// 'Year' is a pseudo-quarter for goals that span the whole year and get
+// broken down into quarterly goals via `parent_goal_id`.
+export const GOAL_TIMEFRAMES = ['Year', ...QUARTERS]
+
 export const getCurrentQuarter = () => getQuarterFromDate(new Date())
 
 export const getQuarterFromDate = (date) => {

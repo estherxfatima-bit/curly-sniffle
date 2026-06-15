@@ -150,6 +150,72 @@ export default function GoalsPage() {
 
                 {isOpen && (
                   <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
+                    {(() => {
+                      const yearlyGoals = yearGoals.filter(g => g.quarter === 'Year')
+                      if (!yearlyGoals.length) return null
+                      return (
+                        <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14 }}>
+                          <div className="flex items-center justify-between mb-2">
+                            <h3 style={{ fontSize: '0.95rem' }}>Year goals — {year}</h3>
+                            <button
+                              className="btn-icon btn btn-sm"
+                              onClick={() => { setEditing(null); setCreateCtx({ year, quarter: 'Year', category: GOAL_CATEGORIES[0] }); setShowModal(true) }}
+                              title={`Add yearly goal for ${year}`}
+                            >
+                              <Plus size={12} />
+                            </button>
+                          </div>
+                          <div className="grid-2 mt-1">
+                            {GOAL_CATEGORIES.map(cat => {
+                              const catGoals = yearlyGoals.filter(g => g.category === cat)
+                              if (catGoals.length === 0) return null
+                              const color = CATEGORY_COLORS[cat]
+                              const cardClass = CATEGORY_CLASSES[cat]
+                              return (
+                                <div key={cat} className={`card ${cardClass}`}>
+                                  <h3 className="mb-4" style={{ color }}>{cat}</h3>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                                    {catGoals.map(goal => {
+                                      const children = yearGoals.filter(g => g.parent_goal_id === goal.id)
+                                      return (
+                                        <div key={goal.id}>
+                                          <GoalCard
+                                            goal={goal}
+                                            color={color}
+                                            linkedTasks={linkedTasksFor(goal.id)}
+                                            metricHistory={metrics.filter(m => m.goal_id === goal.id)}
+                                            onEdit={g => { setEditing(g); setCreateCtx(null); setShowModal(true) }}
+                                            onDelete={deleteGoal}
+                                            onAddMetric={addMetric}
+                                          />
+                                          <div style={{ marginTop: 10 }}>
+                                            <p className="mono mb-1">Broken down into</p>
+                                            {children.length === 0 ? (
+                                              <p style={{ fontSize: 11, color: 'var(--text-3)', fontStyle: 'italic' }}>
+                                                No quarterly goals linked yet — when adding a goal, set "Break down from yearly goal" to this goal.
+                                              </p>
+                                            ) : (
+                                              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                                {QUARTERS.map(q => children.filter(c => c.quarter === q).map(c => (
+                                                  <div key={c.id} className="flex items-center gap-2">
+                                                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-3)', textTransform: 'uppercase' }}>{q}</span>
+                                                    <span style={{ fontSize: 12, color: c.tracking_type !== 'metric' && linkedTasksFor(c.id).length > 0 && linkedTasksFor(c.id).every(t => t.complete) ? 'var(--text-3)' : 'var(--text-2)', textDecoration: c.tracking_type !== 'metric' && linkedTasksFor(c.id).length > 0 && linkedTasksFor(c.id).every(t => t.complete) ? 'line-through' : 'none' }}>{c.primary_goal}</span>
+                                                  </div>
+                                                )))}
+                                              </div>
+                                            )}
+                                          </div>
+                                        </div>
+                                      )
+                                    })}
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )
+                    })()}
                     {QUARTERS.map(q => {
                       const qGoals = yearGoals.filter(g => g.quarter === q)
                       const key = `${year}-${q}`
@@ -197,6 +263,7 @@ export default function GoalsPage() {
                                             color={color}
                                             linkedTasks={linkedTasksFor(goal.id)}
                                             metricHistory={metrics.filter(m => m.goal_id === goal.id)}
+                                            parentGoal={goals.find(g => g.id === goal.parent_goal_id)}
                                             onEdit={g => { setEditing(g); setCreateCtx(null); setShowModal(true) }}
                                             onDelete={deleteGoal}
                                             onAddMetric={addMetric}
@@ -229,6 +296,7 @@ export default function GoalsPage() {
         <GoalModal
           goal={editing}
           defaults={createCtx}
+          goals={goals}
           onClose={() => setShowModal(false)}
           onSave={goal => {
             setGoals(prev => { const idx = prev.findIndex(g => g.id === goal.id); if (idx >= 0) { const n = [...prev]; n[idx] = goal; return n } return [...prev, goal] })
