@@ -17,6 +17,7 @@ import WellnessPage from './pages/WellnessPage'
 import SettingsPage from './pages/SettingsPage'
 import BooksPage from './pages/BooksPage'
 import BucketListPage from './pages/BucketListPage'
+import ResetPasswordPage from './pages/ResetPasswordPage'
 
 function AppRoutes() {
   const { session, loading } = useAuth()
@@ -31,27 +32,30 @@ function AppRoutes() {
     )
   }
 
-  if (!session) return <AuthPage />
-
   return (
-    <AppLayout>
-      <Routes>
-        <Route path="/"         element={<DashboardPage />} />
-        <Route path="/weekly"   element={<WeeklyPage />} />
-        <Route path="/goals"    element={<GoalsPage />} />
-        <Route path="/habits"   element={<HabitsPage />} />
-        <Route path="/content"  element={<ContentPage />} />
-        <Route path="/insights" element={<InsightsPage />} />
-        <Route path="/partners" element={<PartnersPage />} />
-        <Route path="/ai-log"   element={<AILogPage />} />
-        <Route path="/finance"  element={<FinancePage />} />
-        <Route path="/wellness" element={<WellnessPage />} />
-        <Route path="/books" element={<BooksPage />} />
-        <Route path="/bucket-list" element={<BucketListPage />} />
-        <Route path="/settings" element={<SettingsPage />} />
-        <Route path="*"         element={<Navigate to="/" replace />} />
-      </Routes>
-    </AppLayout>
+    <Routes>
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/*" element={!session ? <AuthPage /> : (
+        <AppLayout>
+          <Routes>
+            <Route path="/"         element={<DashboardPage />} />
+            <Route path="/weekly"   element={<WeeklyPage />} />
+            <Route path="/goals"    element={<GoalsPage />} />
+            <Route path="/habits"   element={<HabitsPage />} />
+            <Route path="/content"  element={<ContentPage />} />
+            <Route path="/insights" element={<InsightsPage />} />
+            <Route path="/partners" element={<PartnersPage />} />
+            <Route path="/ai-log"   element={<AILogPage />} />
+            <Route path="/finance"  element={<FinancePage />} />
+            <Route path="/wellness" element={<WellnessPage />} />
+            <Route path="/books" element={<BooksPage />} />
+            <Route path="/bucket-list" element={<BucketListPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="*"         element={<Navigate to="/" replace />} />
+          </Routes>
+        </AppLayout>
+      )} />
+    </Routes>
   )
 }
 

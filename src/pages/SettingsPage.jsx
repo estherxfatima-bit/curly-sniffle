@@ -227,7 +227,9 @@ export default function SettingsPage() {
   async function sendPasswordReset() {
     setResetSending(true)
     setResetMsg(null)
-    const { error } = await supabase.auth.resetPasswordForEmail(user.email)
+    const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    })
     setResetSending(false)
     setResetMsg(error ? { type: 'error', text: error.message } : { type: 'success', text: 'Reset email sent — check your inbox.' })
   }

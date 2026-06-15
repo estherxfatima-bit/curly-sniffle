@@ -58,18 +58,18 @@ export default function PartnersPage() {
   async function addPartner() {
     if (!inviteCode.trim()) return
     const code = inviteCode.trim().toUpperCase()
-    const { data: profile } = await supabase.from('profiles').select('id, email').eq('invite_code', code).single()
-    if (!profile) { alert('No user found with that code.'); return }
-    if (profile.id === user.id) { alert("That's your own code!"); return }
+    const { data: partnerId, error } = await supabase.rpc('find_user_id_by_invite_code', { p_code: code })
+    if (error || !partnerId) { alert('No user found with that code.'); return }
+    if (partnerId === user.id) { alert("That's your own code!"); return }
 
     await supabase.from('accountability_partners').insert({
       user_id: user.id,
-      partner_id: profile.id,
+      partner_id: partnerId,
       status: 'accepted',
     })
     // Also create reverse relationship
     await supabase.from('accountability_partners').insert({
-      user_id: profile.id,
+      user_id: partnerId,
       partner_id: user.id,
       status: 'accepted',
     })
