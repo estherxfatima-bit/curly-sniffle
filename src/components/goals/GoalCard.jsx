@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { format } from 'date-fns'
-import { Edit2, Trash2, RefreshCw, Check, Circle } from 'lucide-react'
+import { Edit2, Trash2, RefreshCw, Check, Circle, Lock, Unlock } from 'lucide-react'
 import ArcRing from '../ui/ArcRing'
 import PriorityDot from '../shared/PriorityDot'
 import { PRIORITY_COLORS } from '../../lib/constants'
@@ -13,7 +13,7 @@ const STATUS_BADGE = {
   'Complete':    'badge-success',
 }
 
-export default function GoalCard({ goal, color, linkedTasks, metricHistory, parentGoal, onEdit, onDelete, onAddMetric, onUpdatePriority }) {
+export default function GoalCard({ goal, color, linkedTasks, metricHistory, parentGoal, onEdit, onDelete, onAddMetric, onUpdatePriority, onTogglePrivate }) {
   const [updating, setUpdating] = useState(false)
   const [newValue, setNewValue] = useState('')
 
@@ -82,6 +82,14 @@ export default function GoalCard({ goal, color, linkedTasks, metricHistory, pare
         </div>
         <div className="flex items-center gap-1" style={{ flexShrink: 0 }}>
           <ArcRing value={pct} max={100} size={44} strokeWidth={4} color={color} label={`${pct}%`} fontSize={9} />
+          <button
+            className="btn-icon btn btn-sm"
+            onClick={() => onTogglePrivate(goal)}
+            title={goal.is_private ? 'Private — hidden from accountability partners. Click to share.' : 'Shared with accepted accountability partners. Click to make private.'}
+            style={{ color: goal.is_private ? 'var(--text-3)' : 'var(--career)' }}
+          >
+            {goal.is_private ? <Lock size={12} /> : <Unlock size={12} />}
+          </button>
           <button className="btn-icon btn btn-sm" onClick={() => onEdit(goal)}><Edit2 size={12} /></button>
           <button className="btn-icon btn btn-sm" onClick={() => onDelete(goal.id)}><Trash2 size={12} /></button>
         </div>

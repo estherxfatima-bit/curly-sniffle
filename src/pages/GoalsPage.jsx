@@ -222,6 +222,7 @@ export default function GoalsPage() {
                                             onDelete={deleteGoal}
                                             onAddMetric={addMetric}
                                             onUpdatePriority={v => updateGoalField(goal.id, 'priority_level', v)}
+                                            onTogglePrivate={g => updateGoalField(g.id, 'is_private', !g.is_private)}
                                           />
                                           <div style={{ marginTop: 10 }}>
                                             <p className="mono mb-1">Broken down into</p>
@@ -303,6 +304,7 @@ export default function GoalsPage() {
                                             onDelete={deleteGoal}
                                             onAddMetric={addMetric}
                                             onUpdatePriority={v => updateGoalField(goal.id, 'priority_level', v)}
+                                            onTogglePrivate={g => updateGoalField(g.id, 'is_private', !g.is_private)}
                                           />
                                         ))}
                                       </div>

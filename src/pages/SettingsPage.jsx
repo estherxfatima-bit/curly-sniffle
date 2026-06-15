@@ -59,6 +59,9 @@ export default function SettingsPage() {
   const [resetSending, setResetSending] = useState(false)
   const [resetMsg, setResetMsg] = useState(null)
 
+  // Sharing with partners
+  const [sharingSettings, setSharingSettings] = useState({ share_finance: false, share_wellness: false, share_books: false })
+
   useEffect(() => {
     registerServiceWorker()
     if (!('PushManager' in window)) { setPushSupported(false); return }
@@ -72,6 +75,7 @@ export default function SettingsPage() {
     loadWorkingHours()
     loadPersonalContext()
     loadDisplayName()
+    loadSharingSettings()
     const params = new URLSearchParams(window.location.search)
     if (params.get('google') === 'error') alert('Failed to connect Google Calendar. Please try again.')
   }, [user])
@@ -79,6 +83,22 @@ export default function SettingsPage() {
   async function loadDisplayName() {
     const { data } = await supabase.from('profiles').select('display_name').eq('id', user.id).maybeSingle()
     setDisplayName(data?.display_name || user?.user_metadata?.full_name || '')
+  }
+
+  async function loadSharingSettings() {
+    const { data } = await supabase.from('user_sharing_settings')
+      .select('share_finance, share_wellness, share_books').eq('user_id', user.id).maybeSingle()
+    if (data) setSharingSettings(data)
+  }
+
+  async function toggleSharing(field) {
+    const next = { ...sharingSettings, [field]: !sharingSettings[field] }
+    setSharingSettings(next)
+    await supabase.from('user_sharing_settings').upsert({
+      user_id: user.id,
+      ...next,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id' })
   }
 
   async function loadPersonalContext() {
@@ -486,6 +506,36 @@ export default function SettingsPage() {
         <p style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 10 }}>
           Set these in your <code style={{ fontFamily: 'var(--font-mono)', background: 'var(--bg-3)', padding: '1px 4px', borderRadius: 3 }}>.env</code> file or Vercel environment variables.
         </p>
+      </div>
+
+      {/* Sharing with partners */}
+      <div className="card mb-4">
+        <h3 style={{ fontSize: '0.9rem', marginBottom: 8 }}>Sharing with partners</h3>
+        <p style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 12 }}>
+          Accepted accountability partners can always see your Goals, Insights, Weekly todos and Daily todos
+          (unless you mark an individual item private with its lock icon). The sections below are off by default —
+          when turned on, partners see a summary only, never your raw entries or amounts.
+        </p>
+        {[
+          { field: 'share_finance', label: 'Finance', desc: 'Shows budget adherence % only — never your income, expenses or amounts.' },
+          { field: 'share_wellness', label: 'Wellness', desc: 'Shows your 7-day average sleep and hydration only.' },
+          { field: 'share_books', label: 'Books', desc: 'Shows how many books you\'re reading and finished this quarter.' },
+        ].map(({ field, label, desc }) => (
+          <div key={field} className="flex items-center justify-between" style={{ paddingTop: 10, paddingBottom: 10, borderTop: '1px solid var(--border)' }}>
+            <div>
+              <p style={{ fontSize: 14, fontWeight: 500 }}>{label}</p>
+              <p style={{ fontSize: 12, color: 'var(--text-3)' }}>{desc}</p>
+            </div>
+            <button
+              className={`btn ${sharingSettings[field] ? 'btn-accent' : 'btn-ghost'} flex items-center gap-2`}
+              onClick={() => toggleSharing(field)}
+              style={sharingSettings[field] ? { color: '#fff' } : {}}
+            >
+              {sharingSettings[field] ? <Check size={14} /> : null}
+              {sharingSettings[field] ? 'On' : 'Off'}
+            </button>
+          </div>
+        ))}
       </div>
 
       {/* AI context */}

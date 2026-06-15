@@ -11,7 +11,7 @@ import GoalTaskPicker from './GoalTaskPicker'
 import BrainDumpPicker from './BrainDumpPicker'
 import TimerWidget from './TimerWidget'
 import TimeBlockModal from './TimeBlockModal'
-import { Plus, Trash2, ChevronDown, ChevronRight, Check, Target, Hourglass, AlarmClock, Link2, Timer as TimerIcon, CalendarClock, ChevronLeft, Download, Lightbulb } from 'lucide-react'
+import { Plus, Trash2, ChevronDown, ChevronRight, Check, Target, Hourglass, AlarmClock, Link2, Timer as TimerIcon, CalendarClock, ChevronLeft, Download, Lightbulb, Lock, Unlock } from 'lucide-react'
 
 const DEFAULT_CATS = ['Work', 'Personal', 'Errands', 'Creative', 'Health']
 
@@ -755,6 +755,16 @@ function TodoItem({ todo, categories, goals, isTimerRunning, onToggle, onRemove,
             <Target size={12} />
           </button>
         )}
+
+        {/* Privacy toggle */}
+        <button
+          className="btn-icon"
+          style={{ padding: 2, flexShrink: 0, color: todo.is_private ? 'var(--text-3)' : 'var(--career)' }}
+          onClick={() => onUpdateField('is_private', !todo.is_private)}
+          title={todo.is_private ? 'Private — hidden from accountability partners. Click to share.' : 'Shared with accepted accountability partners. Click to make private.'}
+        >
+          {todo.is_private ? <Lock size={12} /> : <Unlock size={12} />}
+        </button>
 
         {/* Timer */}
         <button className="btn-icon" style={{ padding: 2, color: isTimerRunning ? 'var(--career)' : 'var(--text-3)', flexShrink: 0 }} onClick={onOpenTimer} title="Task timer">

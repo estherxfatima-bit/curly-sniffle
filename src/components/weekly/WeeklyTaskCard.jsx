@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, MessageSquare, Repeat, Star, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, MessageSquare, Repeat, Star, Trash2, Lock, Unlock } from 'lucide-react'
 import TaskExpansion from './TaskExpansion'
 import PriorityDot from '../shared/PriorityDot'
 import { PRIORITY_COLORS } from '../../lib/constants'
@@ -62,6 +62,14 @@ export default function WeeklyTaskCard({ task, areaColor, goals, expanded, onTog
         {task.complete ? <span className="badge badge-success" style={{ fontSize: 9 }}>Done</span> : <span className="badge badge-muted" style={{ fontSize: 9 }}>Open</span>}
         {goal && <span style={{ fontSize: 9, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>{goal.primary_goal?.slice(0, 20)}</span>}
         <div style={{ flex: 1 }} />
+        <button
+          className="btn-icon btn"
+          onClick={() => onUpdateField('is_private', !task.is_private)}
+          title={task.is_private ? 'Private — hidden from accountability partners. Click to share.' : 'Shared with accepted accountability partners. Click to make private.'}
+          style={{ color: task.is_private ? 'var(--text-3)' : 'var(--career)' }}
+        >
+          {task.is_private ? <Lock size={12} /> : <Unlock size={12} />}
+        </button>
         <button
           className="btn-icon btn"
           onClick={() => onTogglePriority(task)}
