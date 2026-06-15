@@ -2,6 +2,8 @@
 // Google Calendar busy events, propose a schedule that fits each todo into a
 // free gap within working hours.
 
+import { priorityRank } from './constants'
+
 function toMinutes(hhmm, fallback) {
   if (!hhmm) return fallback
   const [h, m] = hhmm.split(':').map(Number)
@@ -52,7 +54,9 @@ export function proposeTimeBlocks(todos, busyEvents, workingHours, date) {
 
   const schedulable = todos.filter(t => !t.complete && t.duration_minutes > 0)
   const timed = schedulable.filter(t => t.scheduled_time).sort((a, b) => toMinutes(a.scheduled_time, 0) - toMinutes(b.scheduled_time, 0))
+  // Untimed todos are slotted into gaps in priority order: Urgent > High > Medium > Low > unprioritised.
   const untimed = schedulable.filter(t => !t.scheduled_time)
+    .sort((a, b) => priorityRank(a.priority_level) - priorityRank(b.priority_level))
 
   // Busy intervals (in minutes-of-day) from Google Calendar, restricted to today
   const calBusy = (busyEvents || [])
