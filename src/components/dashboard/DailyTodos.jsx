@@ -421,8 +421,8 @@ export default function DailyTodos({ compact = false }) {
               </>
             )}
           </div>
-          <button className="btn btn-ghost btn-xs" onClick={() => setShowTimeBlock(true)} disabled={blockable.length === 0}
-            title={blockable.length === 0 ? 'Set a duration on a to-do to enable time-blocking' : 'Find free slots for your timed to-dos'}>
+          <button className="btn btn-ghost btn-xs" onClick={() => setShowTimeBlock(true)}
+            title="Find free slots for your timed to-dos">
             <CalendarClock size={12} /> Time-block my day
           </button>
         </div>

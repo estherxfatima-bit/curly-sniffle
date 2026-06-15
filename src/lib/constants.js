@@ -108,3 +108,43 @@ export const getQuarterYear = () => {
   const now = new Date()
   return `${getCurrentQuarter()} ${now.getFullYear()}`
 }
+
+// Priority levels for daily todos, weekly tasks and goals (stored as `priority_level`).
+export const PRIORITY_LEVELS = ['urgent', 'high', 'medium', 'low']
+
+export const PRIORITY_LABELS = {
+  urgent: 'Urgent',
+  high: 'High',
+  medium: 'Medium',
+  low: 'Low',
+}
+
+export const PRIORITY_COLORS = {
+  urgent: '#e0453c',
+  high: '#e8a020',
+  medium: '#3b6fe0',
+  low: '#9a9089',
+}
+
+// Cycles Urgent -> High -> Medium -> Low -> None (null) -> Urgent...
+export function cyclePriority(current) {
+  const idx = PRIORITY_LEVELS.indexOf(current)
+  if (idx === -1) return PRIORITY_LEVELS[0]
+  return PRIORITY_LEVELS[idx + 1] || null
+}
+
+// Sort comparator: items with a priority_level sort before items without one,
+// ordered urgent > high > medium > low.
+export function priorityRank(level) {
+  const idx = PRIORITY_LEVELS.indexOf(level)
+  return idx === -1 ? PRIORITY_LEVELS.length : idx
+}
+
+// Options for a priority filter bar: '' (all), each level, then 'none' (unprioritised).
+export function priorityFilterOptions() {
+  return [
+    { value: '', label: 'All' },
+    ...PRIORITY_LEVELS.map(p => ({ value: p, label: PRIORITY_LABELS[p] })),
+    { value: 'none', label: 'No priority' },
+  ]
+}
