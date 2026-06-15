@@ -22,7 +22,7 @@ function NudgeInline({ partnerId, taskId = null, onSent, label = 'Nudge' }) {
 
   if (!open) {
     return (
-      <button className="btn btn-ghost btn-xs" onClick={() => setOpen(true)} style={{ fontSize: 11 }}>
+      <button className="btn btn-ghost btn-xs" onClick={() => setOpen(true)} title="Send a nudge to your partner" style={{ fontSize: 11 }}>
         <MessageSquare size={11} /> {label}
       </button>
     )
@@ -37,8 +37,8 @@ function NudgeInline({ partnerId, taskId = null, onSent, label = 'Nudge' }) {
         placeholder="Write a nudge…"
         style={{ fontSize: 12, flex: 1, padding: '3px 8px' }}
       />
-      <button className="btn btn-xs btn-career" style={{ color: '#fff' }} onClick={send} disabled={sending}><Send size={11} /></button>
-      <button className="btn btn-xs btn-ghost" onClick={() => setOpen(false)}>✕</button>
+      <button className="btn btn-xs btn-career" style={{ color: '#fff' }} onClick={send} disabled={sending} title="Send nudge"><Send size={11} /></button>
+      <button className="btn btn-xs btn-ghost" onClick={() => setOpen(false)} title="Cancel">✕</button>
     </div>
   )
 }

@@ -72,6 +72,7 @@ function NudgeButton({ onSend, label = 'Nudge' }) {
       <button
         className="btn btn-ghost btn-xs"
         onClick={() => setOpen(true)}
+        title="Send a nudge to your partner"
         style={{ fontSize: 10, padding: '2px 6px' }}
       >
         <MessageSquare size={11} /> {label}
@@ -88,10 +89,10 @@ function NudgeButton({ onSend, label = 'Nudge' }) {
         placeholder="Write a nudge…"
         style={{ fontSize: 11, flex: 1, padding: '3px 6px' }}
       />
-      <button className="btn btn-xs btn-career" style={{ color: '#fff' }} onClick={send} disabled={sending}>
+      <button className="btn btn-xs btn-career" style={{ color: '#fff' }} onClick={send} disabled={sending} title="Send nudge">
         <Send size={11} />
       </button>
-      <button className="btn btn-xs btn-ghost" onClick={() => setOpen(false)}>✕</button>
+      <button className="btn btn-xs btn-ghost" onClick={() => setOpen(false)} title="Cancel">✕</button>
     </div>
   )
 }
@@ -132,7 +133,7 @@ function CompareColumn({ name, data, onNudge, isSelf }) {
           <ArcRing value={weekPct} max={100} size={52} strokeWidth={5} color="var(--career)" label={`${weekPct}%`} fontSize={10} />
           <p style={{ fontSize: 12, color: 'var(--text-2)' }}>{weekDone} of {weekTasks.length} done this week</p>
         </div>
-        {!isSelf && weekTasks.length > 0 && (
+        {weekTasks.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {weekTasks.slice(0, 8).map(t => (
               <div key={t.id}>
@@ -142,7 +143,7 @@ function CompareColumn({ name, data, onNudge, isSelf }) {
                   </span>
                   {t.complete && <span className="badge badge-success" style={{ fontSize: 9 }}>✓</span>}
                 </div>
-                <NudgeButton onSend={msg => onNudge(msg, t.id)} />
+                {!isSelf && <NudgeButton onSend={msg => onNudge(msg, t.id)} />}
               </div>
             ))}
           </div>

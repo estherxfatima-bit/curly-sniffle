@@ -78,7 +78,7 @@ export default function WeeklyTaskCard({ task, areaColor, goals, expanded, onTog
         >
           <Star size={13} fill={task.priority ? 'var(--warning)' : 'none'} />
         </button>
-        <button className="btn-icon btn" onClick={() => onDelete(task.id)}><Trash2 size={13} /></button>
+        <button className="btn-icon btn" onClick={() => onDelete(task.id)} title="Delete task"><Trash2 size={13} /></button>
       </div>
 
       {/* Expanded details */}

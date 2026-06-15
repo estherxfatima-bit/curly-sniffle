@@ -90,8 +90,8 @@ export default function GoalCard({ goal, color, linkedTasks, metricHistory, pare
           >
             {goal.is_private ? <Lock size={12} /> : <Unlock size={12} />}
           </button>
-          <button className="btn-icon btn btn-sm" onClick={() => onEdit(goal)}><Edit2 size={12} /></button>
-          <button className="btn-icon btn btn-sm" onClick={() => onDelete(goal.id)}><Trash2 size={12} /></button>
+          <button className="btn-icon btn btn-sm" onClick={() => onEdit(goal)} title="Edit goal"><Edit2 size={12} /></button>
+          <button className="btn-icon btn btn-sm" onClick={() => onDelete(goal.id)} title="Delete goal"><Trash2 size={12} /></button>
         </div>
       </div>
 

@@ -580,7 +580,7 @@ function TodoItem({ todo, categories, goals, isTimerRunning, onToggle, onRemove,
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9 }}>
         {/* Expand chevron */}
         {subtasks.length > 0 ? (
-          <button className="btn-icon" style={{ padding: 2, flexShrink: 0, color: 'var(--text-3)', marginTop: 1 }} onClick={() => setExpanded(v => !v)}>
+          <button className="btn-icon" style={{ padding: 2, flexShrink: 0, color: 'var(--text-3)', marginTop: 1 }} onClick={() => setExpanded(v => !v)} title={expanded ? 'Collapse subtasks' : 'Expand subtasks'}>
             {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
           </button>
         ) : <div style={{ width: 18, flexShrink: 0 }} />}
@@ -784,7 +784,7 @@ function TodoItem({ todo, categories, goals, isTimerRunning, onToggle, onRemove,
         )}
 
         {/* Delete */}
-        <button className="btn-icon" style={{ padding: 2, flexShrink: 0 }} onClick={onRemove}>
+        <button className="btn-icon" style={{ padding: 2, flexShrink: 0 }} onClick={onRemove} title="Delete to-do">
           <Trash2 size={12} />
         </button>
       </div>
