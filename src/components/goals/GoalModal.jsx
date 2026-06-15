@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
-import { GOAL_CATEGORIES, GOAL_TIMEFRAMES, getCurrentQuarter } from '../../lib/constants'
+import { GOAL_CATEGORIES, GOAL_TIMEFRAMES, getCurrentQuarter, PRIORITY_LEVELS, PRIORITY_LABELS } from '../../lib/constants'
 import { X, Plus, Trash2 } from 'lucide-react'
 
 export default function GoalModal({ goal, defaults, goals, onClose, onSave }) {
@@ -15,6 +15,7 @@ export default function GoalModal({ goal, defaults, goals, onClose, onSave }) {
     quarter: goal?.quarter || defaults?.quarter || getCurrentQuarter(),
     year: goal?.year || defaults?.year || new Date().getFullYear(),
     parent_goal_id: goal?.parent_goal_id || '',
+    priority_level: goal?.priority_level || '',
     tracking_type: goal?.tracking_type || 'tasks',
     metric_name: goal?.metric_name || '',
     metric_start: goal?.metric_start ?? '',
@@ -47,6 +48,7 @@ export default function GoalModal({ goal, defaults, goals, onClose, onSave }) {
       quarter: form.quarter,
       year: Number(form.year),
       parent_goal_id: form.quarter !== 'Year' && form.parent_goal_id ? form.parent_goal_id : null,
+      priority_level: form.priority_level || null,
       tracking_type: form.tracking_type,
       metric_name: form.tracking_type === 'metric' ? form.metric_name : null,
       metric_start: form.tracking_type === 'metric' && form.metric_start !== '' ? Number(form.metric_start) : null,
@@ -94,6 +96,13 @@ export default function GoalModal({ goal, defaults, goals, onClose, onSave }) {
           </div>
         )}
 
+        <div className="form-group">
+          <label>Priority</label>
+          <select value={form.priority_level} onChange={e => set('priority_level', e.target.value)}>
+            <option value="">No priority</option>
+            {PRIORITY_LEVELS.map(p => <option key={p} value={p}>{PRIORITY_LABELS[p]}</option>)}
+          </select>
+        </div>
         <div className="form-group">
           <label>Category</label>
           <select value={form.category} onChange={e => set('category', e.target.value)}>

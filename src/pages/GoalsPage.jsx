@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
-import { GOAL_CATEGORIES, QUARTERS, getCurrentQuarter } from '../lib/constants'
+import { GOAL_CATEGORIES, QUARTERS, getCurrentQuarter, priorityRank, priorityFilterOptions, PRIORITY_COLORS } from '../lib/constants'
 import { Plus, ChevronDown, ChevronRight } from 'lucide-react'
 import QuarterlyWins from '../components/goals/QuarterlyWins'
 import GoalCard from '../components/goals/GoalCard'
@@ -50,6 +50,7 @@ export default function GoalsPage() {
 
   const [expandedYears, setExpandedYears] = useState(() => new Set([currentYear]))
   const [expandedQuarters, setExpandedQuarters] = useState(() => new Set([`${currentYear}-${currentQuarter}`]))
+  const [priorityFilter, setPriorityFilter] = useState('')
 
   useEffect(() => { if (user) loadAll() }, [user])
 
@@ -100,6 +101,23 @@ export default function GoalsPage() {
     setGoals(prev => prev.map(g => g.id === goal.id ? { ...g, updated_at: new Date().toISOString() } : g))
   }
 
+  async function updateGoalField(id, field, value) {
+    await supabase.from('goals').update({ [field]: value }).eq('id', id)
+    setGoals(prev => prev.map(g => g.id === id ? { ...g, [field]: value } : g))
+  }
+
+  // Goals matching the priority filter, sorted by priority within each category.
+  const byPriority = (a, b) => priorityRank(a.priority_level) - priorityRank(b.priority_level)
+  function visibleSorted(list) {
+    return list
+      .filter(g => {
+        if (priorityFilter === 'none') return !g.priority_level
+        if (priorityFilter) return g.priority_level === priorityFilter
+        return true
+      })
+      .sort(byPriority)
+  }
+
   function linkedTasksFor(goalId) {
     return [
       ...weeklyTasks.filter(t => t.goal_id === goalId).map(t => ({ text: t.specific_task, complete: t.complete, area: t.area })),
@@ -125,6 +143,23 @@ export default function GoalsPage() {
           </button>
         </div>
         <div className="page-header-decoration" style={{ color: 'var(--career)' }}><GoalsDecoration /></div>
+      </div>
+
+      {/* Priority filter bar */}
+      <div className="flex items-center gap-2 mb-5" style={{ overflowX: 'auto', flexWrap: 'nowrap' }}>
+        {priorityFilterOptions().map(opt => (
+          <button key={opt.value || 'all'} onClick={() => setPriorityFilter(priorityFilter === opt.value ? '' : opt.value)}
+            className={`btn btn-xs ${priorityFilter === opt.value ? '' : 'btn-ghost'}`}
+            style={{
+              flexShrink: 0,
+              ...(priorityFilter === opt.value
+                ? { background: PRIORITY_COLORS[opt.value] || 'var(--career)', color: '#fff', border: 'none' }
+                : {}),
+            }}
+          >
+            {opt.label}
+          </button>
+        ))}
       </div>
 
       {loading ? (
@@ -166,7 +201,7 @@ export default function GoalsPage() {
                           </div>
                           <div className="grid-2 mt-1">
                             {GOAL_CATEGORIES.map(cat => {
-                              const catGoals = yearlyGoals.filter(g => g.category === cat)
+                              const catGoals = visibleSorted(yearlyGoals.filter(g => g.category === cat))
                               if (catGoals.length === 0) return null
                               const color = CATEGORY_COLORS[cat]
                               const cardClass = CATEGORY_CLASSES[cat]
@@ -186,6 +221,7 @@ export default function GoalsPage() {
                                             onEdit={g => { setEditing(g); setCreateCtx(null); setShowModal(true) }}
                                             onDelete={deleteGoal}
                                             onAddMetric={addMetric}
+                                            onUpdatePriority={v => updateGoalField(goal.id, 'priority_level', v)}
                                           />
                                           <div style={{ marginTop: 10 }}>
                                             <p className="mono mb-1">Broken down into</p>
@@ -247,7 +283,7 @@ export default function GoalsPage() {
                             ) : (
                               <div className="grid-2 mt-3">
                                 {GOAL_CATEGORIES.map(cat => {
-                                  const catGoals = qGoals.filter(g => g.category === cat)
+                                  const catGoals = visibleSorted(qGoals.filter(g => g.category === cat))
                                   if (catGoals.length === 0) return null
                                   const color = CATEGORY_COLORS[cat]
                                   const cardClass = CATEGORY_CLASSES[cat]
@@ -266,6 +302,7 @@ export default function GoalsPage() {
                                             onEdit={g => { setEditing(g); setCreateCtx(null); setShowModal(true) }}
                                             onDelete={deleteGoal}
                                             onAddMetric={addMetric}
+                                            onUpdatePriority={v => updateGoalField(goal.id, 'priority_level', v)}
                                           />
                                         ))}
                                       </div>

@@ -3,6 +3,8 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'rec
 import { format } from 'date-fns'
 import { Edit2, Trash2, RefreshCw, Check, Circle } from 'lucide-react'
 import ArcRing from '../ui/ArcRing'
+import PriorityDot from '../shared/PriorityDot'
+import { PRIORITY_COLORS } from '../../lib/constants'
 
 const STATUS_BADGE = {
   'Not started': 'badge-muted',
@@ -11,7 +13,7 @@ const STATUS_BADGE = {
   'Complete':    'badge-success',
 }
 
-export default function GoalCard({ goal, color, linkedTasks, metricHistory, parentGoal, onEdit, onDelete, onAddMetric }) {
+export default function GoalCard({ goal, color, linkedTasks, metricHistory, parentGoal, onEdit, onDelete, onAddMetric, onUpdatePriority }) {
   const [updating, setUpdating] = useState(false)
   const [newValue, setNewValue] = useState('')
 
@@ -54,10 +56,18 @@ export default function GoalCard({ goal, color, linkedTasks, metricHistory, pare
   }))
 
   return (
-    <div style={{ borderBottom: '1px solid var(--border)', paddingBottom: 16 }}>
+    <div style={{
+      borderBottom: '1px solid var(--border)',
+      borderLeft: goal.priority_level === 'urgent' ? `3px solid ${PRIORITY_COLORS.urgent}` : 'none',
+      paddingLeft: goal.priority_level === 'urgent' ? 8 : 0,
+      paddingBottom: 16,
+    }}>
       <div className="flex items-start justify-between gap-2 mb-3">
         <div style={{ flex: 1, minWidth: 0 }}>
-          <p style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.4 }}>{goal.primary_goal}</p>
+          <div className="flex items-center gap-2">
+            <PriorityDot priority={goal.priority_level} onChange={onUpdatePriority} />
+            <p style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.4 }}>{goal.primary_goal}</p>
+          </div>
           <div className="flex items-center gap-2 mt-1 wrap">
             <span className={`badge ${STATUS_BADGE[status]}`} style={{ fontSize: 9 }}>{status}</span>
             <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-3)' }}>
