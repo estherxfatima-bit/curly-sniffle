@@ -12,6 +12,7 @@ import WeeklyTaskCard from '../components/weekly/WeeklyTaskCard'
 import WeeklyAgenda from '../components/calendar/WeeklyAgenda'
 import ArcRing from '../components/ui/ArcRing'
 import GoalTaskPicker from '../components/dashboard/GoalTaskPicker'
+import BrainDump from '../components/shared/BrainDump'
 
 const FREQUENCIES = ['Daily', 'Weekly', '2x/week', '3x/week', 'One-off']
 const DAY_SHORT_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -483,6 +484,10 @@ export default function WeeklyPage() {
           <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-3)' }}>Mon → Sun</p>
         </div>
         <WeeklyAgenda weekStart={weekStartStr} />
+      </div>
+
+      <div className="mt-4">
+        <BrainDump />
       </div>
 
       {showReview && <WeeklyReviewModal weekStart={weekStartStr} incompleteTasks={tasks.filter(t => !t.complete)} onClose={() => setShowReview(false)} onComplete={carryForwardIncomplete} />}

@@ -4,7 +4,6 @@ import { useAuth } from '../hooks/useAuth'
 import { GOAL_CATEGORIES, QUARTERS, getCurrentQuarter } from '../lib/constants'
 import { Plus, ChevronDown, ChevronRight } from 'lucide-react'
 import QuarterlyWins from '../components/goals/QuarterlyWins'
-import IdeaParkingLot from '../components/goals/IdeaParkingLot'
 import GoalCard from '../components/goals/GoalCard'
 import GoalModal from '../components/goals/GoalModal'
 
@@ -287,9 +286,8 @@ export default function GoalsPage() {
         </div>
       )}
 
-      <div className="grid-2 mt-6">
+      <div className="mt-6">
         <QuarterlyWins quarter={`${currentQuarter} ${currentYear}`} />
-        <IdeaParkingLot />
       </div>
 
       {showModal && (

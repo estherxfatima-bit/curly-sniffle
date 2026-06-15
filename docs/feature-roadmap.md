@@ -35,6 +35,13 @@ enhance day-to-day use of the app vs. nice-to-haves that can wait.
   fed to the AI along with live goal/task/habit/wins data. The AI can
   suggest weekly tasks and daily to-dos via a JSON block, which renders
   as "Add to plan" cards in the AI Planning panel.
+- **Brain dump rework** — "Idea parking lot" renamed to "Brain dump" and
+  moved out of the Goals page into a shared `BrainDump` component
+  (`src/components/shared/BrainDump.jsx`), available as a dashboard widget
+  on the daily view and as a section on the Weekly plan page. Each parked
+  item can be sent straight to today's to-dos, this week's plan, or a new
+  quarterly goal via a "send to…" menu, in addition to the existing
+  pull-from-brain-dump flow on the daily to-do list.
 
 ## Medium impact
 

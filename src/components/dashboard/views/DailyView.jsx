@@ -11,6 +11,7 @@ import AddWidgetMenu from '../AddWidgetMenu'
 import BudgetRing from '../../finance/BudgetRing'
 import QuickAddExpense from '../../finance/QuickAddExpense'
 import DailyQuote from '../DailyQuote'
+import BrainDump from '../../shared/BrainDump'
 
 export const CARD_LABELS = {
   quote: 'Daily quote',
@@ -23,6 +24,7 @@ export const CARD_LABELS = {
   calendar: "Today's calendar",
   'finance-snapshot': 'Finance snapshot',
   'quick-add-expense': 'Quick add expense',
+  'brain-dump': 'Brain dump',
 }
 
 export const DEFAULT_ORDER = [
@@ -34,6 +36,7 @@ export const DEFAULT_ORDER = [
   { id: 'water', size: 'square' },
   { id: 'reading', size: 'square' },
   { id: 'calendar', size: 'wide' },
+  { id: 'brain-dump', size: 'wide' },
 ]
 const HYDRATION_GOAL = 2500
 
@@ -185,6 +188,12 @@ export default function DailyView({
         </div>
       </div>
     ),
+
+    'brain-dump': (
+      <div onClick={e => e.stopPropagation()}>
+        <BrainDump />
+      </div>
+    ),
   }
 
   const available = Object.entries(CARD_LABELS)
@@ -207,7 +216,7 @@ export default function DailyView({
             editing={editing}
             onResize={s => onResize(id, s)}
             onRemove={() => onRemoveCard(id)}
-            onClick={id !== 'quote' && id !== 'todos' && id !== 'mood' && id !== 'reading' && id !== 'calendar' && id !== 'finance-snapshot' && id !== 'quick-add-expense' ? () => openPanel(id === 'habits' ? 'habits' : id === 'water' ? 'water' : id === 'priority' ? 'tasks' : id, { habits, tasks: weekTasks, hydration }) : undefined}
+            onClick={id !== 'quote' && id !== 'todos' && id !== 'mood' && id !== 'reading' && id !== 'calendar' && id !== 'finance-snapshot' && id !== 'quick-add-expense' && id !== 'brain-dump' ? () => openPanel(id === 'habits' ? 'habits' : id === 'water' ? 'water' : id === 'priority' ? 'tasks' : id, { habits, tasks: weekTasks, hydration }) : undefined}
           >
             {CARDS[id] || null}
           </SortableCard>
