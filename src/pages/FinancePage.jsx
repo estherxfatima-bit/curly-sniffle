@@ -316,14 +316,14 @@ export default function FinancePage() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
         {income.map(i => (
           <div key={i.id} className="flex items-center justify-between gap-2">
-            <div>
+            <div style={{ minWidth: 0, overflow: 'hidden' }}>
               <p style={{ fontSize: 13 }}>{i.name}</p>
               <p className="mono" style={{ fontSize: 10, color: 'var(--text-3)' }}>
                 £{i.amount.toFixed(2)} / {i.frequency}{i.is_self_employed ? ' · self-emp' : ''}
               </p>
             </div>
-            <div className="flex items-center gap-2">
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--finance)', fontWeight: 500 }}>
+            <div className="flex items-center gap-2" style={{ flexShrink: 0 }}>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, color: 'var(--finance)', fontWeight: 600, whiteSpace: 'nowrap' }}>
                 £{toMonthly(i.amount, i.frequency).toFixed(0)}/mo
               </span>
               <button className="btn-icon btn" onClick={() => deleteIncome(i.id)}><Trash2 size={12} /></button>
@@ -354,12 +354,12 @@ export default function FinancePage() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
         {fixed.map(i => (
           <div key={i.id} className="flex items-center justify-between gap-2">
-            <div>
+            <div style={{ minWidth: 0, overflow: 'hidden' }}>
               <p style={{ fontSize: 13 }}>{i.name}</p>
               <p className="mono" style={{ fontSize: 10, color: 'var(--text-3)' }}>{i.category}</p>
             </div>
-            <div className="flex items-center gap-2">
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text)', fontWeight: 500 }}>£{i.amount.toFixed(2)}</span>
+            <div className="flex items-center gap-2" style={{ flexShrink: 0 }}>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, color: 'var(--text)', fontWeight: 600, whiteSpace: 'nowrap' }}>£{i.amount.toFixed(2)}</span>
               <button className="btn-icon btn" onClick={() => deleteFixed(i.id)}><Trash2 size={12} /></button>
             </div>
           </div>

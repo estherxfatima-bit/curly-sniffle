@@ -49,7 +49,7 @@ export default function DailyView({
 
   function openPanel(type, data) { onOpenPanel({ type, data }) }
 
-  const priorityTask = weekTasks.find(t => !t.complete) || null
+  const priorityTask = weekTasks.find(t => t.priority && !t.complete) || weekTasks.find(t => !t.complete) || null
 
   const CARDS = {
     quote: (
