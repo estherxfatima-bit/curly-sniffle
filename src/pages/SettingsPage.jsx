@@ -3,7 +3,7 @@ import { useAuth } from '../hooks/useAuth'
 import { useTheme } from '../hooks/useTheme'
 import { supabase } from '../lib/supabase'
 import { registerServiceWorker, subscribeToPush, unsubscribeFromPush, isSubscribed } from '../lib/pushNotifications'
-import { Bell, BellOff, Sun, Moon, LogOut, Calendar, Unlink, MessageSquare, Clock4, Check, Pencil } from 'lucide-react'
+import { Bell, BellOff, Sun, Moon, LogOut, Calendar, Unlink, MessageSquare, Clock4, Check } from 'lucide-react'
 
 function SettingsDecoration() {
   return (
@@ -33,13 +33,31 @@ export default function SettingsPage() {
   const [workingHoursSaved, setWorkingHoursSaved] = useState(false)
   const [autoCompleteLinked, setAutoCompleteLinked] = useState(true)
   const [reflection, setReflection] = useState({ enabled: false, time: '20:00', method: 'push' })
-  const [editingName, setEditingName] = useState(false)
-  const [nameInput, setNameInput] = useState('')
-  const [nameSaving, setNameSaving] = useState(false)
-  const [nameSaved, setNameSaved] = useState(false)
   const [personalContext, setPersonalContext] = useState('')
   const [personalContextSaving, setPersonalContextSaving] = useState(false)
   const [personalContextSaved, setPersonalContextSaved] = useState(false)
+
+  // Account: change display name
+  const [displayName, setDisplayName] = useState('')
+  const [displayNameSaving, setDisplayNameSaving] = useState(false)
+  const [displayNameMsg, setDisplayNameMsg] = useState(null)
+
+  // Account: change email
+  const [newEmail, setNewEmail] = useState('')
+  const [emailPassword, setEmailPassword] = useState('')
+  const [emailSaving, setEmailSaving] = useState(false)
+  const [emailMsg, setEmailMsg] = useState(null)
+
+  // Account: change password
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [passwordSaving, setPasswordSaving] = useState(false)
+  const [passwordMsg, setPasswordMsg] = useState(null)
+
+  // Account: send password reset email
+  const [resetSending, setResetSending] = useState(false)
+  const [resetMsg, setResetMsg] = useState(null)
 
   useEffect(() => {
     registerServiceWorker()
@@ -53,9 +71,15 @@ export default function SettingsPage() {
     loadSmsStatus()
     loadWorkingHours()
     loadPersonalContext()
+    loadDisplayName()
     const params = new URLSearchParams(window.location.search)
     if (params.get('google') === 'error') alert('Failed to connect Google Calendar. Please try again.')
   }, [user])
+
+  async function loadDisplayName() {
+    const { data } = await supabase.from('profiles').select('display_name').eq('id', user.id).maybeSingle()
+    setDisplayName(data?.display_name || user?.user_metadata?.full_name || '')
+  }
 
   async function loadPersonalContext() {
     const { data } = await supabase.from('profiles').select('personal_context').eq('id', user.id).maybeSingle()
@@ -142,16 +166,70 @@ export default function SettingsPage() {
     setGoogleStatus({ loading: false, connected: false, email: null })
   }
 
-  async function saveName() {
-    const name = nameInput.trim()
+  async function saveDisplayName() {
+    const name = displayName.trim()
     if (!name) return
-    setNameSaving(true)
-    const { error } = await supabase.auth.updateUser({ data: { full_name: name } })
-    setNameSaving(false)
-    if (error) { alert(`Failed to save name: ${error.message}`); return }
-    setEditingName(false)
-    setNameSaved(true)
-    setTimeout(() => setNameSaved(false), 1500)
+    setDisplayNameSaving(true)
+    setDisplayNameMsg(null)
+    const { error } = await supabase.from('profiles').upsert({ id: user.id, email: user.email, display_name: name }, { onConflict: 'id' })
+    if (!error) await supabase.auth.updateUser({ data: { full_name: name } })
+    setDisplayNameSaving(false)
+    setDisplayNameMsg(error ? { type: 'error', text: error.message } : { type: 'success', text: 'Saved' })
+  }
+
+  async function saveEmail() {
+    if (!newEmail.trim() || !emailPassword) return
+    setEmailSaving(true)
+    setEmailMsg(null)
+    const { error: authError } = await supabase.auth.signInWithPassword({ email: user.email, password: emailPassword })
+    if (authError) {
+      setEmailSaving(false)
+      setEmailMsg({ type: 'error', text: 'Incorrect password.' })
+      return
+    }
+    const { error } = await supabase.auth.updateUser({ email: newEmail.trim() })
+    setEmailSaving(false)
+    if (error) {
+      setEmailMsg({ type: 'error', text: error.message })
+    } else {
+      setEmailMsg({ type: 'success', text: 'Check your new email to confirm the change.' })
+      setNewEmail('')
+      setEmailPassword('')
+    }
+  }
+
+  async function savePassword() {
+    if (!currentPassword || !newPassword || !confirmPassword) return
+    if (newPassword !== confirmPassword) {
+      setPasswordMsg({ type: 'error', text: 'New password and confirmation do not match.' })
+      return
+    }
+    setPasswordSaving(true)
+    setPasswordMsg(null)
+    const { error: authError } = await supabase.auth.signInWithPassword({ email: user.email, password: currentPassword })
+    if (authError) {
+      setPasswordSaving(false)
+      setPasswordMsg({ type: 'error', text: 'Current password is incorrect.' })
+      return
+    }
+    const { error } = await supabase.auth.updateUser({ password: newPassword })
+    setPasswordSaving(false)
+    if (error) {
+      setPasswordMsg({ type: 'error', text: error.message })
+    } else {
+      setPasswordMsg({ type: 'success', text: 'Password updated.' })
+      setCurrentPassword('')
+      setNewPassword('')
+      setConfirmPassword('')
+    }
+  }
+
+  async function sendPasswordReset() {
+    setResetSending(true)
+    setResetMsg(null)
+    const { error } = await supabase.auth.resetPasswordForEmail(user.email)
+    setResetSending(false)
+    setResetMsg(error ? { type: 'error', text: error.message } : { type: 'success', text: 'Reset email sent — check your inbox.' })
   }
 
   async function togglePush() {
@@ -430,45 +508,115 @@ export default function SettingsPage() {
 
       {/* Account */}
       <div className="card">
-        <h3 style={{ fontSize: '0.9rem', marginBottom: 16 }}>Account</h3>
         <div className="flex items-center justify-between mb-4">
-          <div style={{ flex: 1 }}>
-            {editingName ? (
-              <div className="flex items-center gap-2">
-                <input
-                  value={nameInput}
-                  onChange={e => setNameInput(e.target.value)}
-                  placeholder="Your name"
-                  autoFocus
-                  onKeyDown={e => e.key === 'Enter' && saveName()}
-                  style={{ fontSize: 14, maxWidth: 220 }}
-                />
-                <button className="btn-icon btn" onClick={saveName} disabled={nameSaving}><Check size={14} /></button>
-                <button className="btn-icon btn" onClick={() => setEditingName(false)}>✕</button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <p style={{ fontSize: 14, fontWeight: 500 }}>{user?.user_metadata?.full_name || user?.email}</p>
-                <button
-                  className="btn-icon btn-sm"
-                  title="Edit name"
-                  onClick={() => { setNameInput(user?.user_metadata?.full_name || ''); setEditingName(true) }}
-                >
-                  <Pencil size={12} />
-                </button>
-                {nameSaved && <span style={{ fontSize: 11, color: 'var(--success)' }}>Saved</span>}
-              </div>
-            )}
-            <p style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>{user?.email}</p>
-          </div>
+          <h3 style={{ fontSize: '0.9rem' }}>Account</h3>
           <button className="btn btn-ghost flex items-center gap-2" onClick={signOut} style={{ color: 'var(--danger)' }}>
             <LogOut size={14} />
             Sign out
           </button>
         </div>
-        <p style={{ fontSize: 11, color: 'var(--text-3)' }}>
-          Set your name so Life OS can greet you by name across the app.
-        </p>
+
+        {/* Display name */}
+        <div className="form-group">
+          <label>Display name</label>
+          <p style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 6 }}>
+            Used to greet you across the app. Currently signed in as {user?.email}.
+          </p>
+          <div className="flex items-center gap-2">
+            <input
+              value={displayName}
+              onChange={e => setDisplayName(e.target.value)}
+              placeholder="Your name"
+              style={{ fontSize: 13, maxWidth: 240 }}
+            />
+            <button className="btn btn-career btn-sm" style={{ color: '#fff' }} onClick={saveDisplayName} disabled={displayNameSaving || !displayName.trim()}>
+              {displayNameSaving ? 'Saving…' : 'Save'}
+            </button>
+            {displayNameMsg && (
+              <span style={{ fontSize: 11, color: displayNameMsg.type === 'error' ? 'var(--danger)' : 'var(--success)' }}>{displayNameMsg.text}</span>
+            )}
+          </div>
+        </div>
+
+        <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '18px 0' }} />
+
+        {/* Change email */}
+        <div className="form-group">
+          <label>Change email</label>
+          <p style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 6 }}>
+            We'll send a confirmation link to the new address before the change takes effect.
+          </p>
+          <div className="flex items-center gap-2 wrap">
+            <input
+              type="email"
+              value={newEmail}
+              onChange={e => setNewEmail(e.target.value)}
+              placeholder="New email address"
+              style={{ fontSize: 13, maxWidth: 220 }}
+            />
+            <input
+              type="password"
+              value={emailPassword}
+              onChange={e => setEmailPassword(e.target.value)}
+              placeholder="Current password"
+              style={{ fontSize: 13, maxWidth: 160 }}
+            />
+            <button className="btn btn-career btn-sm" style={{ color: '#fff' }} onClick={saveEmail} disabled={emailSaving || !newEmail.trim() || !emailPassword}>
+              {emailSaving ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+          {emailMsg && (
+            <p style={{ fontSize: 11, color: emailMsg.type === 'error' ? 'var(--danger)' : 'var(--success)', marginTop: 6 }}>{emailMsg.text}</p>
+          )}
+        </div>
+
+        <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '18px 0' }} />
+
+        {/* Change password */}
+        <div className="form-group">
+          <label>Change password</label>
+          <div className="flex items-center gap-2 wrap mb-2">
+            <input
+              type="password"
+              value={currentPassword}
+              onChange={e => setCurrentPassword(e.target.value)}
+              placeholder="Current password"
+              style={{ fontSize: 13, maxWidth: 160 }}
+            />
+            <input
+              type="password"
+              value={newPassword}
+              onChange={e => setNewPassword(e.target.value)}
+              placeholder="New password"
+              style={{ fontSize: 13, maxWidth: 160 }}
+            />
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={e => setConfirmPassword(e.target.value)}
+              placeholder="Confirm new password"
+              style={{ fontSize: 13, maxWidth: 160 }}
+            />
+            <button
+              className="btn btn-career btn-sm"
+              style={{ color: '#fff' }}
+              onClick={savePassword}
+              disabled={passwordSaving || !currentPassword || !newPassword || !confirmPassword}
+            >
+              {passwordSaving ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+          {passwordMsg && (
+            <p style={{ fontSize: 11, color: passwordMsg.type === 'error' ? 'var(--danger)' : 'var(--success)', marginBottom: 10 }}>{passwordMsg.text}</p>
+          )}
+
+          <button className="btn btn-ghost btn-sm" onClick={sendPasswordReset} disabled={resetSending}>
+            {resetSending ? 'Sending…' : 'Send password reset email'}
+          </button>
+          {resetMsg && (
+            <p style={{ fontSize: 11, color: resetMsg.type === 'error' ? 'var(--danger)' : 'var(--success)', marginTop: 6 }}>{resetMsg.text}</p>
+          )}
+        </div>
       </div>
     </div>
   )
