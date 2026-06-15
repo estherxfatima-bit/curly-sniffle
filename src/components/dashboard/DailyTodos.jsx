@@ -7,9 +7,10 @@ import { parseTimeAllocationToMinutes } from '../../lib/constants'
 import { deleteCalendarEvent } from '../../lib/googleCalendar'
 import WeeklyPlanPicker from './WeeklyPlanPicker'
 import GoalTaskPicker from './GoalTaskPicker'
+import BrainDumpPicker from './BrainDumpPicker'
 import TimerWidget from './TimerWidget'
 import TimeBlockModal from './TimeBlockModal'
-import { Plus, Trash2, ChevronDown, ChevronRight, Check, Target, Hourglass, AlarmClock, Link2, Timer as TimerIcon, CalendarClock, ChevronLeft } from 'lucide-react'
+import { Plus, Trash2, ChevronDown, ChevronRight, Check, Target, Hourglass, AlarmClock, Link2, Timer as TimerIcon, CalendarClock, ChevronLeft, Download, Lightbulb } from 'lucide-react'
 
 const DEFAULT_CATS = ['Work', 'Personal', 'Errands', 'Creative', 'Health']
 
@@ -19,6 +20,15 @@ const AREA_TO_CATEGORY = {
   Personal: 'Personal',
   Financial: 'Personal',
   'Health/Wellness': 'Health',
+  Other: 'Personal',
+}
+
+const IDEA_CAT_TO_TODO_CATEGORY = {
+  Career: 'Work',
+  Creative: 'Creative',
+  Personal: 'Personal',
+  Financial: 'Personal',
+  Health: 'Health',
   Other: 'Personal',
 }
 
@@ -48,7 +58,10 @@ export default function DailyTodos({ compact = false }) {
   const [goals, setGoals] = useState([])
   const [showWeeklyPicker, setShowWeeklyPicker] = useState(false)
   const [showGoalPicker, setShowGoalPicker] = useState(false)
+  const [showBrainDumpPicker, setShowBrainDumpPicker] = useState(false)
+  const [showPullMenu, setShowPullMenu] = useState(false)
   const [weeklyTasks, setWeeklyTasks] = useState([])
+  const [ideas, setIdeas] = useState([])
   const [timerTodo, setTimerTodo] = useState(null)
   const [showTimeBlock, setShowTimeBlock] = useState(false)
   const [workingHours, setWorkingHours] = useState({ start: '09:00', end: '19:00' })
@@ -233,6 +246,26 @@ export default function DailyTodos({ compact = false }) {
     setShowWeeklyPicker(false)
   }
 
+  async function loadIdeas() {
+    const { data } = await supabase.from('idea_parking_lot').select('*')
+      .eq('user_id', user.id).eq('acted_on', false).order('created_at', { ascending: false })
+    setIdeas(data || [])
+    setShowBrainDumpPicker(true)
+  }
+
+  async function pullFromBrainDump(idea) {
+    const { data } = await supabase.from('daily_todos').insert({
+      user_id: user.id,
+      text: idea.text,
+      date: viewDate,
+      category: IDEA_CAT_TO_TODO_CATEGORY[idea.category] || 'Personal',
+      complete: false,
+    }).select().single()
+    if (data) setTodos(prev => [...prev, data])
+    await supabase.from('idea_parking_lot').update({ acted_on: true }).eq('id', idea.id)
+    setShowBrainDumpPicker(false)
+  }
+
   async function pullFromGoalTask(goal, task) {
     const { data } = await supabase.from('daily_todos').insert({
       user_id: user.id,
@@ -351,14 +384,32 @@ export default function DailyTodos({ compact = false }) {
           </button>
         </div>
 
-        {/* Pull from weekly plan / Time-block actions */}
-        <div className="flex items-center gap-2 mb-3 wrap">
-          <button className="btn btn-ghost btn-xs" onClick={loadWeeklyTasks}>
-            <Link2 size={12} /> Pull from weekly plan
-          </button>
-          <button className="btn btn-ghost btn-xs" onClick={() => setShowGoalPicker(true)}>
-            <Target size={12} /> Pull from goal
-          </button>
+        {/* Pull task / Time-block actions */}
+        <div className="flex items-center gap-2 mb-3 wrap" style={{ position: 'relative' }}>
+          <div style={{ position: 'relative' }}>
+            <button className="btn btn-ghost btn-xs" onClick={() => setShowPullMenu(v => !v)}>
+              <Download size={12} /> Pull task
+            </button>
+            {showPullMenu && (
+              <>
+                <div style={{ position: 'fixed', inset: 0, zIndex: 89 }} onClick={() => setShowPullMenu(false)} />
+                <div className="card" style={{
+                  position: 'absolute', top: '100%', left: 0, marginTop: 4, zIndex: 90,
+                  padding: 6, minWidth: 180, display: 'flex', flexDirection: 'column', gap: 2,
+                }}>
+                  <button className="btn btn-ghost btn-xs" style={{ justifyContent: 'flex-start' }} onClick={() => { setShowPullMenu(false); setShowGoalPicker(true) }}>
+                    <Target size={12} /> Goals
+                  </button>
+                  <button className="btn btn-ghost btn-xs" style={{ justifyContent: 'flex-start' }} onClick={() => { setShowPullMenu(false); loadWeeklyTasks() }}>
+                    <Link2 size={12} /> Weekly plan
+                  </button>
+                  <button className="btn btn-ghost btn-xs" style={{ justifyContent: 'flex-start' }} onClick={() => { setShowPullMenu(false); loadIdeas() }}>
+                    <Lightbulb size={12} /> Brain dump
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
           <button className="btn btn-ghost btn-xs" onClick={() => setShowTimeBlock(true)} disabled={blockable.length === 0}
             title={blockable.length === 0 ? 'Set a duration on a to-do to enable time-blocking' : 'Find free slots for your timed to-dos'}>
             <CalendarClock size={12} /> Time-block my day
@@ -429,6 +480,10 @@ export default function DailyTodos({ compact = false }) {
 
       {showGoalPicker && (
         <GoalTaskPicker goals={goals} onSelect={pullFromGoalTask} onClose={() => setShowGoalPicker(false)} />
+      )}
+
+      {showBrainDumpPicker && (
+        <BrainDumpPicker ideas={ideas} onSelect={pullFromBrainDump} onClose={() => setShowBrainDumpPicker(false)} />
       )}
 
       {timerTodo && (
