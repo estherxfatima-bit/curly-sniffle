@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
-import { Users, Copy, UserPlus, X, MessageSquare } from 'lucide-react'
+import { Users, Copy, UserPlus, X, MessageSquare, BarChart2 } from 'lucide-react'
 
 export default function PartnersPage() {
   const { user } = useAuth()
@@ -167,7 +168,16 @@ export default function PartnersPage() {
             const partnerName = p.partner?.display_name || p.partner?.email?.split('@')[0] || 'Partner'
             return (
               <div key={p.id} className="card">
-                <h3 className="mb-4" style={{ fontSize: '1rem' }}>{partnerName}'s tasks</h3>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 style={{ fontSize: '1rem' }}>{partnerName}'s tasks</h3>
+                  <Link
+                    to={`/partners/${p.partner_id}/compare`}
+                    className="btn btn-ghost btn-sm"
+                    style={{ fontSize: 12 }}
+                  >
+                    <BarChart2 size={13} /> Compare
+                  </Link>
+                </div>
                 {tasks.length === 0 ? (
                   <p className="text-dim" style={{ fontSize: '12px' }}>No tasks visible yet.</p>
                 ) : (

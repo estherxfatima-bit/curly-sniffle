@@ -18,6 +18,7 @@ import SettingsPage from './pages/SettingsPage'
 import BooksPage from './pages/BooksPage'
 import BucketListPage from './pages/BucketListPage'
 import ResetPasswordPage from './pages/ResetPasswordPage'
+import ComparePage from './pages/ComparePage'
 
 function AppRoutes() {
   const { session, loading } = useAuth()
@@ -45,6 +46,7 @@ function AppRoutes() {
             <Route path="/content"  element={<ContentPage />} />
             <Route path="/insights" element={<InsightsPage />} />
             <Route path="/partners" element={<PartnersPage />} />
+                <Route path="/partners/:partnerId/compare" element={<ComparePage />} />
             <Route path="/ai-log"   element={<AILogPage />} />
             <Route path="/finance"  element={<FinancePage />} />
             <Route path="/wellness" element={<WellnessPage />} />
