@@ -67,16 +67,20 @@ const CHAT_SYSTEM_PROMPT = `You are a personal planning assistant. Your job is n
       "area": "Career",
       "action": "string",
       "frequency": "Once",
-      "specific_task": "string"
+      "specific_task": "string",
+      "priority_level": "urgent | high | medium | low | null"
     },
     {
       "type": "daily",
       "title": "string",
-      "due_date": "YYYY-MM-DD"
+      "due_date": "YYYY-MM-DD",
+      "priority_level": "urgent | high | medium | low | null"
     }
   ]
 }
 \`\`\`
+
+For each suggested task, set "priority_level" based on the goal's urgency, deadlines and momentum — "urgent" for time-critical items, "high" for important-but-not-urgent, "medium"/"low" for nice-to-haves, or null if no priority is warranted.
 
 Only include this block when you are actually suggesting tasks. Omit it entirely for conversational responses.`
 

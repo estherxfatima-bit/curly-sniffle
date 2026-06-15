@@ -5,6 +5,7 @@ import { generatePlan } from '../../lib/aiLog'
 import { format, startOfWeek, subWeeks, subDays } from 'date-fns'
 import { X, Send, Sparkles, Plus, ChevronDown, Check } from 'lucide-react'
 import { getCurrentQuarter } from '../../lib/constants'
+import PriorityDot from '../shared/PriorityDot'
 
 // Pull a trailing ```json ... ``` block with a "suggested_tasks" array out of an AI
 // response, returning the cleaned display text and the parsed task list (if any).
@@ -26,6 +27,7 @@ export default function AIPlanningPanel({ onClose }) {
   const [loading, setLoading] = useState(false)
   const [response, setResponse] = useState(null)
   const [suggestedTasks, setSuggestedTasks] = useState([])
+  const [taskPriorities, setTaskPriorities] = useState({})
   const [addedTasks, setAddedTasks] = useState(new Set())
   const [recentEntries, setRecentEntries] = useState([])
   const [context, setContext] = useState(null)
@@ -108,12 +110,14 @@ export default function AIPlanningPanel({ onClose }) {
     setLoading(true)
     setResponse(null)
     setSuggestedTasks([])
+    setTaskPriorities({})
     setAddedTasks(new Set())
     try {
       const { response: res } = await generatePlan(user.id, { ...context, question })
       const { text, tasks } = parseSuggestedTasks(res)
       setResponse(text)
       setSuggestedTasks(tasks)
+      setTaskPriorities(Object.fromEntries(tasks.map((t, i) => [i, t.priority_level || null])))
       loadRecentEntries()
     } catch (e) {
       setResponse(`Error: ${e.message}. Check your Claude API key in settings.`)
@@ -123,16 +127,17 @@ export default function AIPlanningPanel({ onClose }) {
   }
 
   async function addSuggestedTask(task, index) {
+    const priority_level = taskPriorities[index] ?? task.priority_level ?? null
     if (task.type === 'weekly') {
       const weekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
       await supabase.from('weekly_tasks').insert({
         user_id: user.id, week_start: weekStart,
         area: task.area, action: task.action, frequency: task.frequency, specific_task: task.specific_task,
-        complete: false, carried_forward: false,
+        complete: false, carried_forward: false, priority_level,
       })
     } else if (task.type === 'daily') {
       await supabase.from('daily_todos').insert({
-        user_id: user.id, text: task.title, date: task.due_date, complete: false,
+        user_id: user.id, text: task.title, date: task.due_date, complete: false, priority_level,
       })
     }
     setAddedTasks(prev => new Set(prev).add(index))
@@ -224,6 +229,10 @@ export default function AIPlanningPanel({ onClose }) {
                     <span style={{ fontSize: 12, flex: 1, color: 'var(--text)' }}>
                       {task.type === 'weekly' ? task.specific_task : task.title}
                     </span>
+                    <PriorityDot
+                      priority={taskPriorities[i] ?? null}
+                      onChange={v => setTaskPriorities(prev => ({ ...prev, [i]: v }))}
+                    />
                     <button
                       className={`btn btn-xs ${addedTasks.has(i) ? 'btn-ghost' : 'btn-career'}`}
                       style={addedTasks.has(i) ? {} : { color: '#fff' }}
