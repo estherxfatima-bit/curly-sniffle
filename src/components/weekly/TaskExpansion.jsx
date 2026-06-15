@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react'
 import { format } from 'date-fns'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
-import { Plus, Check, Clock, Target, Send, CalendarDays, SkipForward, Repeat } from 'lucide-react'
+import { TASK_AREAS } from '../../lib/constants'
+import { Plus, Check, Clock, Target, Send, CalendarDays, SkipForward, Repeat, Tag } from 'lucide-react'
 
 const TIME_OPTS = ['15 min', '30 min', '45 min', '1 hr', '1.5 hr', '2 hr', '3 hr']
 const DAY_LABELS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
@@ -62,6 +63,12 @@ export default function TaskExpansion({ task, goals, onUpdateField, onToggleSubt
 
       {/* Time allocation + linked goal */}
       <div className="flex items-center gap-4 wrap">
+        <div className="flex items-center gap-2">
+          <Tag size={13} color="var(--text-3)" />
+          <select value={task.area} onChange={e => onUpdateField('area', e.target.value)} style={{ fontSize: 12, padding: '4px 8px' }}>
+            {TASK_AREAS.map(a => <option key={a} value={a}>{a}</option>)}
+          </select>
+        </div>
         <div className="flex items-center gap-2">
           <Clock size={13} color="var(--text-3)" />
           <select value={task.time_allocation || ''} onChange={e => onUpdateField('time_allocation', e.target.value || null)} style={{ fontSize: 12, padding: '4px 8px' }}>

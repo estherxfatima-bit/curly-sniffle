@@ -232,8 +232,14 @@ export default function DailyTodos({ compact = false }) {
     setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, subtasks: subs } : t))
   }
 
-  async function pullFromWeeklyTask(task) {
-    const { data } = await supabase.from('daily_todos').insert({
+  async function pullFromWeeklyTask(task, subtask) {
+    const { data } = await supabase.from('daily_todos').insert(subtask ? {
+      user_id: user.id,
+      text: subtask.text,
+      date: viewDate,
+      category: AREA_TO_CATEGORY[task.area] || 'Personal',
+      complete: false,
+    } : {
       user_id: user.id,
       text: task.specific_task || task.action,
       date: viewDate,

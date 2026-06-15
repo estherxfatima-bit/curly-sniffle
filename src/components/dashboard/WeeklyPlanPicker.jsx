@@ -1,5 +1,6 @@
+import { useState } from 'react'
 import { AREA_COLORS } from '../../lib/constants'
-import { X, CalendarDays } from 'lucide-react'
+import { X, CalendarDays, ChevronDown, ChevronRight } from 'lucide-react'
 
 const DAY_SHORT_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
@@ -8,6 +9,8 @@ function areaColor(area) {
 }
 
 export default function WeeklyPlanPicker({ tasks, viewDayOfWeek, onSelect, onClose }) {
+  const [expanded, setExpanded] = useState(null)
+
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={onClose}>
       <div className="card" style={{ width: 420, maxHeight: '70vh', overflow: 'auto', padding: 18 }} onClick={e => e.stopPropagation()}>
@@ -21,34 +24,64 @@ export default function WeeklyPlanPicker({ tasks, viewDayOfWeek, onSelect, onClo
           </p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {tasks.map(task => (
-              <button
-                key={task.id}
-                onClick={() => onSelect(task)}
-                className="btn btn-ghost"
-                style={{ justifyContent: 'flex-start', textAlign: 'left', padding: '8px 10px', display: 'flex', alignItems: 'center', gap: 8 }}
-              >
-                <span className="badge" style={{ background: `${areaColor(task.area)}22`, color: areaColor(task.area), flexShrink: 0 }}>{task.area}</span>
-                <span style={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.specific_task || task.action}</span>
-                {task.day_of_week != null && (
-                  <span
-                    className="badge"
-                    title={task.day_of_week === viewDayOfWeek ? 'Allocated to this day' : 'Allocated day'}
-                    style={{
-                      fontSize: 9, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 3,
-                      background: task.day_of_week === viewDayOfWeek ? 'var(--success-tint, var(--career-tint))' : 'var(--career-tint)',
-                      color: 'var(--career)',
-                      marginLeft: task.time_allocation ? 0 : 'auto',
-                    }}
-                  >
-                    <CalendarDays size={9} /> {DAY_SHORT_LABELS[task.day_of_week]}
-                  </span>
-                )}
-                {task.time_allocation && (
-                  <span style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', marginLeft: 'auto', flexShrink: 0 }}>{task.time_allocation}</span>
-                )}
-              </button>
-            ))}
+            {tasks.map(task => {
+              const subtasks = (task.subtasks || []).filter(s => !s.complete)
+              return (
+                <div key={task.id}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    {subtasks.length > 0 && (
+                      <button
+                        className="btn-icon"
+                        style={{ padding: 2, flexShrink: 0 }}
+                        onClick={() => setExpanded(prev => prev === task.id ? null : task.id)}
+                        title="Show subtasks"
+                      >
+                        {expanded === task.id ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+                      </button>
+                    )}
+                    <button
+                      onClick={() => onSelect(task)}
+                      className="btn btn-ghost"
+                      style={{ flex: 1, justifyContent: 'flex-start', textAlign: 'left', padding: '8px 10px', display: 'flex', alignItems: 'center', gap: 8 }}
+                    >
+                      <span className="badge" style={{ background: `${areaColor(task.area)}22`, color: areaColor(task.area), flexShrink: 0 }}>{task.area}</span>
+                      <span style={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.specific_task || task.action}</span>
+                      {task.day_of_week != null && (
+                        <span
+                          className="badge"
+                          title={task.day_of_week === viewDayOfWeek ? 'Allocated to this day' : 'Allocated day'}
+                          style={{
+                            fontSize: 9, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 3,
+                            background: task.day_of_week === viewDayOfWeek ? 'var(--success-tint, var(--career-tint))' : 'var(--career-tint)',
+                            color: 'var(--career)',
+                            marginLeft: task.time_allocation ? 0 : 'auto',
+                          }}
+                        >
+                          <CalendarDays size={9} /> {DAY_SHORT_LABELS[task.day_of_week]}
+                        </span>
+                      )}
+                      {task.time_allocation && (
+                        <span style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', marginLeft: 'auto', flexShrink: 0 }}>{task.time_allocation}</span>
+                      )}
+                    </button>
+                  </div>
+                  {expanded === task.id && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginLeft: 21, marginTop: 4 }}>
+                      {subtasks.map(sub => (
+                        <button
+                          key={sub.id}
+                          onClick={() => onSelect(task, sub)}
+                          className="btn btn-ghost btn-sm"
+                          style={{ justifyContent: 'flex-start', textAlign: 'left', padding: '6px 10px', fontSize: 12, color: 'var(--text-2)' }}
+                        >
+                          {sub.text}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </div>
         )}
       </div>
