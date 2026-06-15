@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { formatDistanceToNow } from 'date-fns'
-import { Bell, X, MessageSquare, Flame, CalendarDays, Info, Sun, Moon } from 'lucide-react'
+import { Bell, X, MessageSquare, Flame, CalendarDays, Info, Sun, Moon, ListTodo, Users } from 'lucide-react'
 import { useNotifications } from '../../hooks/useNotifications'
 
 const TYPE_ICON = {
@@ -9,7 +9,9 @@ const TYPE_ICON = {
   streak_warning:   { icon: Flame,         color: 'var(--warning)'  },
   review_reminder:  { icon: CalendarDays,  color: 'var(--career)'   },
   morning_reminder: { icon: Sun,           color: 'var(--creative)' },
-  reflection:       { icon: Moon,          color: 'var(--wellness)' },
+  reflection:           { icon: Moon,    color: 'var(--wellness)' },
+  plan_tomorrow:        { icon: ListTodo, color: 'var(--career)'   },
+  partner_nudge_prompt: { icon: Users,   color: 'var(--personal)' },
 }
 
 export default function NotificationsBell({ variant = 'sidebar' }) {

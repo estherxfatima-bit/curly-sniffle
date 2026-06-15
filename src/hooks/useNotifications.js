@@ -1,8 +1,17 @@
 import { useState, useEffect, useRef } from 'react'
-import { format, startOfWeek } from 'date-fns'
+import { format, startOfWeek, addDays } from 'date-fns'
 import { supabase } from '../lib/supabase'
 import { simulateHabit } from '../lib/habitUtils'
 import { useAuth } from './useAuth'
+
+// Always compare against UK clock so notifications fire at the right local time
+// regardless of where the user's device is set.
+function ukHour() {
+  return parseInt(
+    new Intl.DateTimeFormat('en-GB', { hour: 'numeric', hour12: false, timeZone: 'Europe/London' }).format(new Date()),
+    10,
+  )
+}
 
 async function generateNudgeNotifications(user) {
   const { data: comments } = await supabase
@@ -26,10 +35,9 @@ async function generateNudgeNotifications(user) {
 }
 
 async function generateMorningReminder(user) {
-  const now = new Date()
-  const h = now.getHours()
-  if (h < 6 || h >= 12) return // only generate in the morning
-  const todayStr = format(now, 'yyyy-MM-dd')
+  const h = ukHour()
+  if (h < 6 || h >= 12) return
+  const todayStr = format(new Date(), 'yyyy-MM-dd')
   await supabase.from('notifications').upsert([{
     user_id: user.id,
     type: 'morning_reminder',
@@ -41,39 +49,117 @@ async function generateMorningReminder(user) {
 }
 
 async function generateReflectionReminder(user) {
-  const now = new Date()
-  const h = now.getHours()
-  if (h < 17) return // only generate in the evening
-  const todayStr = format(now, 'yyyy-MM-dd')
-  // Skip if they've already done today's reflection
+  const h = ukHour()
+  if (h < 17) return
+  const todayStr = format(new Date(), 'yyyy-MM-dd')
   const { data } = await supabase.from('daily_reflections').select('id').eq('user_id', user.id).eq('date', todayStr).maybeSingle()
   if (data) return
   await supabase.from('notifications').upsert([{
     user_id: user.id,
     type: 'reflection',
     title: 'Time for your daily reflection',
-    body: 'Rate your day, jot what went well, and set tomorrow\'s priorities.',
+    body: "Rate your day, jot what went well, and set tomorrow's priorities.",
     link: '/?reflect=1',
     source_id: `${todayStr}:reflection`,
   }], { onConflict: 'user_id,type,source_id', ignoreDuplicates: true })
 }
 
 async function generateReviewReminder(user) {
-  const today = new Date()
-  if (today.getDay() !== 0) return // Only nudge for a review on Sundays
-  const weekStartStr = format(startOfWeek(today, { weekStartsOn: 1 }), 'yyyy-MM-dd')
+  const now = new Date()
+  if (now.getDay() !== 0) return // Sundays only
+  const h = ukHour()
+  if (h < 21) return // only after 9 pm UK time
+  const weekStartStr = format(startOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd')
 
-  const { data: review } = await supabase.from('weekly_reviews').select('id').eq('user_id', user.id).eq('week_start', weekStartStr).maybeSingle()
-  if (review) return
+  // Check if they have any weekly tasks this week — if none, that counts as not planned
+  const [reviewRes, taskRes] = await Promise.all([
+    supabase.from('weekly_reviews').select('id').eq('user_id', user.id).eq('week_start', weekStartStr).maybeSingle(),
+    supabase.from('weekly_tasks').select('id').eq('user_id', user.id).eq('week_start', weekStartStr).limit(1),
+  ])
+  const hasReview = !!reviewRes.data
+  const hasTasks = !!(taskRes.data?.length)
+  if (hasReview && hasTasks) return
 
   await supabase.from('notifications').upsert([{
     user_id: user.id,
     type: 'review_reminder',
-    title: 'Weekly review due',
-    body: "Take a few minutes to reflect on this week's progress.",
-    link: '/weekly?review=1',
-    source_id: weekStartStr,
+    title: "Weekly plan not done — it's 9 pm Sunday",
+    body: hasTasks
+      ? "You've got tasks but haven't done your weekly review yet."
+      : "You haven't added any tasks to this week's plan.",
+    link: '/weekly',
+    source_id: `${weekStartStr}:sunday21`,
   }], { onConflict: 'user_id,type,source_id', ignoreDuplicates: true })
+}
+
+async function generatePlanTomorrowReminder(user) {
+  const h = ukHour()
+  if (h < 18) return // only from 6 pm onwards
+  const tomorrowStr = format(addDays(new Date(), 1), 'yyyy-MM-dd')
+  const { data } = await supabase
+    .from('daily_todos')
+    .select('id')
+    .eq('user_id', user.id)
+    .eq('date', tomorrowStr)
+    .eq('archived', false)
+    .limit(3)
+  if ((data?.length ?? 0) >= 2) return
+  await supabase.from('notifications').upsert([{
+    user_id: user.id,
+    type: 'plan_tomorrow',
+    title: 'Plan your tomorrow',
+    body: (data?.length ?? 0) === 0
+      ? "You have nothing planned for tomorrow yet."
+      : "You only have 1 task planned for tomorrow — add a couple more.",
+    link: '/',
+    source_id: `${tomorrowStr}:plan`,
+  }], { onConflict: 'user_id,type,source_id', ignoreDuplicates: true })
+}
+
+async function generatePartnerNudgePrompts(user) {
+  // If a partner has no weekly tasks and no daily todos, prompt the user to nudge them.
+  const { data: partnerRows } = await supabase
+    .from('accountability_partners')
+    .select('partner_id')
+    .eq('user_id', user.id)
+    .eq('status', 'accepted')
+  if (!partnerRows?.length) return
+
+  const now = new Date()
+  const weekStartStr = format(startOfWeek(now, { weekStartsOn: 1 }), 'yyyy-MM-dd')
+  const todayStr = format(now, 'yyyy-MM-dd')
+
+  const rows = []
+  for (const row of partnerRows) {
+    const pid = row.partner_id
+    const [taskRes, todoRes, profileRes] = await Promise.all([
+      supabase.from('weekly_tasks').select('id').eq('user_id', pid).eq('week_start', weekStartStr).limit(1),
+      supabase.from('daily_todos').select('id').eq('user_id', pid).eq('date', todayStr).eq('archived', false).limit(1),
+      supabase.from('profiles').select('display_name, email').eq('id', pid).maybeSingle(),
+    ])
+    const hasWeekTasks = !!(taskRes.data?.length)
+    const hasTodayTodos = !!(todoRes.data?.length)
+    if (hasWeekTasks && hasTodayTodos) continue
+
+    const name = profileRes.data?.display_name || profileRes.data?.email?.split('@')[0] || 'Your partner'
+    const missing = !hasWeekTasks && !hasTodayTodos
+      ? 'no weekly plan or daily to-dos'
+      : !hasWeekTasks
+        ? 'no weekly plan yet'
+        : 'nothing planned for today'
+
+    rows.push({
+      user_id: user.id,
+      type: 'partner_nudge_prompt',
+      title: `${name} has ${missing}`,
+      body: 'Send them a nudge to get going.',
+      link: `/partners/${pid}/compare`,
+      source_id: `${pid}:${weekStartStr}:empty`,
+    })
+  }
+  if (rows.length) {
+    await supabase.from('notifications').upsert(rows, { onConflict: 'user_id,type,source_id', ignoreDuplicates: true })
+  }
 }
 
 async function generateStreakWarnings(user) {
@@ -131,6 +217,8 @@ export function useNotifications() {
           generateMorningReminder(user),
           generateReflectionReminder(user),
           generateReviewReminder(user),
+          generatePlanTomorrowReminder(user),
+          generatePartnerNudgePrompts(user),
           generateStreakWarnings(user),
         ])
       }

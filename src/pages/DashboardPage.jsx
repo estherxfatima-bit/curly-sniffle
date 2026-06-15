@@ -24,7 +24,10 @@ const DEFAULTS = { daily: DAILY_DEFAULT, weekly: WEEKLY_DEFAULT, monthly: MONTHL
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 function greeting(name) {
-  const h = new Date().getHours()
+  const h = parseInt(
+    new Intl.DateTimeFormat('en-GB', { hour: 'numeric', hour12: false, timeZone: 'Europe/London' }).format(new Date()),
+    10,
+  )
   const time = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'
   return name ? `${time}, ${name.split(' ')[0]}` : time
 }
