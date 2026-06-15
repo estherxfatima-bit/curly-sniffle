@@ -33,12 +33,19 @@ export default function PartnersPage() {
     setLoading(true)
     const { data: partnerRows } = await supabase
       .from('accountability_partners')
-      .select('*, partner:partner_id(id, email, raw_user_meta_data)')
+      .select('*')
       .eq('user_id', user.id)
       .eq('status', 'accepted')
 
     if (partnerRows?.length) {
-      setPartners(partnerRows)
+      const partnerIds = partnerRows.map(row => row.partner_id)
+      const { data: profileRows } = await supabase
+        .from('profiles')
+        .select('id, email, display_name')
+        .in('id', partnerIds)
+      const profilesById = Object.fromEntries((profileRows || []).map(p => [p.id, p]))
+      setPartners(partnerRows.map(row => ({ ...row, partner: profilesById[row.partner_id] })))
+
       // Load each partner's tasks
       const taskPromises = partnerRows.map(async (row) => {
         const { data } = await supabase
@@ -51,6 +58,9 @@ export default function PartnersPage() {
       })
       const results = await Promise.all(taskPromises)
       setPartnerTasks(Object.fromEntries(results))
+    } else {
+      setPartners([])
+      setPartnerTasks({})
     }
     setLoading(false)
   }
@@ -58,21 +68,9 @@ export default function PartnersPage() {
   async function addPartner() {
     if (!inviteCode.trim()) return
     const code = inviteCode.trim().toUpperCase()
-    const { data: partnerId, error } = await supabase.rpc('find_user_id_by_invite_code', { p_code: code })
-    if (error || !partnerId) { alert('No user found with that code.'); return }
-    if (partnerId === user.id) { alert("That's your own code!"); return }
+    const { error } = await supabase.rpc('connect_accountability_partner', { p_code: code })
+    if (error) { alert(error.message.includes('own code') ? "That's your own code!" : 'No user found with that code.'); return }
 
-    await supabase.from('accountability_partners').insert({
-      user_id: user.id,
-      partner_id: partnerId,
-      status: 'accepted',
-    })
-    // Also create reverse relationship
-    await supabase.from('accountability_partners').insert({
-      user_id: partnerId,
-      partner_id: user.id,
-      status: 'accepted',
-    })
     setInviteCode('')
     loadPartners()
   }
@@ -161,7 +159,7 @@ export default function PartnersPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           {partners.map(p => {
             const tasks = partnerTasks[p.partner_id] || []
-            const partnerName = p.partner?.raw_user_meta_data?.full_name || p.partner?.email?.split('@')[0] || 'Partner'
+            const partnerName = p.partner?.display_name || p.partner?.email?.split('@')[0] || 'Partner'
             return (
               <div key={p.id} className="card">
                 <h3 className="mb-4" style={{ fontSize: '1rem' }}>{partnerName}'s tasks</h3>
