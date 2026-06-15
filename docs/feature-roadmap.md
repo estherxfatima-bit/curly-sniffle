@@ -53,6 +53,38 @@ enhance day-to-day use of the app vs. nice-to-haves that can wait.
   Also fixed a bug where Today's to-dos could briefly show the wrong day's
   items after navigating with the day arrows (a slower in-flight load for
   one day could overwrite the list after a faster load for another day).
+- **Time-block my day fixes** — the "Time-block my day" button was
+  effectively dead (silently disabled with no visible reason). It's now
+  always clickable, with a loading spinner and clear inline error states
+  for each precondition: no todos with a duration set, no working hours,
+  Google Calendar not connected, an expired Calendar connection, and "no
+  free slots today". Every failure path logs via `console.error`.
+- **Priority levels for todos, weekly tasks and goals** — optional
+  Urgent/High/Medium/Low priority (`priority_level` text column, distinct
+  from the existing `weekly_tasks.priority` "star this week" boolean).
+  Each row gets a clickable `PriorityDot` that cycles
+  Urgent → High → Medium → Low → None. Daily to-dos sort timed-first then
+  by priority; weekly tasks float high-priority items to the top of each
+  group; goals sort by priority within their category. Urgent items get a
+  red left-border tint. A priority filter bar (All/Urgent/High/Medium/Low/
+  No priority) is on the daily, weekly and goals views, session-only.
+  Requires `supabase/phase32_schema.sql` (adds `priority_level` to
+  `daily_todos`, `weekly_tasks`, `goals`).
+- **Time-blocking respects priority** — when generating a schedule,
+  untimed to-dos are slotted into free gaps in priority order (Urgent →
+  High → Medium → Low → unprioritised); todos with a fixed `scheduled_time`
+  are still placed first regardless of priority.
+- **Editable, draggable time-block preview** — before confirming, the
+  proposed schedule is a fully interactive list: drag to reorder
+  (recalculates times), edit each block's time/duration inline, remove a
+  block, add any of today's other to-dos (even ones without a duration),
+  or "Clear all" to reset back to the original AI suggestion. Nothing is
+  written to Google Calendar until "Confirm and add to calendar" is
+  clicked.
+- **AI planning assistant suggests priorities** — suggested weekly tasks
+  and daily to-dos from the AI planning panel now include a suggested
+  `priority_level` (based on goal urgency/deadlines/momentum), shown as an
+  editable priority dot the user can change before adding to their plan.
 - **Brain dump rework** — "Idea parking lot" renamed to "Brain dump" and
   moved out of the Goals page into a shared `BrainDump` component
   (`src/components/shared/BrainDump.jsx`), available as a dashboard widget
