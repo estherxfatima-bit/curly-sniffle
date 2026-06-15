@@ -56,21 +56,45 @@ Write 2-3 sentences. Capture the honest reality, name the pattern if there is on
 // Base persona system prompt — applied to every AI call
 export const BASE_SYSTEM_PROMPT = `You are a personal planning assistant for her. Be direct, specific, and grounded. Reference her actual goals and tasks. Never give generic productivity advice. Her tone is considered and non-performative — match it.`
 
+// Full chat system prompt — see "LIFE OS -- AI CHAT FULL UPGRADE" spec
+const CHAT_SYSTEM_PROMPT = `You are a personal planning assistant. Your job is not to affirm -- surface what the user is avoiding, ask one hard question, and help them prioritise. Challenge gently. Never be generic. Reference their actual data when provided. When suggesting weekly priorities or daily to-dos, always end your response with a JSON block in this exact format and no other JSON anywhere in the response:
+
+\`\`\`json
+{
+  "suggested_tasks": [
+    {
+      "type": "weekly",
+      "area": "Career",
+      "action": "string",
+      "frequency": "Once",
+      "specific_task": "string"
+    },
+    {
+      "type": "daily",
+      "title": "string",
+      "due_date": "YYYY-MM-DD"
+    }
+  ]
+}
+\`\`\`
+
+Only include this block when you are actually suggesting tasks. Omit it entirely for conversational responses.`
+
 // AI planning with full user context — saves to ai_log
-export async function generatePlan(userId, { goals, tasks, habits, moodAvg, todayTodos, question }) {
-  const system = `${BASE_SYSTEM_PROMPT}
+export async function generatePlan(userId, { goals, tasks, habits, moodAvg, todayTodos, question, personalContext, quarterlyWins }) {
+  let system = CHAT_SYSTEM_PROMPT
 
-Respond like a smart colleague who has seen the data and has a clear point of view. If something looks off, say so plainly. If priorities are unclear, name that.
-
-Never say "great job" or "you're doing amazing". Never suggest "scheduling time for self-care". Give real observations and specific next steps.`
+  if (personalContext) {
+    system += `\n\nABOUT THIS USER:\n${personalContext}`
+  }
 
   // Cap task data to last 2 weeks to control cost
   const recentTasks = tasks.slice(0, 30)
 
-  const prompt = `Here is my current context:
+  system += `\n\nCURRENT CONTEXT:
 
 THIS QUARTER'S GOALS:
-${goals.map(g => `- [${g.category}] ${g.primary_goal}`).join('\n') || 'None set'}
+${goals.map(g => `- [${g.category}] ${g.primary_goal} — ${g.status}`).join('\n') || 'None set'}
 
 THIS WEEK'S TASKS (${tasks.filter(t => !t.complete).length} incomplete, ${tasks.filter(t => t.complete).length} done):
 ${recentTasks.map(t => `- [${t.area}] ${t.specific_task} — ${t.complete ? '✓ done' : 'incomplete'}${t.carried_forward ? ' (carried)' : ''}`).join('\n') || 'None'}
@@ -83,10 +107,10 @@ MOOD AVERAGE THIS WEEK: ${moodAvg ? `${moodAvg.toFixed(1)}/5` : 'Not logged'}
 TODAY'S TO-DOS (${todayTodos.filter(t => !t.complete).length} remaining):
 ${todayTodos.slice(0, 8).map(t => `- ${t.text} [${t.category}]${t.complete ? ' ✓' : ''}`).join('\n') || 'None'}
 
-MY QUESTION / REQUEST:
-${question}
+QUARTERLY WINS LOGGED THIS QUARTER:
+${(quarterlyWins || []).map(w => `- ${w}`).join('\n') || 'None'}`
 
-Give a specific, direct response. If I asked for a plan, give one. If I asked for analysis, give it plainly. Cap your response at 250 words.`
+  const prompt = question
 
   const response = await callClaude(prompt, system, 800)
   const title = `AI plan — ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}: ${question.slice(0, 40)}`

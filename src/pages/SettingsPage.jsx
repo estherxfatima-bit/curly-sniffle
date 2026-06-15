@@ -37,6 +37,9 @@ export default function SettingsPage() {
   const [nameInput, setNameInput] = useState('')
   const [nameSaving, setNameSaving] = useState(false)
   const [nameSaved, setNameSaved] = useState(false)
+  const [personalContext, setPersonalContext] = useState('')
+  const [personalContextSaving, setPersonalContextSaving] = useState(false)
+  const [personalContextSaved, setPersonalContextSaved] = useState(false)
 
   useEffect(() => {
     registerServiceWorker()
@@ -49,9 +52,23 @@ export default function SettingsPage() {
     loadGoogleStatus()
     loadSmsStatus()
     loadWorkingHours()
+    loadPersonalContext()
     const params = new URLSearchParams(window.location.search)
     if (params.get('google') === 'error') alert('Failed to connect Google Calendar. Please try again.')
   }, [user])
+
+  async function loadPersonalContext() {
+    const { data } = await supabase.from('profiles').select('personal_context').eq('id', user.id).maybeSingle()
+    setPersonalContext(data?.personal_context || '')
+  }
+
+  async function savePersonalContext() {
+    setPersonalContextSaving(true)
+    await supabase.from('profiles').upsert({ id: user.id, email: user.email, personal_context: personalContext }, { onConflict: 'id' })
+    setPersonalContextSaving(false)
+    setPersonalContextSaved(true)
+    setTimeout(() => setPersonalContextSaved(false), 1500)
+  }
 
   async function loadWorkingHours() {
     const { data } = await supabase.from('user_preferences')
@@ -389,6 +406,26 @@ export default function SettingsPage() {
         <p style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 10 }}>
           Set these in your <code style={{ fontFamily: 'var(--font-mono)', background: 'var(--bg-3)', padding: '1px 4px', borderRadius: 3 }}>.env</code> file or Vercel environment variables.
         </p>
+      </div>
+
+      {/* AI context */}
+      <div className="card mb-4">
+        <h3 style={{ fontSize: '0.9rem', marginBottom: 8 }}>My context</h3>
+        <p style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 12 }}>
+          Tell the AI about you
+        </p>
+        <textarea
+          value={personalContext}
+          onChange={e => setPersonalContext(e.target.value)}
+          placeholder="Your work, goals, what you're building, how you like to be challenged…"
+          style={{ minHeight: 120, fontSize: 13, width: '100%' }}
+        />
+        <div className="flex items-center gap-2 mt-2">
+          <button className="btn btn-career btn-sm" style={{ color: '#fff' }} onClick={savePersonalContext} disabled={personalContextSaving}>
+            {personalContextSaving ? 'Saving…' : 'Save'}
+          </button>
+          {personalContextSaved && <span style={{ fontSize: 11, color: 'var(--success)' }}>Saved</span>}
+        </div>
       </div>
 
       {/* Account */}

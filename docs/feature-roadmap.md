@@ -18,11 +18,23 @@ enhance day-to-day use of the app vs. nice-to-haves that can wait.
   expenses are already treated as ongoing monthly costs with no
   per-month instance concept, so there's nothing to auto-create.)
 
-## High impact — do next
-
 - **Notifications inbox** (item 5) — bell icon + unread badge, surfaces
-  partner nudges, review reminders, streak warnings. Foundational for
-  the partner features below.
+  partner nudges, review reminders, streak warnings. Requires
+  `supabase/phase27_schema.sql` (adds `notifications` table).
+- **Yearly goals broken down into quarterly goals** — goals can now be
+  created with a "Year" timeframe and quarterly goals can link to a
+  parent yearly goal via "Break down from yearly goal". The Goals page
+  shows yearly goals per year with their linked quarterly breakdown.
+  Requires `supabase/phase28_schema.sql` (adds `goals.parent_goal_id`).
+- **Finance amount display sizing** — income/fixed-expense monthly
+  amounts are now larger and no longer get clipped by long item names.
+- **Dashboard priority card** — the "One priority" card on the daily
+  dashboard now surfaces the starred (priority) weekly task first.
+- **AI chat full upgrade** — Settings has a "My context" field
+  (`profiles.personal_context`, see `supabase/phase29_schema.sql`) that's
+  fed to the AI along with live goal/task/habit/wins data. The AI can
+  suggest weekly tasks and daily to-dos via a JSON block, which renders
+  as "Add to plan" cards in the AI Planning panel.
 
 ## Medium impact
 

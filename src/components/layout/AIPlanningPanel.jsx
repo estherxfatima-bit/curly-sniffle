@@ -3,14 +3,30 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
 import { generatePlan } from '../../lib/aiLog'
 import { format, startOfWeek, subWeeks, subDays } from 'date-fns'
-import { X, Send, Sparkles, Plus, ChevronDown } from 'lucide-react'
+import { X, Send, Sparkles, Plus, ChevronDown, Check } from 'lucide-react'
 import { getCurrentQuarter } from '../../lib/constants'
+
+// Pull a trailing ```json ... ``` block with a "suggested_tasks" array out of an AI
+// response, returning the cleaned display text and the parsed task list (if any).
+function parseSuggestedTasks(text) {
+  const match = text.match(/```json\s*([\s\S]*?)```/)
+  if (!match) return { text, tasks: [] }
+  try {
+    const parsed = JSON.parse(match[1])
+    if (!Array.isArray(parsed.suggested_tasks)) return { text, tasks: [] }
+    return { text: text.slice(0, match.index).trim(), tasks: parsed.suggested_tasks }
+  } catch {
+    return { text, tasks: [] }
+  }
+}
 
 export default function AIPlanningPanel({ onClose }) {
   const { user } = useAuth()
   const [question, setQuestion] = useState('')
   const [loading, setLoading] = useState(false)
   const [response, setResponse] = useState(null)
+  const [suggestedTasks, setSuggestedTasks] = useState([])
+  const [addedTasks, setAddedTasks] = useState(new Set())
   const [recentEntries, setRecentEntries] = useState([])
   const [context, setContext] = useState(null)
   const textareaRef = useRef(null)
@@ -36,13 +52,17 @@ export default function AIPlanningPanel({ onClose }) {
     // Last 14 days, for habit streak calculation
     const days = Array.from({ length: 14 }, (_, i) => format(subDays(new Date(), 13 - i), 'yyyy-MM-dd'))
 
-    const [goalsRes, tasksRes, habitsRes, logsRes, moodRes, todosRes] = await Promise.all([
-      supabase.from('goals').select('category, primary_goal').eq('user_id', user.id).eq('quarter', quarter).eq('year', year),
+    const [goalsRes, tasksRes, habitsRes, logsRes, moodRes, todosRes, winsRes, profileRes, goalTasksRes, goalTodosRes] = await Promise.all([
+      supabase.from('goals').select('id, category, primary_goal, tracking_type, metric_start, metric_target').eq('user_id', user.id).eq('quarter', quarter).eq('year', year),
       supabase.from('weekly_tasks').select('area, specific_task, complete, carried_forward').eq('user_id', user.id).gte('week_start', twoWeeksAgo),
       supabase.from('habits').select('id, name').eq('user_id', user.id),
       supabase.from('habit_logs').select('habit_id, log_date').eq('user_id', user.id).gte('log_date', days[0]),
       supabase.from('mood_logs').select('mood_score').eq('user_id', user.id).gte('log_date', weekStart),
       supabase.from('daily_todos').select('text, category, complete').eq('user_id', user.id).eq('date', today),
+      supabase.from('quarterly_wins').select('text').eq('user_id', user.id).eq('quarter', `${quarter} ${year}`),
+      supabase.from('profiles').select('personal_context').eq('id', user.id).maybeSingle(),
+      supabase.from('weekly_tasks').select('goal_id, complete').eq('user_id', user.id).not('goal_id', 'is', null),
+      supabase.from('daily_todos').select('goal_id, complete').eq('user_id', user.id).not('goal_id', 'is', null),
     ])
 
     const moods = moodRes.data || []
@@ -61,12 +81,25 @@ export default function AIPlanningPanel({ onClose }) {
       return { name: h.name, streak }
     })
 
+    const goalTasks = [...(goalTasksRes.data || []), ...(goalTodosRes.data || [])]
+    const goalsWithStatus = (goalsRes.data || []).map(g => {
+      if (g.tracking_type === 'metric') {
+        return { category: g.category, primary_goal: g.primary_goal, status: `${g.metric_start ?? 0} → ${g.metric_target ?? '?'} (metric)` }
+      }
+      const linked = goalTasks.filter(t => t.goal_id === g.id)
+      const done = linked.filter(t => t.complete).length
+      const status = linked.length ? `${done}/${linked.length} tasks done` : 'no tasks linked'
+      return { category: g.category, primary_goal: g.primary_goal, status }
+    })
+
     setContext({
-      goals: goalsRes.data || [],
+      goals: goalsWithStatus,
       tasks: tasksRes.data || [],
       habits: habitsWithStreaks,
       moodAvg,
       todayTodos: todosRes.data || [],
+      quarterlyWins: (winsRes.data || []).map(w => w.text),
+      personalContext: profileRes.data?.personal_context || '',
     })
   }
 
@@ -74,15 +107,35 @@ export default function AIPlanningPanel({ onClose }) {
     if (!question.trim() || loading || !context) return
     setLoading(true)
     setResponse(null)
+    setSuggestedTasks([])
+    setAddedTasks(new Set())
     try {
-      const { response: res, record } = await generatePlan(user.id, { ...context, question })
-      setResponse(res)
+      const { response: res } = await generatePlan(user.id, { ...context, question })
+      const { text, tasks } = parseSuggestedTasks(res)
+      setResponse(text)
+      setSuggestedTasks(tasks)
       loadRecentEntries()
     } catch (e) {
       setResponse(`Error: ${e.message}. Check your Claude API key in settings.`)
     } finally {
       setLoading(false)
     }
+  }
+
+  async function addSuggestedTask(task, index) {
+    if (task.type === 'weekly') {
+      const weekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
+      await supabase.from('weekly_tasks').insert({
+        user_id: user.id, week_start: weekStart,
+        area: task.area, action: task.action, frequency: task.frequency, specific_task: task.specific_task,
+        complete: false, carried_forward: false,
+      })
+    } else if (task.type === 'daily') {
+      await supabase.from('daily_todos').insert({
+        user_id: user.id, text: task.title, date: task.due_date, complete: false,
+      })
+    }
+    setAddedTasks(prev => new Set(prev).add(index))
   }
 
   async function addToWeeklyPlan(text) {
@@ -152,14 +205,37 @@ export default function AIPlanningPanel({ onClose }) {
           <div style={{ background: 'var(--career-tint)', borderRadius: 'var(--radius-lg)', padding: '16px 18px', borderLeft: '3px solid var(--career)' }}>
             <p className="mono mb-2" style={{ color: 'var(--career)' }}>Response</p>
             <p style={{ fontSize: 13, lineHeight: 1.75, color: 'var(--text)', whiteSpace: 'pre-wrap' }}>{response}</p>
-            <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
-              <button className="btn btn-sm btn-ghost" onClick={() => addToWeeklyPlan(response.split('\n')[0])}>
-                <Plus size={12} /> Add to weekly plan
-              </button>
-              <button className="btn btn-sm btn-ghost" onClick={() => addToDailyTodo(response.split('\n')[0])}>
-                <Plus size={12} /> Add to today's todos
-              </button>
-            </div>
+            {suggestedTasks.length === 0 ? (
+              <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
+                <button className="btn btn-sm btn-ghost" onClick={() => addToWeeklyPlan(response.split('\n')[0])}>
+                  <Plus size={12} /> Add to weekly plan
+                </button>
+                <button className="btn btn-sm btn-ghost" onClick={() => addToDailyTodo(response.split('\n')[0])}>
+                  <Plus size={12} /> Add to today's todos
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 14 }}>
+                {suggestedTasks.map((task, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg)', borderRadius: 'var(--radius)', padding: '10px 12px', border: '1px solid var(--border)' }}>
+                    <span className={`badge ${task.type === 'weekly' ? 'badge-career' : 'badge-finance'}`} style={{ fontSize: 9, flexShrink: 0 }}>
+                      {task.type === 'weekly' ? 'Weekly' : 'Daily'}
+                    </span>
+                    <span style={{ fontSize: 12, flex: 1, color: 'var(--text)' }}>
+                      {task.type === 'weekly' ? task.specific_task : task.title}
+                    </span>
+                    <button
+                      className={`btn btn-xs ${addedTasks.has(i) ? 'btn-ghost' : 'btn-career'}`}
+                      style={addedTasks.has(i) ? {} : { color: '#fff' }}
+                      onClick={() => addSuggestedTask(task, i)}
+                      disabled={addedTasks.has(i)}
+                    >
+                      {addedTasks.has(i) ? (<><Check size={12} /> Added</>) : (<><Plus size={12} /> Add to plan</>)}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
