@@ -1,9 +1,9 @@
-import { ChevronDown, ChevronRight, MessageSquare, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, MessageSquare, Star, Trash2 } from 'lucide-react'
 import TaskExpansion from './TaskExpansion'
 
 const DAY_SHORT_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
-export default function WeeklyTaskCard({ task, areaColor, goals, expanded, onToggleExpand, onToggle, onUpdateField, onToggleSubtask, onAddSubtask, onPushNextWeek, onDelete }) {
+export default function WeeklyTaskCard({ task, areaColor, goals, expanded, onToggleExpand, onToggle, onUpdateField, onToggleSubtask, onAddSubtask, onPushNextWeek, onTogglePriority, onDelete }) {
   const goal = goals.find(g => g.id === task.goal_id)
 
   return (
@@ -37,6 +37,7 @@ export default function WeeklyTaskCard({ task, areaColor, goals, expanded, onTog
           WebkitBoxOrient: 'vertical',
           overflow: 'hidden',
         }}>
+          {task.priority && <Star size={12} color="var(--warning)" fill="var(--warning)" style={{ marginRight: 5, verticalAlign: -1 }} />}
           {task.specific_task}
         </span>
 
@@ -56,6 +57,14 @@ export default function WeeklyTaskCard({ task, areaColor, goals, expanded, onTog
         {task.complete ? <span className="badge badge-success" style={{ fontSize: 9 }}>Done</span> : <span className="badge badge-muted" style={{ fontSize: 9 }}>Open</span>}
         {goal && <span style={{ fontSize: 9, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>{goal.primary_goal?.slice(0, 20)}</span>}
         <div style={{ flex: 1 }} />
+        <button
+          className="btn-icon btn"
+          onClick={() => onTogglePriority(task)}
+          title={task.priority ? 'Remove from this week\'s priorities' : 'Mark as a priority for this week'}
+          style={{ color: task.priority ? 'var(--warning)' : undefined }}
+        >
+          <Star size={13} fill={task.priority ? 'var(--warning)' : 'none'} />
+        </button>
         <button className="btn-icon btn" onClick={() => onDelete(task.id)}><Trash2 size={13} /></button>
       </div>
 

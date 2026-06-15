@@ -3,34 +3,34 @@ import { supabase } from '../../lib/supabase'
 import { Edit2, Check, X } from 'lucide-react'
 import { AFFIRMATIONS } from '../../lib/affirmations'
 
-function getRotation(weekStart) {
-  // Pick a consistent affirmation per week based on week number
-  const d = new Date(weekStart)
-  const weekNum = Math.floor(d.getTime() / (7 * 24 * 60 * 60 * 1000))
-  return AFFIRMATIONS[weekNum % AFFIRMATIONS.length]
+function getRotation(dateStr) {
+  // Pick a consistent affirmation per day based on day number
+  const d = new Date(dateStr)
+  const dayNum = Math.floor(d.getTime() / (24 * 60 * 60 * 1000))
+  return AFFIRMATIONS[dayNum % AFFIRMATIONS.length]
 }
 
-export default function WeeklyQuote({ userId, weekStart, savedQuote, onSave }) {
+export default function DailyQuote({ userId, date, savedQuote, onSave }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
 
-  const displayQuote = savedQuote || getRotation(weekStart)
+  const displayQuote = savedQuote || getRotation(date)
   const isCustom = !!savedQuote
 
   async function save() {
     const text = draft.trim()
     if (!text) return
-    await supabase.from('weekly_quotes').upsert(
-      { user_id: userId, week_start: weekStart, quote: text },
-      { onConflict: 'user_id,week_start' }
+    await supabase.from('daily_quotes').upsert(
+      { user_id: userId, log_date: date, quote: text },
+      { onConflict: 'user_id,log_date' }
     )
     onSave(text)
     setEditing(false)
   }
 
   async function clearCustom() {
-    await supabase.from('weekly_quotes').delete()
-      .eq('user_id', userId).eq('week_start', weekStart)
+    await supabase.from('daily_quotes').delete()
+      .eq('user_id', userId).eq('log_date', date)
     onSave(null)
   }
 
@@ -40,7 +40,7 @@ export default function WeeklyQuote({ userId, weekStart, savedQuote, onSave }) {
         <textarea
           value={draft}
           onChange={e => setDraft(e.target.value)}
-          placeholder="Your intention or quote for this week…"
+          placeholder="Your intention or quote for today…"
           style={{ minHeight: 80, fontSize: 15, fontStyle: 'italic', lineHeight: 1.6 }}
           autoFocus
           onKeyDown={e => { if (e.key === 'Enter' && e.metaKey) save() }}
@@ -72,7 +72,7 @@ export default function WeeklyQuote({ userId, weekStart, savedQuote, onSave }) {
       </p>
       {!isCustom && (
         <p style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-3)', marginTop: 10, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-          Weekly rotation · set your own below
+          Daily rotation · set your own below
         </p>
       )}
       <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 12 }}>

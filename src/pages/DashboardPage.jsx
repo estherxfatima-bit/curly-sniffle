@@ -73,6 +73,7 @@ export default function DashboardPage() {
   const [moodWeek,  setMoodWeek]  = useState([])
   const [hydration, setHydration] = useState(0)
   const [savedQuote, setSavedQuote] = useState(null)
+  const [savedDailyQuote, setSavedDailyQuote] = useState(null)
   const [periodLoading, setPeriodLoading] = useState(true)
 
   // Monthly view extra
@@ -134,18 +135,20 @@ export default function DashboardPage() {
 
   async function loadPeriod() {
     setPeriodLoading(true)
-    const [logsRes, tasksRes, moodRes, wellnessRes, quoteRes] = await Promise.all([
+    const [logsRes, tasksRes, moodRes, wellnessRes, quoteRes, dailyQuoteRes] = await Promise.all([
       supabase.from('habit_logs').select('habit_id,log_date').eq('user_id', user.id).gte('log_date', weekStart).lte('log_date', weekEnd),
       supabase.from('weekly_tasks').select('*').eq('user_id', user.id).eq('week_start', weekStart).eq('archived', false),
       supabase.from('mood_logs').select('mood_score,log_date').eq('user_id', user.id).gte('log_date', weekStart).lte('log_date', weekEnd),
       supabase.from('wellness_logs').select('hydration_ml').eq('user_id', user.id).eq('log_date', today).maybeSingle(),
       supabase.from('weekly_quotes').select('quote').eq('user_id', user.id).eq('week_start', weekStart).maybeSingle(),
+      supabase.from('daily_quotes').select('quote').eq('user_id', user.id).eq('log_date', today).maybeSingle(),
     ])
     setHabitLogs(logsRes.data || [])
     setWeekTasks(tasksRes.data || [])
     setMoodWeek(moodRes.data || [])
     setHydration(wellnessRes.data?.hydration_ml || 0)
     setSavedQuote(quoteRes.data?.quote || null)
+    setSavedDailyQuote(dailyQuoteRes.data?.quote || null)
     setPeriodLoading(false)
   }
 
@@ -434,6 +437,8 @@ export default function DashboardPage() {
           financeTotalVariable={financeTotalVariable}
           financeOverallBudget={financeOverallBudget}
           onAddExpense={addFinanceVariable}
+          savedDailyQuote={savedDailyQuote}
+          onSaveDailyQuote={setSavedDailyQuote}
           {...viewProps}
         />
       )}

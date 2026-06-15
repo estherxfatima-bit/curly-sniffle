@@ -1,0 +1,23 @@
+// Considered, specific affirmations — not motivational-poster energy
+export const AFFIRMATIONS = [
+  "The gap between where you are and where you want to be is just time and iteration.",
+  "Done is infinitely more useful than perfect. Finish the thing, then make it better.",
+  "Your best work comes from building habits, not waiting for inspiration.",
+  "Constraints are a creative gift. Work within them before trying to escape them.",
+  "The people you most admire also had weeks where nothing went to plan.",
+  "Rest is part of the work. Protecting your energy is not laziness.",
+  "One good decision made consistently beats ten perfect plans made once.",
+  "You don't need permission to start, only the willingness to begin badly.",
+  "Your future self will thank you for the 20-minute version you actually did.",
+  "What you repeatedly do is what you become. Small actions compound.",
+  "Clarity comes from action, not from more planning.",
+  "The work that matters most is often the work that feels hardest to start.",
+  "A slow week is not a failed week. Pace is part of the process.",
+  "Say no to the good things so you have space for the right things.",
+  "You are not behind. You are exactly where your choices have brought you — and you can choose again.",
+  "Progress compounds in ways you cannot see day to day. Keep going.",
+  "The version of you that shipped something imperfect is more useful than the one still planning.",
+  "Focus is a skill, not a personality trait. You can train it.",
+  "Deadlines are a kindness — they force you to decide what matters.",
+  "The work is never done. The question is whether you showed up for it today.",
+]

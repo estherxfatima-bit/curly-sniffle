@@ -10,8 +10,10 @@ import { SortableCard, DraggableCardList } from '../DraggableCard'
 import AddWidgetMenu from '../AddWidgetMenu'
 import BudgetRing from '../../finance/BudgetRing'
 import QuickAddExpense from '../../finance/QuickAddExpense'
+import DailyQuote from '../DailyQuote'
 
 export const CARD_LABELS = {
+  quote: 'Daily quote',
   priority: 'One priority',
   todos: "Today's to-dos",
   habits: 'Habits',
@@ -24,6 +26,7 @@ export const CARD_LABELS = {
 }
 
 export const DEFAULT_ORDER = [
+  { id: 'quote', size: 'wide' },
   { id: 'priority', size: 'square' },
   { id: 'todos', size: 'wide' },
   { id: 'habits', size: 'wide' },
@@ -39,6 +42,7 @@ export default function DailyView({
   cardOrder, onReorder, user, today,
   onHydrationAdd,
   financeTotalVariable, financeOverallBudget, onAddExpense,
+  savedDailyQuote, onSaveDailyQuote,
   editing, onResize, onRemoveCard, onAddCard,
 }) {
   const order = (cardOrder?.length ? cardOrder : DEFAULT_ORDER)
@@ -48,6 +52,17 @@ export default function DailyView({
   const priorityTask = weekTasks.find(t => !t.complete) || null
 
   const CARDS = {
+    quote: (
+      <div className="card" style={{ textAlign: 'center' }}>
+        <DailyQuote
+          userId={user.id}
+          date={today}
+          savedQuote={savedDailyQuote}
+          onSave={onSaveDailyQuote}
+        />
+      </div>
+    ),
+
     priority: (
       <div className="card card-career">
         <div className="flex items-center justify-between mb-3">
@@ -192,7 +207,7 @@ export default function DailyView({
             editing={editing}
             onResize={s => onResize(id, s)}
             onRemove={() => onRemoveCard(id)}
-            onClick={id !== 'todos' && id !== 'mood' && id !== 'reading' && id !== 'calendar' && id !== 'finance-snapshot' && id !== 'quick-add-expense' ? () => openPanel(id === 'habits' ? 'habits' : id === 'water' ? 'water' : id === 'priority' ? 'tasks' : id, { habits, tasks: weekTasks, hydration }) : undefined}
+            onClick={id !== 'quote' && id !== 'todos' && id !== 'mood' && id !== 'reading' && id !== 'calendar' && id !== 'finance-snapshot' && id !== 'quick-add-expense' ? () => openPanel(id === 'habits' ? 'habits' : id === 'water' ? 'water' : id === 'priority' ? 'tasks' : id, { habits, tasks: weekTasks, hydration }) : undefined}
           >
             {CARDS[id] || null}
           </SortableCard>

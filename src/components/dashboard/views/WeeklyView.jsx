@@ -1,4 +1,4 @@
-import { Check, Trash2 } from 'lucide-react'
+import { Check, Star, Trash2 } from 'lucide-react'
 import { format, addDays } from 'date-fns'
 import ArcRing from '../../ui/ArcRing'
 import WeeklyQuote from '../WeeklyQuote'
@@ -8,6 +8,7 @@ import AddWidgetMenu from '../AddWidgetMenu'
 
 export const CARD_LABELS = {
   quote: 'Weekly quote',
+  priorities: 'Weekly priorities',
   momentum: 'Momentum',
   tasks: 'This week',
   'habit-grid': 'Habit week',
@@ -16,6 +17,7 @@ export const CARD_LABELS = {
 
 export const DEFAULT_ORDER = [
   { id: 'quote', size: 'wide' },
+  { id: 'priorities', size: 'wide' },
   { id: 'momentum', size: 'wide' },
   { id: 'tasks', size: 'wide' },
   { id: 'habit-grid', size: 'wide' },
@@ -50,6 +52,34 @@ export default function WeeklyView({
           savedQuote={savedQuote}
           onSave={onSaveQuote}
         />
+      </div>
+    ),
+
+    priorities: (
+      <div className="card card-career">
+        <div className="flex items-center justify-between mb-4">
+          <h3>Weekly priorities</h3>
+          <Star size={13} color="var(--warning)" fill="var(--warning)" />
+        </div>
+        {weekTasks.filter(t => t.priority).length === 0 ? (
+          <p style={{ fontSize: 13, color: 'var(--text-3)', fontStyle: 'italic' }}>
+            No priorities set. Star a task in your weekly plan to feature it here.
+          </p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {weekTasks.filter(t => t.priority).map(task => (
+              <div key={task.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div onClick={e => { e.stopPropagation(); onToggleTask(task) }} className={`toggle-dot ${task.complete ? 'done' : ''}`} style={{ flexShrink: 0, cursor: 'pointer' }}>
+                  {task.complete && <Check size={10} color="white" strokeWidth={3} />}
+                </div>
+                <span style={{ flex: 1, fontSize: 13, textDecoration: task.complete ? 'line-through' : 'none', color: task.complete ? 'var(--text-3)' : 'var(--text)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {task.specific_task}
+                </span>
+                <span className="mono">{task.area}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     ),
 
@@ -197,7 +227,7 @@ export default function WeeklyView({
             editing={editing}
             onResize={s => onResize(id, s)}
             onRemove={() => onRemoveCard(id)}
-            onClick={id !== 'quote' && id !== 'calendar' ? () => openPanel(
+            onClick={id !== 'quote' && id !== 'priorities' && id !== 'calendar' ? () => openPanel(
               id === 'momentum' ? 'momentum' :
               id === 'tasks'    ? 'tasks'    :
               id === 'habit-grid' ? 'habits' : id,

@@ -3,7 +3,7 @@ import { format, startOfWeek, endOfWeek, addWeeks, subWeeks } from 'date-fns'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { TASK_AREAS, AREA_COLORS } from '../lib/constants'
-import { ChevronLeft, ChevronRight, ChevronDown, Plus, Trash2, RotateCcw, MessageSquare, Check, Target } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ChevronDown, Plus, Trash2, RotateCcw, MessageSquare, Check, Target, Star } from 'lucide-react'
 import WeeklyReviewModal from '../components/weekly/WeeklyReviewModal'
 import PastReviews from '../components/weekly/PastReviews'
 import WeeklyQuote from '../components/dashboard/WeeklyQuote'
@@ -154,6 +154,10 @@ export default function WeeklyPage() {
       incomplete.map(t => ({ user_id: user.id, week_start: nextWeekStart, area: t.area, action: t.action, frequency: t.frequency, specific_task: t.specific_task, goal_id: t.goal_id, complete: false, carried_forward: true, notes: t.notes, subtasks: t.subtasks, time_allocation: t.time_allocation }))
     )
     alert(`${incomplete.length} task(s) carried forward to next week`)
+  }
+
+  function togglePriority(task) {
+    updateTaskField(task.id, 'priority', !task.priority)
   }
 
   async function updateTaskField(taskId, field, value) {
@@ -315,6 +319,7 @@ export default function WeeklyPage() {
                           <td>
                             <div className="flex items-center gap-1">
                               <ChevronDown size={12} color="var(--text-3)" style={{ flexShrink: 0, transform: expanded ? 'none' : 'rotate(-90deg)', transition: 'transform 0.15s' }} />
+                              {task.priority && <Star size={12} color="var(--warning)" fill="var(--warning)" style={{ flexShrink: 0 }} />}
                               <span style={{ textDecoration: task.complete ? 'line-through' : 'none', fontSize: 13 }}>{task.specific_task}</span>
                               {task.carried_forward && <span className="badge badge-warning" style={{ marginLeft: 6, fontSize: 9 }}>carried</span>}
                               {task.day_of_week != null && <span className="badge" style={{ marginLeft: 6, fontSize: 9, background: 'var(--career-tint)', color: 'var(--career)' }}>{DAY_SHORT_LABELS[task.day_of_week]}</span>}
@@ -325,6 +330,14 @@ export default function WeeklyPage() {
                           <td>{task.complete ? <span className="badge badge-success">Done</span> : <span className="badge badge-muted">Open</span>}</td>
                           <td>
                             <div className="flex items-center gap-1">
+                              <button
+                                className="btn-icon btn"
+                                onClick={e => { e.stopPropagation(); togglePriority(task) }}
+                                title={task.priority ? 'Remove from this week\'s priorities' : 'Mark as a priority for this week'}
+                                style={{ color: task.priority ? 'var(--warning)' : undefined }}
+                              >
+                                <Star size={13} fill={task.priority ? 'var(--warning)' : 'none'} />
+                              </button>
                               <button className="btn-icon btn" onClick={e => { e.stopPropagation(); deleteTask(task.id) }}><Trash2 size={13} /></button>
                             </div>
                           </td>
@@ -410,6 +423,7 @@ export default function WeeklyPage() {
                   onToggleSubtask={subId => toggleSubtask(task, subId)}
                   onAddSubtask={text => addSubtask(task, text)}
                   onPushNextWeek={pushToNextWeek}
+                  onTogglePriority={togglePriority}
                   onDelete={deleteTask}
                 />
               ))}
