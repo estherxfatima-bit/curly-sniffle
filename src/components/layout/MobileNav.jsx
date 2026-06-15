@@ -1,6 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { LayoutDashboard, CalendarDays, Film, Heart, MoreHorizontal, Search } from 'lucide-react'
 import { useState } from 'react'
+import NotificationsBell from './NotificationsBell'
 
 // Phase 7: primary 4 tabs — Dashboard, Week, Content, Wellness
 const primaryItems = [
@@ -102,6 +103,8 @@ export default function MobileNav({ onOpenSearch }) {
           <Search size={18} />
           Search
         </button>
+
+        <NotificationsBell variant="mobile" />
 
         <button
           onClick={() => setShowOverflow(v => !v)}

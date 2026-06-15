@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { useTheme } from '../../hooks/useTheme'
+import NotificationsBell from './NotificationsBell'
 
 const navItems = [
   { to: '/',          label: 'Dashboard',   icon: LayoutDashboard, section: 'career'   },
@@ -72,8 +73,8 @@ export default function Sidebar({ onOpenSearch }) {
         </div>
       </div>
 
-      {/* Search */}
-      <div style={{ padding: '12px 10px 0' }}>
+      {/* Search + Notifications */}
+      <div style={{ padding: '12px 10px 0', display: 'flex', flexDirection: 'column', gap: 8 }}>
         <button
           onClick={onOpenSearch}
           style={{
@@ -87,6 +88,7 @@ export default function Sidebar({ onOpenSearch }) {
           Search
           <span className="mono" style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--text-3)' }}>⌘K</span>
         </button>
+        <NotificationsBell variant="sidebar" />
       </div>
 
       {/* Nav */}
