@@ -1,8 +1,8 @@
-// /api/calendar/events — read/write the signed-in user's primary Google
-// Calendar, refreshing the stored access token if it has expired.
-// GET    /api/calendar/events?timeMin=...&timeMax=...        — list events
-// POST   /api/calendar/events  { summary, description, start, end } — create event
-// DELETE /api/calendar/events?eventId=...                    — delete event
+// /api/calendar/events — read/write the signed-in user's Google Calendars,
+// refreshing the stored access token if it has expired.
+// GET    /api/calendar/events?timeMin=...&timeMax=...        — list events across all of the user's calendars
+// POST   /api/calendar/events  { summary, description, start, end } — create event on the primary calendar
+// DELETE /api/calendar/events?eventId=...                    — delete event from the primary calendar
 // Header: Authorization: Bearer <supabase access token>
 
 import { createClient } from '@supabase/supabase-js'
@@ -45,6 +45,23 @@ async function getAccessToken(userId) {
   return { accessToken: tokenRow.access_token }
 }
 
+// Returns the list of calendars the user has subscribed to (including secondary
+// calendars synced from other providers, e.g. iCloud calendars subscribed in Google
+// Calendar), restricted to ones the user has selected to show in their UI.
+async function listCalendars(accessToken) {
+  const res = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=freeBusyReader', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  const data = await res.json()
+  if (!res.ok) {
+    console.error('[api/calendar/events] failed to list calendars', data)
+    return ['primary']
+  }
+  const calendars = (data.items || []).filter(c => c.selected !== false)
+  if (calendars.length === 0) return ['primary']
+  return calendars.map(c => c.id)
+}
+
 export default async function handler(req, res) {
   const authHeader = req.headers.authorization || ''
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null
@@ -67,21 +84,36 @@ export default async function handler(req, res) {
       orderBy: 'startTime',
     })
 
-    const evRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events?${params.toString()}`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    })
-    const evData = await evRes.json()
-    if (!evRes.ok) {
-      return res.status(200).json({ connected: true, error: evData.error?.message || 'Failed to fetch events', events: [] })
-    }
+    const calendarIds = await listCalendars(accessToken)
 
-    const events = (evData.items || []).map(e => ({
-      id: e.id,
-      summary: e.summary || '(No title)',
-      start: e.start?.dateTime || e.start?.date,
-      end: e.end?.dateTime || e.end?.date,
-      allDay: !e.start?.dateTime,
+    const results = await Promise.all(calendarIds.map(async calendarId => {
+      const evRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      })
+      const evData = await evRes.json()
+      if (!evRes.ok) {
+        console.error('[api/calendar/events] failed to fetch events for calendar', calendarId, evData.error?.message || evData)
+        return { calendarId, events: [], error: evData.error?.message }
+      }
+      return {
+        calendarId,
+        events: (evData.items || []).map(e => ({
+          id: e.id,
+          calendarId,
+          summary: e.summary || '(No title)',
+          start: e.start?.dateTime || e.start?.date,
+          end: e.end?.dateTime || e.end?.date,
+          allDay: !e.start?.dateTime,
+        })),
+      }
     }))
+
+    const events = results.flatMap(r => r.events).sort((a, b) => new Date(a.start) - new Date(b.start))
+    const firstError = results.find(r => r.error)?.error
+
+    if (events.length === 0 && firstError) {
+      return res.status(200).json({ connected: true, error: firstError, events: [] })
+    }
 
     return res.status(200).json({ connected: true, events })
   }
