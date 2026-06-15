@@ -9,10 +9,9 @@ import WeeklyPlanPicker from './WeeklyPlanPicker'
 import GoalTaskPicker from './GoalTaskPicker'
 import TimerWidget from './TimerWidget'
 import TimeBlockModal from './TimeBlockModal'
-import { Plus, Trash2, ChevronDown, ChevronRight, Check, Clock, Target, Hourglass, AlarmClock, Link2, Timer as TimerIcon, CalendarClock, ChevronLeft } from 'lucide-react'
+import { Plus, Trash2, ChevronDown, ChevronRight, Check, Target, Hourglass, AlarmClock, Link2, Timer as TimerIcon, CalendarClock, ChevronLeft } from 'lucide-react'
 
 const DEFAULT_CATS = ['Work', 'Personal', 'Errands', 'Creative', 'Health']
-const TIME_OPTS = ['15 min', '30 min', '45 min', '1 hr', '1.5 hr', '2 hr', '3 hr']
 
 const AREA_TO_CATEGORY = {
   Career: 'Work',
@@ -455,7 +454,8 @@ function TodoItem({ todo, categories, goals, isTimerRunning, onToggle, onRemove,
   const [showOptions,  setShowOptions]  = useState(false)
   const [addingSub,    setAddingSub]    = useState(false)
   const [subInput,     setSubInput]     = useState('')
-  const [editingTime,  setEditingTime]  = useState(false)
+  const [editingText,  setEditingText]  = useState(false)
+  const [textInput,    setTextInput]    = useState(todo.text)
   const [editingCat,   setEditingCat]   = useState(false)
   const [editingGoal,  setEditingGoal]  = useState(false)
   const [editingDuration, setEditingDuration] = useState(false)
@@ -467,6 +467,13 @@ function TodoItem({ todo, categories, goals, isTimerRunning, onToggle, onRemove,
   function submitSub() {
     if (subInput.trim()) { onAddSubtask(subInput.trim()); setSubInput('') }
     setAddingSub(false)
+  }
+
+  function saveText() {
+    const t = textInput.trim()
+    if (t && t !== todo.text) onUpdateField('text', t)
+    else setTextInput(todo.text)
+    setEditingText(false)
   }
 
   return (
@@ -498,23 +505,38 @@ function TodoItem({ todo, categories, goals, isTimerRunning, onToggle, onRemove,
         </div>
 
         {/* Text */}
-        <span style={{
-          flex: 1,
-          fontSize: 13,
-          fontWeight: 500,
-          color: todo.complete ? 'var(--text-3)' : 'var(--text)',
-          textDecoration: todo.complete ? 'line-through' : 'none',
-          transition: 'all 0.18s',
-          minWidth: 0,
-          whiteSpace: 'normal',
-          wordBreak: 'break-word',
-          display: '-webkit-box',
-          WebkitLineClamp: 4,
-          WebkitBoxOrient: 'vertical',
-          overflow: 'hidden',
-        }}>
-          {todo.text}
-        </span>
+        {editingText ? (
+          <input
+            value={textInput}
+            onChange={e => setTextInput(e.target.value)}
+            onBlur={saveText}
+            onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); if (e.key === 'Escape') { setTextInput(todo.text); setEditingText(false) } }}
+            autoFocus
+            style={{ flex: 1, fontSize: 13, fontWeight: 500, minWidth: 0, padding: '2px 6px' }}
+          />
+        ) : (
+          <span
+            onClick={() => { setTextInput(todo.text); setEditingText(true) }}
+            title="Click to edit"
+            style={{
+              flex: 1,
+              fontSize: 13,
+              fontWeight: 500,
+              color: todo.complete ? 'var(--text-3)' : 'var(--text)',
+              textDecoration: todo.complete ? 'line-through' : 'none',
+              transition: 'all 0.18s',
+              minWidth: 0,
+              whiteSpace: 'normal',
+              wordBreak: 'break-word',
+              display: '-webkit-box',
+              WebkitLineClamp: 4,
+              WebkitBoxOrient: 'vertical',
+              overflow: 'hidden',
+              cursor: 'text',
+            }}>
+            {todo.text}
+          </span>
+        )}
 
         {/* Options toggle */}
         <button className="btn-icon" style={{ padding: 2, flexShrink: 0, color: showOptions ? 'var(--career)' : 'var(--text-3)' }}
@@ -596,31 +618,6 @@ function TodoItem({ todo, categories, goals, isTimerRunning, onToggle, onRemove,
         ) : (
           <button onClick={() => setEditingDuration(true)} className="btn-icon" style={{ padding: 2, color: 'var(--border)', flexShrink: 0 }} title="Set duration">
             <Hourglass size={12} />
-          </button>
-        )}
-
-        {/* Time pill — click to cycle */}
-        {editingTime ? (
-          <select
-            autoFocus
-            value={todo.time_allocation || ''}
-            onChange={e => { onUpdateField('time_allocation', e.target.value || null); setEditingTime(false) }}
-            onBlur={() => setEditingTime(false)}
-            style={{ fontSize: 11, padding: '2px 6px', width: 'auto', border: '1px solid var(--border)', borderRadius: 6 }}
-          >
-            <option value="">No time</option>
-            {TIME_OPTS.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
-        ) : todo.time_allocation ? (
-          <span
-            onClick={() => setEditingTime(true)}
-            title="Click to change"
-            style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 10, color: 'var(--text-3)', background: 'var(--bg-3)', borderRadius: 10, padding: '2px 7px', cursor: 'pointer', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>
-            <Clock size={9} /> {todo.time_allocation}
-          </span>
-        ) : (
-          <button onClick={() => setEditingTime(true)} className="btn-icon" style={{ padding: 2, color: 'var(--border)', flexShrink: 0 }} title="Set time">
-            <Clock size={12} />
           </button>
         )}
 
