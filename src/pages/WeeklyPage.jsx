@@ -2,7 +2,8 @@ import { useState, useEffect, Fragment } from 'react'
 import { format, startOfWeek, endOfWeek, addWeeks, subWeeks } from 'date-fns'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
-import { TASK_AREAS, AREA_COLORS } from '../lib/constants'
+import { TASK_AREAS, AREA_COLORS, priorityRank, priorityFilterOptions, PRIORITY_COLORS } from '../lib/constants'
+import PriorityDot from '../components/shared/PriorityDot'
 import { ChevronLeft, ChevronRight, ChevronDown, Plus, Trash2, RotateCcw, Repeat, MessageSquare, Check, Target, Star } from 'lucide-react'
 import WeeklyReviewModal from '../components/weekly/WeeklyReviewModal'
 import PastReviews from '../components/weekly/PastReviews'
@@ -61,6 +62,7 @@ export default function WeeklyPage() {
   const [showPastReviews, setShowPastReviews] = useState(false)
   const [expandedTask, setExpandedTask] = useState(null)
   const [groupBy, setGroupBy] = useState('area')
+  const [priorityFilter, setPriorityFilter] = useState('') // '' | urgent | high | medium | low | none
   const [newTask, setNewTask] = useState({ area: 'Career', action: '', frequency: 'Weekly', specific_task: '', goal_id: '', recurring: false })
   const [savedQuote, setSavedQuote] = useState(null)
 
@@ -208,17 +210,26 @@ export default function WeeklyPage() {
   const incompleteCount = tasks.filter(t => !t.complete).length
   const doneCount = tasks.filter(t => t.complete).length
 
+  const visibleTasks = tasks.filter(t => {
+    if (priorityFilter === 'none') return !t.priority_level
+    if (priorityFilter) return t.priority_level === priorityFilter
+    return true
+  })
+
+  // High-priority tasks float to the top within each group.
+  const byPriority = (a, b) => priorityRank(a.priority_level) - priorityRank(b.priority_level)
+
   // Build groups based on the grouping toggle
   let groups = []
   if (groupBy === 'area') {
     groups = TASK_AREAS.map(area => ({
-      key: area, label: area, color: areaColor(area), tasks: tasks.filter(t => t.area === area),
+      key: area, label: area, color: areaColor(area), tasks: visibleTasks.filter(t => t.area === area).sort(byPriority),
     })).filter(g => g.tasks.length)
   } else {
     groups = goals.map(g => ({
-      key: g.id, label: g.primary_goal, goal: g, pct: goalProgress(g, metrics, tasks), tasks: tasks.filter(t => t.goal_id === g.id),
+      key: g.id, label: g.primary_goal, goal: g, pct: goalProgress(g, metrics, tasks), tasks: visibleTasks.filter(t => t.goal_id === g.id).sort(byPriority),
     })).filter(g => g.tasks.length)
-    const ungrouped = tasks.filter(t => !t.goal_id)
+    const ungrouped = visibleTasks.filter(t => !t.goal_id).sort(byPriority)
     if (ungrouped.length) groups.push({ key: 'ungrouped', label: 'Ungrouped', tasks: ungrouped })
   }
 
@@ -271,6 +282,23 @@ export default function WeeklyPage() {
         <button className="btn btn-career btn-sm" style={{ color: '#fff' }} onClick={() => setShowAddRow(v => !v)}>
           <Plus size={14} /> Add task
         </button>
+      </div>
+
+      {/* Priority filter bar */}
+      <div className="flex items-center gap-2 mb-5" style={{ overflowX: 'auto', flexWrap: 'nowrap' }}>
+        {priorityFilterOptions().map(opt => (
+          <button key={opt.value || 'all'} onClick={() => setPriorityFilter(priorityFilter === opt.value ? '' : opt.value)}
+            className={`btn btn-xs ${priorityFilter === opt.value ? '' : 'btn-ghost'}`}
+            style={{
+              flexShrink: 0,
+              ...(priorityFilter === opt.value
+                ? { background: PRIORITY_COLORS[opt.value] || 'var(--career)', color: '#fff', border: 'none' }
+                : {}),
+            }}
+          >
+            {opt.label}
+          </button>
+        ))}
       </div>
 
       {/* Table — desktop/tablet */}
@@ -343,7 +371,7 @@ export default function WeeklyPage() {
                       <Fragment key={task.id}>
                         <tr
                           onClick={() => setExpandedTask(expanded ? null : task.id)}
-                          style={{ opacity: task.complete ? 0.55 : 1, transition: 'opacity 0.2s', cursor: 'pointer', borderLeft: `3px solid ${areaColor(task.area)}` }}
+                          style={{ opacity: task.complete ? 0.55 : 1, transition: 'opacity 0.2s', cursor: 'pointer', borderLeft: `3px solid ${task.priority_level === 'urgent' ? PRIORITY_COLORS.urgent : areaColor(task.area)}` }}
                         >
                           <td>
                             <div className={`toggle-dot ${task.complete ? 'done' : ''}`} onClick={e => { e.stopPropagation(); toggleTask(task) }} style={{ margin: '0 auto' }}>
@@ -368,6 +396,7 @@ export default function WeeklyPage() {
                           <td>{task.complete ? <span className="badge badge-success">Done</span> : <span className="badge badge-muted">Open</span>}</td>
                           <td>
                             <div className="flex items-center gap-1">
+                              <PriorityDot priority={task.priority_level} onChange={v => updateTaskField(task.id, 'priority_level', v)} />
                               <button
                                 className="btn-icon btn"
                                 onClick={e => { e.stopPropagation(); togglePriority(task) }}

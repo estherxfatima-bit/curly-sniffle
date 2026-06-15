@@ -1,5 +1,7 @@
 import { ChevronDown, ChevronRight, MessageSquare, Repeat, Star, Trash2 } from 'lucide-react'
 import TaskExpansion from './TaskExpansion'
+import PriorityDot from '../shared/PriorityDot'
+import { PRIORITY_COLORS } from '../../lib/constants'
 
 const DAY_SHORT_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
@@ -9,7 +11,7 @@ export default function WeeklyTaskCard({ task, areaColor, goals, expanded, onTog
   return (
     <div className="card-sm" style={{
       border: '1px solid var(--border)',
-      borderLeft: `3px solid ${areaColor(task.area)}`,
+      borderLeft: `3px solid ${task.priority_level === 'urgent' ? PRIORITY_COLORS.urgent : areaColor(task.area)}`,
       borderRadius: 'var(--radius)',
       opacity: task.complete ? 0.6 : 1,
       transition: 'opacity 0.2s',
@@ -42,6 +44,8 @@ export default function WeeklyTaskCard({ task, areaColor, goals, expanded, onTog
         </span>
 
         {task.notes && <MessageSquare size={12} color="var(--creative)" style={{ flexShrink: 0, marginTop: 2 }} />}
+
+        <PriorityDot priority={task.priority_level} onChange={v => onUpdateField('priority_level', v)} />
 
         <button className="btn-icon" style={{ padding: 2, flexShrink: 0, color: 'var(--text-3)' }} onClick={() => onToggleExpand(task.id)} title="Show notes, comments and details">
           {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
