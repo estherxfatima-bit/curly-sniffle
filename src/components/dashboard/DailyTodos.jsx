@@ -3,7 +3,8 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
 import { useTimer } from '../../hooks/useTimer'
 import { format, subDays, addDays, startOfWeek, getDay, parseISO } from 'date-fns'
-import { parseTimeAllocationToMinutes } from '../../lib/constants'
+import { parseTimeAllocationToMinutes, priorityRank, priorityFilterOptions, PRIORITY_COLORS } from '../../lib/constants'
+import PriorityDot from '../shared/PriorityDot'
 import { deleteCalendarEvent } from '../../lib/googleCalendar'
 import WeeklyPlanPicker from './WeeklyPlanPicker'
 import GoalTaskPicker from './GoalTaskPicker'
@@ -52,6 +53,7 @@ export default function DailyTodos({ compact = false }) {
   const [input,   setInput]   = useState('')
   const [statusFilter,   setStatusFilter]   = useState('all')    // all | active | done
   const [categoryFilter, setCategoryFilter] = useState('')
+  const [priorityFilter, setPriorityFilter] = useState('')       // '' | urgent | high | medium | low | none
   const [categories, setCategories] = useState(DEFAULT_CATS)
   const [newCatInput, setNewCatInput] = useState('')
   const [showAddCat,  setShowAddCat]  = useState(false)
@@ -318,16 +320,18 @@ export default function DailyTodos({ compact = false }) {
     if (statusFilter === 'active' && t.complete) return false
     if (statusFilter === 'done'   && !t.complete) return false
     if (categoryFilter && t.category !== categoryFilter) return false
+    if (priorityFilter === 'none' && t.priority_level) return false
+    if (priorityFilter && priorityFilter !== 'none' && t.priority_level !== priorityFilter) return false
     return true
   })
 
-  // Pinned priorities sort first, then timed todos in chronological order, then timeless todos.
+  // Pinned priorities sort first, then timed todos in chronological order, then by priority.
   const sorted = [...filtered].sort((a, b) => {
     if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1
     if (a.scheduled_time && b.scheduled_time) return a.scheduled_time.localeCompare(b.scheduled_time)
     if (a.scheduled_time) return -1
     if (b.scheduled_time) return 1
-    return 0
+    return priorityRank(a.priority_level) - priorityRank(b.priority_level)
   })
 
   const done  = todos.filter(t => t.complete).length
@@ -454,6 +458,23 @@ export default function DailyTodos({ compact = false }) {
           )}
         </div>
 
+        {/* Priority filter bar */}
+        <div className="flex items-center gap-2 mb-4" style={{ overflowX: 'auto', flexWrap: 'nowrap' }}>
+          {priorityFilterOptions().map(opt => (
+            <button key={opt.value || 'all'} onClick={() => setPriorityFilter(priorityFilter === opt.value ? '' : opt.value)}
+              className={`btn btn-xs ${priorityFilter === opt.value ? '' : 'btn-ghost'}`}
+              style={{
+                flexShrink: 0,
+                ...(priorityFilter === opt.value
+                  ? { background: PRIORITY_COLORS[opt.value] || 'var(--career)', color: '#fff', border: 'none' }
+                  : {}),
+              }}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+
         {/* List */}
         {loading ? (
           <p style={{ color: 'var(--text-3)', fontSize: 13, textAlign: 'center', padding: '16px 0' }}>Loading…</p>
@@ -546,7 +567,7 @@ function TodoItem({ todo, categories, goals, isTimerRunning, onToggle, onRemove,
     <div className="todo-item-row" style={{
       background: todo.complete ? 'var(--bg-2)' : 'var(--card-bg)',
       border: '1px solid var(--border)',
-      borderLeft: `3px solid ${todo.complete ? 'var(--border)' : cc}`,
+      borderLeft: `3px solid ${todo.complete ? 'var(--border)' : (todo.priority_level === 'urgent' ? PRIORITY_COLORS.urgent : cc)}`,
       borderRadius: 'var(--radius)',
       padding: '9px 12px',
       display: 'flex',
@@ -569,6 +590,9 @@ function TodoItem({ todo, categories, goals, isTimerRunning, onToggle, onRemove,
           style={{ borderColor: todo.complete ? 'var(--success)' : cc, flexShrink: 0, cursor: 'pointer', marginTop: 2 }}>
           {todo.complete && <Check size={10} color="white" strokeWidth={3} />}
         </div>
+
+        {/* Priority dot — always visible, cycles Urgent/High/Medium/Low/None */}
+        <PriorityDot priority={todo.priority_level} onChange={v => onUpdateField('priority_level', v)} />
 
         {/* Text */}
         {editingText ? (
