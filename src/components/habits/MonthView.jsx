@@ -66,9 +66,9 @@ export default function MonthView({ habits, logsByHabit, sims, monthDate, today,
                       let bg = 'var(--card-bg)'
                       let border = 'var(--border)'
                       if (status === 'done' || status === 'frozen') { bg = color; border = color }
-                      else if (status === 'na' || status === 'future' || !inMonth) { bg = 'var(--bg-3)'; border = 'transparent' }
+                      else if (status === 'na' || !inMonth) { bg = 'var(--bg-3)'; border = 'transparent' }
 
-                      const clickable = inMonth && (status === 'done' || status === 'missed')
+                      const clickable = inMonth && status !== 'na'
 
                       return (
                         <div
@@ -80,7 +80,7 @@ export default function MonthView({ habits, logsByHabit, sims, monthDate, today,
                             background: bg, border: `1px solid ${border}`,
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                             cursor: clickable ? 'pointer' : 'default',
-                            opacity: !inMonth ? 0.25 : (status === 'future' ? 0.3 : 1),
+                            opacity: !inMonth ? 0.25 : 1,
                             flexShrink: 0,
                           }}
                         >

@@ -1,9 +1,8 @@
-import { format, isAfter, isToday } from 'date-fns'
+import { format, isToday } from 'date-fns'
 import { Check, Trash2, Snowflake, Edit2 } from 'lucide-react'
 import { isExpectedDay, frequencyLabel, weekCount, habitColor } from '../../lib/habitUtils'
 
 export default function HabitRow({ habit, weekDays, logSet, frozenSet, streak, banked, onToggleLog, onOpenMonth, onEdit, onDelete }) {
-  const today = new Date()
   const isTimesPerWeek = habit.frequency_type === 'times_per_week'
   const cnt = isTimesPerWeek ? weekCount(logSet, weekDays[0]) : 0
   const color = habitColor(habit)
@@ -49,11 +48,10 @@ export default function HabitRow({ habit, weekDays, logSet, frozenSet, streak, b
           const expected = isExpectedDay(habit, d)
           const logged = logSet.has(ds)
           const frozen = frozenSet.has(ds)
-          const future = isAfter(d, today) && !isToday(d)
           const todayDot = isToday(d)
 
-          // Future days, and non-expected days for specific-day habits, render blank
-          if (future || (!expected && habit.frequency_type === 'specific_days')) {
+          // Non-expected days for specific-day habits render blank — this habit never occurs on that day
+          if (!expected && habit.frequency_type === 'specific_days') {
             return <div key={ds} style={{ display: 'flex', justifyContent: 'center' }}><div style={{ width: 22, height: 22 }} /></div>
           }
 
