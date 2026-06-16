@@ -16,21 +16,47 @@ function ukHour() {
 async function generateNudgeNotifications(user) {
   const { data: comments } = await supabase
     .from('comments')
-    .select('id, content, created_at')
+    .select('id, content, created_at, user_id, task_id')
     .eq('partner_id', user.id)
     .order('created_at', { ascending: false })
     .limit(20)
   if (!comments?.length) return
 
-  const rows = comments.map(c => ({
-    user_id: user.id,
-    type: 'nudge',
-    title: 'New nudge from your partner',
-    body: c.content,
-    link: '/weekly',
-    source_id: c.id,
-    created_at: c.created_at,
-  }))
+  // Collect unique sender IDs and task IDs to batch-fetch
+  const senderIds = [...new Set(comments.map(c => c.user_id).filter(Boolean))]
+  const taskIds   = [...new Set(comments.map(c => c.task_id).filter(Boolean))]
+
+  const [profilesRes, tasksRes] = await Promise.all([
+    senderIds.length
+      ? supabase.from('profiles').select('id, display_name, email').in('id', senderIds)
+      : { data: [] },
+    taskIds.length
+      ? supabase.from('weekly_tasks').select('id, specific_task').in('id', taskIds)
+      : { data: [] },
+  ])
+
+  const profileMap = Object.fromEntries((profilesRes.data || []).map(p => [p.id, p]))
+  const taskMap    = Object.fromEntries((tasksRes.data    || []).map(t => [t.id, t]))
+
+  const rows = comments.map(c => {
+    const profile  = profileMap[c.user_id]
+    const senderName = profile?.display_name || profile?.email?.split('@')[0] || 'Your partner'
+    const task = c.task_id ? taskMap[c.task_id] : null
+    const context = task
+      ? `"${task.specific_task}"`
+      : c.content?.toLowerCase().includes('weekly') ? 'your weekly plan'
+      : c.content?.toLowerCase().includes('todo') || c.content?.toLowerCase().includes('to-do') ? 'a to-do'
+      : 'your progress'
+    return {
+      user_id: user.id,
+      type: 'nudge',
+      title: `${senderName} nudged you on ${context}`,
+      body: c.content,
+      link: '/weekly',
+      source_id: c.id,
+      created_at: c.created_at,
+    }
+  })
   await supabase.from('notifications').upsert(rows, { onConflict: 'user_id,type,source_id', ignoreDuplicates: true })
 }
 
