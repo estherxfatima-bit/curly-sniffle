@@ -57,6 +57,7 @@ export default function DailyAgenda() {
 
   const todayStr = format(new Date(), 'yyyy-MM-dd')
   const todaysEvents = events.filter(e => format(new Date(e.start), 'yyyy-MM-dd') === todayStr)
+  const now = new Date()
 
   return (
     <div>
@@ -68,15 +69,27 @@ export default function DailyAgenda() {
       {todaysEvents.length === 0 ? (
         <p style={{ fontSize: 13, color: 'var(--text-3)', fontStyle: 'italic' }}>No events today.</p>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {todaysEvents.map(e => (
-            <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span className="mono" style={{ width: 56, flexShrink: 0, color: 'var(--text-3)' }}>
-                {e.allDay ? 'All day' : format(new Date(e.start), 'HH:mm')}
-              </span>
-              <span style={{ fontSize: 13, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.summary}</span>
-            </div>
-          ))}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {todaysEvents.map(e => {
+            const isNow = !e.allDay && new Date(e.start) <= now && now <= new Date(e.end)
+            return (
+              <div
+                key={e.id}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '6px 8px', borderRadius: 6,
+                  borderLeft: `3px solid ${e.calendarColor || 'var(--career)'}`,
+                  background: isNow ? `color-mix(in srgb, ${e.calendarColor || 'var(--career)'} 12%, transparent)` : 'var(--bg-2)',
+                }}
+              >
+                <span className="mono" style={{ width: 52, flexShrink: 0, fontSize: 11, color: isNow ? (e.calendarColor || 'var(--career)') : 'var(--text-3)', fontWeight: isNow ? 700 : 400 }}>
+                  {e.allDay ? 'All day' : format(new Date(e.start), 'HH:mm')}
+                </span>
+                <span style={{ fontSize: 13, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: isNow ? 600 : 400 }}>{e.summary}</span>
+                {isNow && <span className="badge" style={{ fontSize: 9, marginLeft: 'auto', flexShrink: 0, background: e.calendarColor || 'var(--career)', color: '#fff' }}>Now</span>}
+              </div>
+            )
+          })}
         </div>
       )}
     </div>

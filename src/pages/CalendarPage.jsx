@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { format, startOfWeek, addDays, addWeeks, subWeeks, differenceInMinutes, parseISO, isSameDay } from 'date-fns'
-import { ChevronLeft, ChevronRight, RefreshCw, AlertTriangle, Calendar } from 'lucide-react'
+import { ChevronLeft, ChevronRight, RefreshCw, AlertTriangle, Calendar, Plus, Pencil, Trash2, Check, X } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
-import { fetchCalendarEvents } from '../lib/googleCalendar'
+import { fetchCalendarEvents, createCalendarEvent, updateCalendarEvent, deleteCalendarEvent } from '../lib/googleCalendar'
 import { Link } from 'react-router-dom'
 
 // Grid spans 6am – 11pm (17 hours × 60 = 1020 minutes)
@@ -68,6 +68,8 @@ export default function CalendarPage() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [selected, setSelected] = useState(null) // selected event for detail
+  const [saving, setSaving] = useState(false)
+  const [form, setForm] = useState(null) // { eventId?, calendarId?, summary, description, date, startTime, endTime }
 
   const weekStart = startOfWeek(weekRef, { weekStartsOn: 1 })
 
@@ -87,6 +89,51 @@ export default function CalendarPage() {
   }, [session, weekStart.toISOString()]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { load() }, [load])
+
+  function openNewEventForm(day, hour) {
+    const date = format(day || new Date(), 'yyyy-MM-dd')
+    const startHour = hour != null ? hour : new Date().getHours()
+    setForm({
+      summary: '', description: '', date,
+      startTime: `${String(startHour).padStart(2, '0')}:00`,
+      endTime: `${String(Math.min(startHour + 1, 23)).padStart(2, '0')}:00`,
+    })
+  }
+
+  function openEditEventForm(ev) {
+    setSelected(null)
+    setForm({
+      eventId: ev.id, calendarId: ev.calendarId,
+      summary: ev.summary, description: ev.description || '',
+      date: format(ev.start.length === 10 ? parseISO(ev.start) : new Date(ev.start), 'yyyy-MM-dd'),
+      startTime: ev.allDay ? '09:00' : format(new Date(ev.start), 'HH:mm'),
+      endTime: ev.allDay ? '10:00' : format(new Date(ev.end), 'HH:mm'),
+    })
+  }
+
+  async function saveEventForm() {
+    if (!form?.summary?.trim() || !form.date || !form.startTime || !form.endTime) return
+    setSaving(true)
+    const start = `${form.date}T${form.startTime}:00`
+    const end = `${form.date}T${form.endTime}:00`
+    let result
+    if (form.eventId) {
+      result = await updateCalendarEvent(session, form.eventId, { calendarId: form.calendarId, summary: form.summary, description: form.description, start, end })
+    } else {
+      result = await createCalendarEvent(session, { summary: form.summary, description: form.description, start, end })
+    }
+    setSaving(false)
+    if (result?.error) { alert(result.error); return }
+    setForm(null)
+    await load(true)
+  }
+
+  async function deleteEvent(ev) {
+    if (!window.confirm(`Delete "${ev.summary}"?`)) return
+    setSelected(null)
+    await deleteCalendarEvent(session, ev.id, ev.calendarId)
+    await load(true)
+  }
 
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
   const todayStr = format(new Date(), 'yyyy-MM-dd')
@@ -145,6 +192,9 @@ export default function CalendarPage() {
             <button className="btn-icon" title="Next week" onClick={() => setWeekRef(d => addWeeks(d, 1))}><ChevronRight size={16} /></button>
             <button className="btn-icon" title="Refresh" onClick={() => load(true)} disabled={refreshing}>
               <RefreshCw size={14} className={refreshing ? 'spin' : ''} />
+            </button>
+            <button className="btn btn-career btn-sm" style={{ color: '#fff' }} onClick={() => openNewEventForm(new Date(), new Date().getHours())}>
+              <Plus size={14} /> New event
             </button>
           </div>
         </div>
@@ -219,9 +269,13 @@ export default function CalendarPage() {
                 const dayEvs = eventsByDay[di]
                 return (
                   <div key={di} style={{ position: 'relative', height: GRID_HEIGHT, borderLeft: '1px solid var(--border)', background: isToday ? 'var(--career-tint, var(--bg-2))' : 'transparent' }}>
-                    {/* Hour grid lines */}
+                    {/* Hour grid lines — click an empty slot to create an event there */}
                     {hours.map(h => (
-                      <div key={h} style={{ position: 'absolute', top: (h - GRID_START_HOUR) * HOUR_HEIGHT, left: 0, right: 0, borderTop: '1px solid var(--border)', opacity: 0.4 }} />
+                      <div
+                        key={h}
+                        onClick={() => openNewEventForm(day, h)}
+                        style={{ position: 'absolute', top: (h - GRID_START_HOUR) * HOUR_HEIGHT, left: 0, right: 0, height: HOUR_HEIGHT, borderTop: '1px solid var(--border)', opacity: 0.4, cursor: 'pointer' }}
+                      />
                     ))}
 
                     {/* Events */}
@@ -239,7 +293,7 @@ export default function CalendarPage() {
                       return (
                         <div
                           key={ev.id}
-                          onClick={() => setSelected(ev)}
+                          onClick={e => { e.stopPropagation(); setSelected(ev) }}
                           title={`${ev.summary}\n${startTime}–${endTime}`}
                           style={{
                             position: 'absolute',
@@ -295,7 +349,39 @@ export default function CalendarPage() {
             )}
             {selected.location && <p style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 6 }}>📍 {selected.location}</p>}
             {selected.description && <p style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 8, whiteSpace: 'pre-wrap' }}>{selected.description}</p>}
-            <button className="btn btn-ghost btn-sm" style={{ marginTop: 16 }} onClick={() => setSelected(null)}>Close</button>
+            <div className="flex items-center gap-2" style={{ marginTop: 16 }}>
+              <button className="btn btn-ghost btn-sm" onClick={() => openEditEventForm(selected)}><Pencil size={13} /> Edit</button>
+              <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => deleteEvent(selected)}><Trash2 size={13} /> Delete</button>
+              <div style={{ flex: 1 }} />
+              <button className="btn btn-ghost btn-sm" onClick={() => setSelected(null)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create / edit event form */}
+      {form && (
+        <div
+          style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh', zIndex: 1150, background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(2px)', WebkitBackdropFilter: 'blur(2px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+          onClick={() => setForm(null)}
+        >
+          <div className="card" style={{ maxWidth: 400, width: '100%', boxShadow: 'var(--shadow-lg)' }} onClick={e => e.stopPropagation()}>
+            <p style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>{form.eventId ? 'Edit event' : 'New event'}</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <input placeholder="Title" value={form.summary} onChange={e => setForm(p => ({ ...p, summary: e.target.value }))} style={{ fontSize: 13 }} autoFocus />
+              <input type="date" value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} style={{ fontSize: 13 }} />
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input type="time" value={form.startTime} onChange={e => setForm(p => ({ ...p, startTime: e.target.value }))} style={{ fontSize: 13, flex: 1 }} />
+                <input type="time" value={form.endTime} onChange={e => setForm(p => ({ ...p, endTime: e.target.value }))} style={{ fontSize: 13, flex: 1 }} />
+              </div>
+              <textarea placeholder="Description (optional)" value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} style={{ fontSize: 13, minHeight: 60, resize: 'vertical' }} />
+            </div>
+            <div className="flex items-center gap-2" style={{ marginTop: 16 }}>
+              <button className="btn btn-career btn-sm" style={{ color: '#fff' }} onClick={saveEventForm} disabled={saving}>
+                <Check size={13} /> {saving ? 'Saving…' : form.eventId ? 'Save changes' : 'Create event'}
+              </button>
+              <button className="btn btn-ghost btn-sm" onClick={() => setForm(null)}><X size={13} /> Cancel</button>
+            </div>
           </div>
         </div>
       )}

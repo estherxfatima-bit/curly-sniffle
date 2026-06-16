@@ -57,6 +57,7 @@ export default function WeeklyAgenda({ weekStart }) {
   }
 
   const days = Array.from({ length: 7 }, (_, i) => addDays(new Date(weekStart), i))
+  const todayStr = format(new Date(), 'yyyy-MM-dd')
 
   return (
     <div>
@@ -65,19 +66,28 @@ export default function WeeklyAgenda({ weekStart }) {
           <RefreshCw size={13} className={refreshing ? 'spin' : ''} />
         </button>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {days.map(day => {
           const dayStr = format(day, 'yyyy-MM-dd')
+          const isToday = dayStr === todayStr
           const dayEvents = events.filter(e => format(new Date(e.start), 'yyyy-MM-dd') === dayStr)
           return (
-            <div key={dayStr} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-              <span className="mono" style={{ width: 64, flexShrink: 0, color: 'var(--text-3)', paddingTop: 1 }}>{format(day, 'EEE d')}</span>
+            <div
+              key={dayStr}
+              style={{
+                display: 'flex', gap: 12, alignItems: 'flex-start',
+                padding: '6px 8px', borderRadius: 6,
+                background: isToday ? 'var(--career-tint, var(--bg-2))' : 'transparent',
+              }}
+            >
+              <span className="mono" style={{ width: 64, flexShrink: 0, fontSize: 11, color: isToday ? 'var(--career)' : 'var(--text-3)', fontWeight: isToday ? 700 : 400, paddingTop: 1 }}>{format(day, 'EEE d')}</span>
               {dayEvents.length === 0 ? (
                 <span style={{ fontSize: 12, color: 'var(--text-3)', fontStyle: 'italic' }}>—</span>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1, minWidth: 0 }}>
                   {dayEvents.map(e => (
                     <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ width: 6, height: 6, borderRadius: '50%', background: e.calendarColor || 'var(--career)', flexShrink: 0 }} />
                       <span className="mono" style={{ fontSize: 10, color: 'var(--text-3)', flexShrink: 0 }}>
                         {e.allDay ? 'All day' : format(new Date(e.start), 'HH:mm')}
                       </span>

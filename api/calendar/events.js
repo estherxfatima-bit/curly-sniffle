@@ -2,7 +2,8 @@
 // refreshing the stored access token if it has expired.
 // GET    /api/calendar/events?timeMin=...&timeMax=...        — list events across all of the user's calendars
 // POST   /api/calendar/events  { summary, description, start, end } — create event on the primary calendar
-// DELETE /api/calendar/events?eventId=...                    — delete event from the primary calendar
+// PATCH  /api/calendar/events  { eventId, calendarId?, summary?, description?, start?, end? } — update an event
+// DELETE /api/calendar/events?eventId=...&calendarId=...     — delete event (defaults to primary calendar)
 // Header: Authorization: Bearer <supabase access token>
 
 import { createClient } from '@supabase/supabase-js'
@@ -157,15 +158,45 @@ export default async function handler(req, res) {
     return res.status(200).json({ id: evData.id, summary: evData.summary, start: evData.start?.dateTime, end: evData.end?.dateTime })
   }
 
+  if (req.method === 'PATCH') {
+    const { accessToken, error } = await getAccessToken(userId)
+    if (error === 'not_connected') return res.status(409).json({ error: 'Google Calendar is not connected' })
+    if (error === 'reconnect') return res.status(409).json({ error: 'Missing refresh token — please reconnect Google Calendar' })
+
+    const { eventId, calendarId, summary, description, start, end } = req.body || {}
+    if (!eventId) return res.status(400).json({ error: 'eventId is required' })
+
+    const patch = {}
+    if (summary !== undefined) patch.summary = summary
+    if (description !== undefined) patch.description = description
+    if (start !== undefined) patch.start = start.length === 10 ? { date: start } : { dateTime: start }
+    if (end !== undefined) patch.end = end.length === 10 ? { date: end } : { dateTime: end }
+
+    const evRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId || 'primary')}/events/${encodeURIComponent(eventId)}`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    })
+    const evData = await evRes.json()
+    if (!evRes.ok) return res.status(502).json({ error: evData.error?.message || 'Failed to update event' })
+
+    return res.status(200).json({
+      id: evData.id,
+      summary: evData.summary,
+      start: evData.start?.dateTime || evData.start?.date,
+      end: evData.end?.dateTime || evData.end?.date,
+    })
+  }
+
   if (req.method === 'DELETE') {
     const { accessToken, error } = await getAccessToken(userId)
     if (error === 'not_connected') return res.status(200).json({ ok: true })
     if (error === 'reconnect') return res.status(200).json({ ok: true })
 
-    const { eventId } = req.query
+    const { eventId, calendarId } = req.query
     if (!eventId) return res.status(400).json({ error: 'eventId is required' })
 
-    const evRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/primary/events/${encodeURIComponent(eventId)}`, {
+    const evRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId || 'primary')}/events/${encodeURIComponent(eventId)}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${accessToken}` },
     })

@@ -35,12 +35,32 @@ export async function createCalendarEvent(session, { summary, description, start
   }
 }
 
+// Updates an existing event. Only the fields passed are changed.
+export async function updateCalendarEvent(session, eventId, { calendarId, summary, description, start, end }) {
+  if (!session?.access_token || !eventId) return { error: 'Not signed in' }
+  try {
+    const res = await fetch('/api/calendar/events', {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ eventId, calendarId, summary, description, start, end }),
+    })
+    const data = await res.json()
+    if (!res.ok) return { error: data.error || 'Failed to update event' }
+    return data
+  } catch {
+    return { error: 'Failed to update event' }
+  }
+}
+
 // Deletes an event from the user's primary Google Calendar. Treats missing
 // connection / already-deleted events as success so callers don't need to handle it.
-export async function deleteCalendarEvent(session, eventId) {
+export async function deleteCalendarEvent(session, eventId, calendarId) {
   if (!session?.access_token || !eventId) return { ok: true }
   try {
-    const params = new URLSearchParams({ eventId })
+    const params = new URLSearchParams({ eventId, ...(calendarId ? { calendarId } : {}) })
     const res = await fetch(`/api/calendar/events?${params.toString()}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${session.access_token}` },
