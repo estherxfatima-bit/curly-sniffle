@@ -24,7 +24,7 @@ export default function MoodWidget() {
   }, [user, today])
 
   async function logMood(score) {
-    if (todayMood || saving) return
+    if (saving) return
     setSaving(true)
     await supabase.from('mood_logs').upsert({ user_id: user.id, mood_score: score, log_date: today }, { onConflict: 'user_id,log_date' })
     setTodayMood(score)
@@ -46,8 +46,8 @@ export default function MoodWidget() {
               padding: '5px 7px',
               borderRadius: 'var(--radius)',
               border: todayMood === m.value ? '2px solid var(--personal)' : '2px solid transparent',
-              opacity: todayMood && todayMood !== m.value ? 0.3 : 1,
-              cursor: todayMood ? 'default' : 'pointer',
+              opacity: 1,
+              cursor: 'pointer',
               transition: 'all 0.15s',
               transform: todayMood === m.value ? 'scale(1.1)' : 'scale(1)',
             }}

@@ -12,14 +12,8 @@ import WellnessDashboard from '../components/wellness/WellnessDashboard'
 
 const WORKOUT_TYPES = ['Gym', 'Run', 'Yoga', 'Swim', 'Cycle', 'Walk', 'HIIT', 'Other']
 const HYDRATION_GOAL = 2500
-const MOOD_OPTIONS = [
-  { emoji: '😞', label: 'Bad' },
-  { emoji: '😕', label: 'Low' },
-  { emoji: '😐', label: 'Okay' },
-  { emoji: '🙂', label: 'Good' },
-  { emoji: '😄', label: 'Great' },
-]
 const FREQUENCY_UNITS = ['days', 'weeks', 'months']
+const ROUTINE_EMOJIS = ['💉', '💆', '🛀', '🦷', '💇', '🧖', '✨', '🪒', '💅']
 
 function frequencyToDays(value, unit) {
   if (unit === 'weeks') return value * 7
@@ -106,7 +100,8 @@ export default function WellnessPage() {
   const [tab, setTab]                 = useState(() => new URLSearchParams(window.location.search).get('tab') || 'dashboard')
   const [mealTab, setMealTab]         = useState('plan')
   const [routines, setRoutines]       = useState([])
-  const [newRoutine, setNewRoutine]   = useState({ name: '', frequency_value: 1, frequency_unit: 'weeks', remind_days_before: 2 })
+  const [newRoutine, setNewRoutine]   = useState({ name: '', frequency_value: 1, frequency_unit: 'weeks', remind_days_before: 2, last_done_date: '', emoji: '' })
+  const [taskDateForRoutine, setTaskDateForRoutine] = useState({})
   const [measurements, setMeasurements] = useState([])
   const [weightUnit, setWeightUnit]   = useState('kg')
   const [newMeasurement, setNewMeasurement] = useState({ date: format(new Date(), 'yyyy-MM-dd'), weight: '', custom: [] })
@@ -244,9 +239,11 @@ export default function WellnessPage() {
       frequency_value: parseInt(newRoutine.frequency_value) || 1,
       frequency_unit: newRoutine.frequency_unit,
       remind_days_before: parseInt(newRoutine.remind_days_before) || 0,
+      last_done_date: newRoutine.last_done_date || null,
+      emoji: newRoutine.emoji || null,
     }).select().single()
     if (data) setRoutines(prev => [...prev, data])
-    setNewRoutine({ name: '', frequency_value: 1, frequency_unit: 'weeks', remind_days_before: 2 })
+    setNewRoutine({ name: '', frequency_value: 1, frequency_unit: 'weeks', remind_days_before: 2, last_done_date: '', emoji: '' })
   }
 
   async function markRoutineDone(routine) {
@@ -257,6 +254,22 @@ export default function WellnessPage() {
   async function deleteRoutine(id) {
     await supabase.from('wellness_routines').delete().eq('id', id)
     setRoutines(prev => prev.filter(r => r.id !== id))
+  }
+
+  async function addRoutineAsTask(routine, dateStr) {
+    if (!dateStr) return
+    const taskWeekStart = format(startOfWeek(parseISO(dateStr), { weekStartsOn: 1 }), 'yyyy-MM-dd')
+    await supabase.from('weekly_tasks').insert({
+      user_id: user.id,
+      week_start: taskWeekStart,
+      area: 'Health/Wellness',
+      specific_task: routine.name,
+      action: routine.name,
+      frequency: 'One-off',
+      complete: false,
+      carried_forward: false,
+    })
+    setTaskDateForRoutine(prev => ({ ...prev, [routine.id]: undefined }))
   }
 
   // Body measurements
@@ -288,20 +301,6 @@ export default function WellnessPage() {
   async function deleteMeasurement(id) {
     await supabase.from('body_measurements').delete().eq('id', id)
     setMeasurements(prev => prev.filter(m => m.id !== id))
-  }
-
-  // Mood
-  async function setMood(emoji, label) {
-    if (wellnessLog) {
-      const { data } = await supabase.from('wellness_logs').update({ mood: label, mood_emoji: emoji }).eq('id', wellnessLog.id).select().single()
-      if (data) setWellnessLog(data)
-    } else {
-      const { data } = await supabase.from('wellness_logs').upsert(
-        { user_id: user.id, log_date: today, mood: label, mood_emoji: emoji },
-        { onConflict: 'user_id,log_date' }
-      ).select().single()
-      if (data) setWellnessLog(data)
-    }
   }
 
   async function logHydration() {
@@ -474,27 +473,6 @@ export default function WellnessPage() {
       {/* Dashboard tab */}
       {tab === 'dashboard' && (
         <>
-        <div className="card mb-4">
-          <h3 style={{ fontSize: '0.9rem', marginBottom: 12 }}>How are you feeling today?</h3>
-          <div className="flex items-center gap-2">
-            {MOOD_OPTIONS.map(opt => (
-              <button
-                key={opt.label}
-                onClick={() => setMood(opt.emoji, opt.label)}
-                title={opt.label}
-                className="btn-icon btn"
-                style={{
-                  fontSize: 24, width: 44, height: 44,
-                  background: wellnessLog?.mood_emoji === opt.emoji ? 'var(--wellness-tint, rgba(224,120,32,0.15))' : 'transparent',
-                  border: wellnessLog?.mood_emoji === opt.emoji ? '2px solid var(--wellness)' : '1px solid var(--border)',
-                  borderRadius: '50%',
-                }}
-              >
-                {opt.emoji}
-              </button>
-            ))}
-          </div>
-        </div>
         <WellnessDashboard
           streak={streak}
           sessionsThisWeek={workouts.filter(w => w.log_date >= weekStart).length}
@@ -817,6 +795,39 @@ export default function WellnessPage() {
               <input type="number" min={0} value={newRoutine.remind_days_before} onChange={e => setNewRoutine(p => ({ ...p, remind_days_before: e.target.value }))} style={{ fontSize: 12, width: 60 }} />
               <span style={{ fontSize: 12, color: 'var(--text-3)' }}>days before due</span>
             </div>
+            <div className="flex items-center gap-2 mb-3">
+              <span style={{ fontSize: 12, color: 'var(--text-3)' }}>last done</span>
+              <input type="date" value={newRoutine.last_done_date} onChange={e => setNewRoutine(p => ({ ...p, last_done_date: e.target.value }))} style={{ fontSize: 12 }} />
+              <span style={{ fontSize: 11, color: 'var(--text-3)' }}>(optional)</span>
+            </div>
+            <div className="mb-3">
+              <p style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 6 }}>Emoji</p>
+              <div className="flex items-center gap-1 wrap">
+                {ROUTINE_EMOJIS.map(em => (
+                  <button
+                    key={em}
+                    type="button"
+                    onClick={() => setNewRoutine(p => ({ ...p, emoji: p.emoji === em ? '' : em }))}
+                    className="btn-icon btn"
+                    style={{
+                      fontSize: 16, width: 30, height: 30,
+                      background: newRoutine.emoji === em ? 'var(--wellness-tint, rgba(224,120,32,0.15))' : 'transparent',
+                      border: newRoutine.emoji === em ? '2px solid var(--wellness)' : '1px solid var(--border)',
+                      borderRadius: '50%',
+                    }}
+                  >
+                    {em}
+                  </button>
+                ))}
+                <input
+                  placeholder="or paste"
+                  maxLength={2}
+                  value={ROUTINE_EMOJIS.includes(newRoutine.emoji) ? '' : newRoutine.emoji}
+                  onChange={e => setNewRoutine(p => ({ ...p, emoji: e.target.value }))}
+                  style={{ fontSize: 14, width: 56 }}
+                />
+              </div>
+            </div>
             <button className="btn btn-sm btn-wellness" style={{ color: '#fff' }} onClick={addRoutine}><Plus size={12} /> Add routine</button>
           </div>
 
@@ -828,10 +839,12 @@ export default function WellnessPage() {
                 const status = routineStatus(routine)
                 const daysSince = routine.last_done_date ? differenceInCalendarDays(new Date(), new Date(`${routine.last_done_date}T00:00:00`)) : null
                 const badgeClass = status.tone === 'danger' ? 'badge-danger' : status.tone === 'warning' ? 'badge-warning' : status.tone === 'success' ? 'badge-success' : 'badge-muted'
+                const dueSoonOrOverdue = status.tone === 'warning' || status.tone === 'danger'
+                const defaultTaskDate = status.nextDue ? format(status.nextDue, 'yyyy-MM-dd') : today
                 return (
                   <div key={routine.id} className="card">
                     <div className="flex items-center justify-between mb-2">
-                      <p style={{ fontSize: 14, fontWeight: 600 }}>{routine.name}</p>
+                      <p style={{ fontSize: 14, fontWeight: 600 }}>{routine.emoji ? `${routine.emoji} ` : ''}{routine.name}</p>
                       <button className="btn-icon btn" onClick={() => deleteRoutine(routine.id)}><Trash2 size={12} /></button>
                     </div>
                     <span className={`badge ${badgeClass}`}>{status.label}</span>
@@ -843,6 +856,22 @@ export default function WellnessPage() {
                     )}
                     <p style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 10 }}>Every {routine.frequency_value} {routine.frequency_unit}</p>
                     <button className="btn btn-sm btn-wellness" style={{ color: '#fff' }} onClick={() => markRoutineDone(routine)}><Check size={12} /> Mark as done today</button>
+                    {dueSoonOrOverdue && (
+                      <div className="flex items-center gap-2" style={{ marginTop: 8 }}>
+                        <input
+                          type="date"
+                          value={taskDateForRoutine[routine.id] ?? defaultTaskDate}
+                          onChange={e => setTaskDateForRoutine(prev => ({ ...prev, [routine.id]: e.target.value }))}
+                          style={{ fontSize: 11, padding: '4px 6px' }}
+                        />
+                        <button
+                          className="btn btn-xs btn-ghost"
+                          onClick={() => addRoutineAsTask(routine, taskDateForRoutine[routine.id] ?? defaultTaskDate)}
+                        >
+                          <Plus size={11} /> Add as task
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )
               })}
