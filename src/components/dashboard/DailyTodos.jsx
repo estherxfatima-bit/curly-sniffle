@@ -123,46 +123,65 @@ export default function DailyTodos({ compact = false }) {
   }
 
   async function carryOverYesterday() {
-    // Carry over yesterday's incomplete (idempotent guard via carried_from)
-    const { data: yd } = await supabase
+    // Find the most recent day before today that has incomplete, unarchived todos
+    // (handles being away for multiple days, not just yesterday)
+    const { data: pending } = await supabase
       .from('daily_todos')
       .select('*')
       .eq('user_id', user.id)
-      .eq('date', yesterday)
+      .lt('date', today)
       .eq('complete', false)
       .eq('archived', false)
+      .order('date', { ascending: false })
 
-    if (yd?.length) {
-      const { data: alreadyDone } = await supabase
-        .from('daily_todos')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('date', today)
-        .eq('carried_from', yesterday)
-        .limit(1)
+    if (!pending?.length) return
 
-      if (!alreadyDone?.length) {
-        // Insert carry-overs then archive yesterday
-        await supabase.from('daily_todos').insert(
-          yd.map(t => ({
-            user_id: user.id,
-            text: t.text,
-            date: today,
-            complete: false,
-            category: t.category || 'Personal',
-            time_allocation: t.time_allocation,
-            subtasks: t.subtasks,
-            carried_from: yesterday,
-            duration_minutes: t.duration_minutes,
-          }))
-        )
-        await supabase.from('daily_todos')
-          .update({ archived: true })
-          .eq('user_id', user.id)
-          .eq('date', yesterday)
-          .eq('complete', false)
-      }
+    // Guard: don't carry over if today already has rows from this source date
+    const sourceDates = [...new Set(pending.map(t => t.date))]
+    const { data: alreadyCarried } = await supabase
+      .from('daily_todos')
+      .select('carried_from')
+      .eq('user_id', user.id)
+      .eq('date', today)
+      .in('carried_from', sourceDates)
+
+    const alreadyCarriedDates = new Set((alreadyCarried || []).map(r => r.carried_from))
+    const toCarry = pending.filter(t => !alreadyCarriedDates.has(t.date))
+    if (!toCarry.length) return
+
+    // Insert first — only archive source rows if insert succeeds
+    const { error } = await supabase.from('daily_todos').insert(
+      toCarry.map(t => ({
+        user_id:            user.id,
+        text:               t.text,
+        date:               today,
+        complete:           false,
+        category:           t.category || 'Personal',
+        time_allocation:    t.time_allocation,
+        subtasks:           t.subtasks,
+        carried_from:       t.date,
+        duration_minutes:   t.duration_minutes,
+        priority_level:     t.priority_level,
+        is_private:         t.is_private ?? false,
+        goal_id:            t.goal_id,
+        sort_order:         t.sort_order,
+        scheduled_time:     t.scheduled_time,
+        weekly_task_ref_id: t.weekly_task_ref_id,
+      }))
+    )
+
+    if (error) {
+      console.error('Carryover insert failed — NOT archiving source todos:', error)
+      return
     }
+
+    // Only archive after confirmed insert
+    const sourceDateList = [...new Set(toCarry.map(t => t.date))]
+    await supabase.from('daily_todos')
+      .update({ archived: true })
+      .eq('user_id', user.id)
+      .eq('complete', false)
+      .in('date', sourceDateList)
   }
 
   async function loadTodosForDate(date) {
