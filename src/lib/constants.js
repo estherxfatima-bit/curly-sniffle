@@ -1,4 +1,4 @@
-export const TASK_AREAS = ['Career', 'Creative', 'Personal', 'Financial', 'Health/Wellness', 'Other']
+export const TASK_AREAS = ['Career', 'Creative', 'Personal', 'Financial', 'Health/Wellness', 'Work (9–5)', 'Other']
 
 export const AREA_COLORS = {
   Career: '#1a4fff',
@@ -6,8 +6,12 @@ export const AREA_COLORS = {
   Personal: '#d4506a',
   Financial: '#0a8a5a',
   'Health/Wellness': '#e07820',
+  'Work (9–5)': '#64748b',
   Other: '#8a7d75',
 }
+
+// Day labels used by work-hours / overlap pickers (Settings, time-blocking).
+export const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
 export const GOAL_CATEGORIES = ['Career', 'Creative', 'Financial', 'Personal', 'Wellness']
 

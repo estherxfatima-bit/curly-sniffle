@@ -3,9 +3,10 @@ import { Link } from 'react-router-dom'
 import { format, startOfWeek, endOfWeek, addWeeks, subWeeks } from 'date-fns'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
-import { TASK_AREAS, AREA_COLORS, priorityRank, priorityFilterOptions, PRIORITY_COLORS } from '../lib/constants'
+import { TASK_AREAS, AREA_COLORS, priorityRank, priorityFilterOptions, PRIORITY_COLORS, DAY_LABELS } from '../lib/constants'
 import PriorityDot from '../components/shared/PriorityDot'
-import { ChevronLeft, ChevronRight, ChevronDown, Plus, Trash2, RotateCcw, Repeat, MessageSquare, Check, Target, Star } from 'lucide-react'
+import { toMinutes, minutesToTimeString } from '../lib/timeBlocking'
+import { ChevronLeft, ChevronRight, ChevronDown, Plus, Trash2, RotateCcw, Repeat, MessageSquare, Check, Target, Star, CalendarClock } from 'lucide-react'
 import WeeklyReviewModal from '../components/weekly/WeeklyReviewModal'
 import PastReviews from '../components/weekly/PastReviews'
 import WeeklyQuote from '../components/dashboard/WeeklyQuote'
@@ -18,6 +19,7 @@ import BrainDump from '../components/shared/BrainDump'
 
 const FREQUENCIES = ['Daily', 'Weekly', '2x/week', '3x/week', 'One-off']
 const DAY_SHORT_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+const WORK_AREA = 'Work (9–5)'
 
 function areaColor(area) {
   return AREA_COLORS[area] || AREA_COLORS.Other
@@ -66,13 +68,95 @@ export default function WeeklyPage() {
   const [priorityFilter, setPriorityFilter] = useState('') // '' | urgent | high | medium | low | none
   const [newTask, setNewTask] = useState({ area: 'Career', action: '', frequency: 'Weekly', specific_task: '', goal_id: '', recurring: false })
   const [savedQuote, setSavedQuote] = useState(null)
+  const [prefs, setPrefs] = useState(null)
+  const [timeBlocking, setTimeBlocking] = useState(false)
 
   const weekStart = startOfWeek(currentWeek, { weekStartsOn: 1 })
   const weekEnd   = endOfWeek(currentWeek, { weekStartsOn: 1 })
   const weekStartStr = format(weekStart, 'yyyy-MM-dd')
 
-  useEffect(() => { if (user) { loadTasks(); loadGoals(); loadQuote() } }, [user, currentWeek])
+  useEffect(() => { if (user) { loadTasks(); loadGoals(); loadQuote(); loadPrefs() } }, [user, currentWeek])
   useEffect(() => { if (window.location.search.includes('review=1')) setShowReview(true) }, [])
+
+  async function loadPrefs() {
+    const { data } = await supabase.from('user_preferences')
+      .select('working_hours_start, working_hours_end, work_days, allow_personal_overlap, overlap_days, overlap_hours')
+      .eq('user_id', user.id).maybeSingle()
+    setPrefs(data || {
+      working_hours_start: '09:00', working_hours_end: '19:00',
+      work_days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'], allow_personal_overlap: false,
+      overlap_days: [], overlap_hours: [],
+    })
+  }
+
+  // Minimal "time-block my day": walk 30-min slots from 6am-10pm, skip slots that
+  // fall within configured work hours/work days unless the task's area is Work,
+  // or personal-overlap is allowed for that day/hour. Assigns scheduled_time to
+  // today's incomplete, unscheduled tasks (day_of_week matching today or unset).
+  async function timeBlockMyDay() {
+    if (!prefs) return
+    setTimeBlocking(true)
+    try {
+      const now = new Date()
+      const todayIdx = (now.getDay() + 6) % 7 // 0=Mon..6=Sun
+      const todayLabel = DAY_LABELS[todayIdx]
+
+      const candidates = tasks
+        .filter(t => !t.complete && !t.scheduled_time && (t.day_of_week == null || t.day_of_week === todayIdx))
+        .sort(byPriority)
+
+      if (!candidates.length) { setTimeBlocking(false); return }
+
+      const workStart = toMinutes(prefs.working_hours_start, 9 * 60)
+      const workEnd = toMinutes(prefs.working_hours_end, 19 * 60)
+      const isWorkDay = (prefs.work_days || []).includes(todayLabel)
+      const overlapAllowedToday = prefs.allow_personal_overlap && (prefs.overlap_days || []).includes(todayLabel)
+      const overlapRanges = (prefs.overlap_hours || []).map(r => ({ start: toMinutes(r.start, 0), end: toMinutes(r.end, 0) }))
+
+      function slotIsWorkBlocked(slotStart, slotEnd, area) {
+        if (area === WORK_AREA) return false
+        if (!isWorkDay) return false
+        const withinWorkHours = slotStart < workEnd && slotEnd > workStart
+        if (!withinWorkHours) return false
+        if (prefs.allow_personal_overlap && overlapAllowedToday) {
+          const withinOverlapRange = overlapRanges.some(r => slotStart >= r.start && slotEnd <= r.end)
+          if (withinOverlapRange) return false
+        }
+        return true
+      }
+
+      const SLOT = 30
+      const DAY_START = 6 * 60
+      const DAY_END = 22 * 60
+      const taken = new Set(
+        tasks.filter(t => t.scheduled_time).map(t => toMinutes(t.scheduled_time, 0))
+      )
+
+      const updates = []
+      for (const task of candidates) {
+        let placed = false
+        for (let slot = DAY_START; slot + SLOT <= DAY_END; slot += SLOT) {
+          if (taken.has(slot)) continue
+          if (slotIsWorkBlocked(slot, slot + SLOT, task.area)) continue
+          taken.add(slot)
+          updates.push({ id: task.id, scheduled_time: minutesToTimeString(slot) })
+          placed = true
+          break
+        }
+        if (!placed) continue
+      }
+
+      for (const u of updates) {
+        await supabase.from('weekly_tasks').update({ scheduled_time: u.scheduled_time }).eq('id', u.id)
+      }
+      setTasks(prev => prev.map(t => {
+        const u = updates.find(x => x.id === t.id)
+        return u ? { ...t, scheduled_time: u.scheduled_time } : t
+      }))
+    } finally {
+      setTimeBlocking(false)
+    }
+  }
 
   async function loadQuote() {
     const { data } = await supabase.from('weekly_quotes').select('quote').eq('user_id', user.id).eq('week_start', weekStartStr).maybeSingle()
@@ -280,6 +364,9 @@ export default function WeeklyPage() {
         <button className="btn btn-ghost btn-sm" onClick={() => setShowGoalPicker(true)}>
           <Target size={13} /> Pull from goal
         </button>
+        <button className="btn btn-ghost btn-sm" onClick={timeBlockMyDay} disabled={timeBlocking || !prefs}>
+          <CalendarClock size={13} /> {timeBlocking ? 'Time-blocking…' : 'Time-block my day'}
+        </button>
         <button className="btn btn-career btn-sm" style={{ color: '#fff' }} onClick={() => setShowAddRow(v => !v)}>
           <Plus size={14} /> Add task
         </button>
@@ -350,9 +437,11 @@ export default function WeeklyPage() {
             ) : tasks.length === 0 && !showAddRow ? (
               <tr><td colSpan={8} style={{ textAlign: 'center', padding: 40, color: 'var(--text-3)', fontStyle: 'italic' }}>No tasks this week — click "Add task" to start</td></tr>
             ) : (
-              groups.map(group => (
+              groups.map(group => {
+                const isWorkGroup = groupBy === 'area' && group.key === WORK_AREA
+                return (
                 <Fragment key={group.key}>
-                  <tr style={{ background: 'var(--bg-2)' }}>
+                  <tr style={isWorkGroup ? { background: 'rgba(100,116,139,0.08)', boxShadow: 'inset 3px 0 0 0 #64748b' } : { background: 'var(--bg-2)' }}>
                     <td colSpan={8} style={{ padding: '8px 16px' }}>
                       {groupBy === 'area' ? (
                         <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 600, color: group.color, textTransform: 'uppercase', letterSpacing: '0.05em' }}>

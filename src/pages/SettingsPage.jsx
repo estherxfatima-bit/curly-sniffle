@@ -3,7 +3,8 @@ import { useAuth } from '../hooks/useAuth'
 import { useTheme } from '../hooks/useTheme'
 import { supabase } from '../lib/supabase'
 import { registerServiceWorker, subscribeToPush, unsubscribeFromPush, isSubscribed } from '../lib/pushNotifications'
-import { Bell, BellOff, Sun, Moon, LogOut, Calendar, Unlink, MessageSquare, Clock4, Check } from 'lucide-react'
+import { Bell, BellOff, Sun, Moon, LogOut, Calendar, Unlink, MessageSquare, Clock4, Check, Plus, Trash2 } from 'lucide-react'
+import { DAY_LABELS } from '../lib/constants'
 
 function SettingsDecoration() {
   return (
@@ -31,6 +32,12 @@ export default function SettingsPage() {
   const [workingHours, setWorkingHours] = useState({ start: '09:00', end: '19:00' })
   const [workingHoursLoading, setWorkingHoursLoading] = useState(true)
   const [workingHoursSaved, setWorkingHoursSaved] = useState(false)
+  const [workDays, setWorkDays] = useState(['Mon', 'Tue', 'Wed', 'Thu', 'Fri'])
+  const [allowPersonalOverlap, setAllowPersonalOverlap] = useState(false)
+  const [overlapDays, setOverlapDays] = useState([])
+  const [overlapHours, setOverlapHours] = useState([])
+  const [weightUnit, setWeightUnit] = useState('kg')
+  const [hydrationReminderTime, setHydrationReminderTime] = useState('13:00')
   const [autoCompleteLinked, setAutoCompleteLinked] = useState(true)
   const [reflection, setReflection] = useState({ enabled: false, time: '20:00', method: 'push' })
   const [personalContext, setPersonalContext] = useState('')
@@ -116,7 +123,7 @@ export default function SettingsPage() {
 
   async function loadWorkingHours() {
     const { data } = await supabase.from('user_preferences')
-      .select('working_hours_start, working_hours_end, auto_complete_linked_tasks, reflection_enabled, reflection_time, reflection_method')
+      .select('working_hours_start, working_hours_end, auto_complete_linked_tasks, reflection_enabled, reflection_time, reflection_method, work_days, allow_personal_overlap, overlap_days, overlap_hours, weight_unit, hydration_reminder_time')
       .eq('user_id', user.id).maybeSingle()
     if (data) {
       setWorkingHours({ start: data.working_hours_start, end: data.working_hours_end })
@@ -126,8 +133,78 @@ export default function SettingsPage() {
         time: data.reflection_time || '20:00',
         method: data.reflection_method || 'push',
       })
+      setWorkDays(data.work_days?.length ? data.work_days : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'])
+      setAllowPersonalOverlap(data.allow_personal_overlap ?? false)
+      setOverlapDays(data.overlap_days || [])
+      setOverlapHours(data.overlap_hours || [])
+      setWeightUnit(data.weight_unit || 'kg')
+      setHydrationReminderTime(data.hydration_reminder_time || '13:00')
     }
     setWorkingHoursLoading(false)
+  }
+
+  async function saveWorkDays(next) {
+    setWorkDays(next)
+    await supabase.from('user_preferences').upsert({
+      user_id: user.id, work_days: next, updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id' })
+  }
+
+  function toggleWorkDay(day) {
+    const next = workDays.includes(day) ? workDays.filter(d => d !== day) : [...workDays, day]
+    saveWorkDays(next)
+  }
+
+  async function saveAllowPersonalOverlap(next) {
+    setAllowPersonalOverlap(next)
+    await supabase.from('user_preferences').upsert({
+      user_id: user.id, allow_personal_overlap: next, updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id' })
+  }
+
+  async function saveOverlapDays(next) {
+    setOverlapDays(next)
+    await supabase.from('user_preferences').upsert({
+      user_id: user.id, overlap_days: next, updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id' })
+  }
+
+  function toggleOverlapDay(day) {
+    const next = overlapDays.includes(day) ? overlapDays.filter(d => d !== day) : [...overlapDays, day]
+    saveOverlapDays(next)
+  }
+
+  async function saveOverlapHours(next) {
+    setOverlapHours(next)
+    await supabase.from('user_preferences').upsert({
+      user_id: user.id, overlap_hours: next, updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id' })
+  }
+
+  function addOverlapHourRow() {
+    saveOverlapHours([...overlapHours, { start: '12:00', end: '13:00' }])
+  }
+
+  function updateOverlapHourRow(idx, field, value) {
+    saveOverlapHours(overlapHours.map((r, i) => i === idx ? { ...r, [field]: value } : r))
+  }
+
+  function removeOverlapHourRow(idx) {
+    saveOverlapHours(overlapHours.filter((_, i) => i !== idx))
+  }
+
+  async function saveWeightUnit(next) {
+    setWeightUnit(next)
+    await supabase.from('user_preferences').upsert({
+      user_id: user.id, weight_unit: next, updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id' })
+  }
+
+  async function saveHydrationReminderTime(next) {
+    setHydrationReminderTime(next)
+    await supabase.from('user_preferences').upsert({
+      user_id: user.id, hydration_reminder_time: next, updated_at: new Date().toISOString(),
+    }, { onConflict: 'user_id' })
   }
 
   async function saveReflection(next) {
@@ -382,6 +459,113 @@ export default function SettingsPage() {
               {workingHoursSaved && <span style={{ fontSize: 11, color: 'var(--success)' }}>Saved</span>}
             </div>
           </div>
+        )}
+      </div>
+
+      {/* Work days & personal overlap */}
+      <div className="card mb-4">
+        <h3 style={{ fontSize: '0.9rem', marginBottom: 16 }}>Work days & personal overlap</h3>
+        {workingHoursLoading ? (
+          <p style={{ fontSize: 12, color: 'var(--text-3)' }}>Loading…</p>
+        ) : (
+          <>
+            <div className="mb-4">
+              <p style={{ fontSize: 14, fontWeight: 500, marginBottom: 6 }}>Work days</p>
+              <p style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 8 }}>Used together with working hours to keep personal tasks out of work time.</p>
+              <div className="flex items-center gap-1 wrap">
+                {DAY_LABELS.map(day => (
+                  <button
+                    key={day}
+                    className={`btn btn-xs ${workDays.includes(day) ? 'btn-accent' : 'btn-ghost'}`}
+                    onClick={() => toggleWorkDay(day)}
+                    style={workDays.includes(day) ? { color: '#fff' } : {}}
+                  >
+                    {workDays.includes(day) ? <Check size={11} /> : null} {day}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <p style={{ fontSize: 14, fontWeight: 500 }}>Allow personal work to overlap with work hours</p>
+                <p style={{ fontSize: 12, color: 'var(--text-3)' }}>
+                  When off, "Time-block my day" never schedules personal tasks during work hours.
+                </p>
+              </div>
+              <button
+                className={`btn ${allowPersonalOverlap ? 'btn-accent' : 'btn-ghost'} flex items-center gap-2`}
+                onClick={() => saveAllowPersonalOverlap(!allowPersonalOverlap)}
+                style={allowPersonalOverlap ? { color: '#fff' } : {}}
+              >
+                {allowPersonalOverlap ? <Check size={14} /> : null}
+                {allowPersonalOverlap ? 'On' : 'Off'}
+              </button>
+            </div>
+
+            {allowPersonalOverlap && (
+              <div style={{ paddingTop: 4 }}>
+                <div className="mb-4">
+                  <p style={{ fontSize: 13, fontWeight: 500, marginBottom: 6 }}>Days overlap is allowed</p>
+                  <div className="flex items-center gap-1 wrap">
+                    {workDays.map(day => (
+                      <button
+                        key={day}
+                        className={`btn btn-xs ${overlapDays.includes(day) ? 'btn-accent' : 'btn-ghost'}`}
+                        onClick={() => toggleOverlapDay(day)}
+                        style={overlapDays.includes(day) ? { color: '#fff' } : {}}
+                      >
+                        {overlapDays.includes(day) ? <Check size={11} /> : null} {day}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <p style={{ fontSize: 13, fontWeight: 500, marginBottom: 6 }}>Hour ranges overlap is allowed (e.g. lunch break)</p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
+                    {overlapHours.map((r, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <input type="time" value={r.start} onChange={e => updateOverlapHourRow(idx, 'start', e.target.value)} style={{ fontSize: 12, padding: '4px 8px' }} />
+                        <span style={{ color: 'var(--text-3)' }}>–</span>
+                        <input type="time" value={r.end} onChange={e => updateOverlapHourRow(idx, 'end', e.target.value)} style={{ fontSize: 12, padding: '4px 8px' }} />
+                        <button className="btn-icon btn" onClick={() => removeOverlapHourRow(idx)}><Trash2 size={13} /></button>
+                      </div>
+                    ))}
+                  </div>
+                  <button className="btn btn-ghost btn-sm" onClick={addOverlapHourRow}><Plus size={13} /> Add overlap time range</button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Body measurement & hydration preferences */}
+      <div className="card mb-4">
+        <h3 style={{ fontSize: '0.9rem', marginBottom: 16 }}>Wellness preferences</h3>
+        {workingHoursLoading ? (
+          <p style={{ fontSize: 12, color: 'var(--text-3)' }}>Loading…</p>
+        ) : (
+          <>
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <p style={{ fontSize: 14, fontWeight: 500 }}>Weight unit</p>
+                <p style={{ fontSize: 12, color: 'var(--text-3)' }}>Used on the Wellness → Body tab.</p>
+              </div>
+              <select value={weightUnit} onChange={e => saveWeightUnit(e.target.value)} style={{ fontSize: 12, padding: '4px 8px' }}>
+                <option value="kg">kg</option>
+                <option value="lbs">lbs</option>
+              </select>
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <p style={{ fontSize: 14, fontWeight: 500 }}>Hydration reminder time</p>
+                <p style={{ fontSize: 12, color: 'var(--text-3)' }}>Nudge if you're behind on hydration by this time.</p>
+              </div>
+              <input type="time" value={hydrationReminderTime} onChange={e => saveHydrationReminderTime(e.target.value)} style={{ fontSize: 12, padding: '4px 8px' }} />
+            </div>
+          </>
         )}
       </div>
 
