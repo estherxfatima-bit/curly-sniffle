@@ -473,6 +473,28 @@ export default function WellnessPage() {
 
       {/* Dashboard tab */}
       {tab === 'dashboard' && (
+        <>
+        <div className="card mb-4">
+          <h3 style={{ fontSize: '0.9rem', marginBottom: 12 }}>How are you feeling today?</h3>
+          <div className="flex items-center gap-2">
+            {MOOD_OPTIONS.map(opt => (
+              <button
+                key={opt.label}
+                onClick={() => setMood(opt.emoji, opt.label)}
+                title={opt.label}
+                className="btn-icon btn"
+                style={{
+                  fontSize: 24, width: 44, height: 44,
+                  background: wellnessLog?.mood_emoji === opt.emoji ? 'var(--wellness-tint, rgba(224,120,32,0.15))' : 'transparent',
+                  border: wellnessLog?.mood_emoji === opt.emoji ? '2px solid var(--wellness)' : '1px solid var(--border)',
+                  borderRadius: '50%',
+                }}
+              >
+                {opt.emoji}
+              </button>
+            ))}
+          </div>
+        </div>
         <WellnessDashboard
           streak={streak}
           sessionsThisWeek={workouts.filter(w => w.log_date >= weekStart).length}
@@ -489,6 +511,7 @@ export default function WellnessPage() {
           onCompleteScheduled={completeScheduledWorkout}
           onDeleteScheduled={deleteScheduledWorkout}
         />
+        </>
       )}
 
       {/* Workouts tab */}
@@ -516,7 +539,30 @@ export default function WellnessPage() {
               <input type="date" value={newWorkout.log_date} onChange={e => setNewWorkout(p => ({ ...p, log_date: e.target.value }))} style={{ fontSize: 12 }} />
             </div>
             <input placeholder="Notes (optional)" value={newWorkout.notes} onChange={e => setNewWorkout(p => ({ ...p, notes: e.target.value }))} style={{ fontSize: 12, marginBottom: 8 }} />
-            <button className="btn btn-sm btn-wellness" style={{ color: '#fff' }} onClick={addWorkout}><Plus size={12} /> Log</button>
+            <div className="flex items-center gap-2">
+              <button className="btn btn-sm btn-wellness" style={{ color: '#fff' }} onClick={addWorkout}><Plus size={12} /> Log workout</button>
+              <button className="btn btn-sm btn-ghost" onClick={logRestDay}><Moon size={12} /> Log rest day</button>
+            </div>
+          </div>
+
+          <div className="card mb-4">
+            <h3 style={{ fontSize: '0.9rem', marginBottom: 12 }}>Last 28 days</h3>
+            <DotGrid days={(() => {
+              const days = []
+              for (let i = 27; i >= 0; i--) {
+                const d = format(subDays(new Date(), i), 'yyyy-MM-dd')
+                const logsForDay = recentWorkoutDays.filter(w => w.log_date === d)
+                const hasWorkout = logsForDay.some(w => w.type !== 'rest')
+                const hasRest = logsForDay.some(w => w.type === 'rest')
+                days.push({ date: d, status: hasWorkout ? 'workout' : hasRest ? 'rest' : 'none' })
+              }
+              return days
+            })()} />
+            <div className="flex items-center gap-4 mt-3" style={{ fontSize: 11, color: 'var(--text-3)' }}>
+              <span className="flex items-center gap-1"><span style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--wellness)', display: 'inline-block' }} /> Workout</span>
+              <span className="flex items-center gap-1"><span style={{ width: 10, height: 10, borderRadius: '50%', border: '2px solid #8fbf9f', display: 'inline-block' }} /> Rest</span>
+              <span className="flex items-center gap-1"><span style={{ width: 10, height: 10, borderRadius: '50%', border: '1px solid var(--border)', opacity: 0.5, display: 'inline-block' }} /> No log</span>
+            </div>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
