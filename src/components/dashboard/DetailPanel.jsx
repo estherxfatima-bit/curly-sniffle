@@ -31,7 +31,7 @@ export default function DetailPanel({ panel, onClose }) {
   return (
     <>
       <div
-        style={{ position: 'fixed', inset: 0, background: 'rgba(13,8,5,0.28)', zIndex: 199, backdropFilter: 'blur(2px)' }}
+        style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh', background: 'rgba(13,8,5,0.45)', zIndex: 1100, backdropFilter: 'blur(2px)', WebkitBackdropFilter: 'blur(2px)' }}
         onClick={onClose}
       />
       <div style={{
@@ -40,7 +40,7 @@ export default function DetailPanel({ panel, onClose }) {
         background: 'var(--card-bg)',
         borderLeft: '1px solid var(--border)',
         boxShadow: 'var(--shadow-lg)',
-        zIndex: 200,
+        zIndex: 1200,
         display: 'flex', flexDirection: 'column',
         animation: 'slideRight 0.22s ease',
       }}>

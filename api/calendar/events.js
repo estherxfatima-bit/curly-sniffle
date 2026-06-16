@@ -48,6 +48,7 @@ async function getAccessToken(userId) {
 // Returns the list of calendars the user has subscribed to (including secondary
 // calendars synced from other providers, e.g. iCloud calendars subscribed in Google
 // Calendar), restricted to ones the user has selected to show in their UI.
+// Returns full calendar metadata: id, summary, backgroundColor, foregroundColor
 async function listCalendars(accessToken) {
   const res = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=freeBusyReader', {
     headers: { Authorization: `Bearer ${accessToken}` },
@@ -55,11 +56,16 @@ async function listCalendars(accessToken) {
   const data = await res.json()
   if (!res.ok) {
     console.error('[api/calendar/events] failed to list calendars', data)
-    return ['primary']
+    return [{ id: 'primary', summary: 'Calendar', backgroundColor: '#4285f4', foregroundColor: '#ffffff' }]
   }
   const calendars = (data.items || []).filter(c => c.selected !== false)
-  if (calendars.length === 0) return ['primary']
-  return calendars.map(c => c.id)
+  if (calendars.length === 0) return [{ id: 'primary', summary: 'Calendar', backgroundColor: '#4285f4', foregroundColor: '#ffffff' }]
+  return calendars.map(c => ({
+    id: c.id,
+    summary: c.summaryOverride || c.summary || c.id,
+    backgroundColor: c.backgroundColor || '#4285f4',
+    foregroundColor: c.foregroundColor || '#ffffff',
+  }))
 }
 
 export default async function handler(req, res) {
@@ -84,9 +90,11 @@ export default async function handler(req, res) {
       orderBy: 'startTime',
     })
 
-    const calendarIds = await listCalendars(accessToken)
+    const calendars = await listCalendars(accessToken)
+    // Build a lookup: calendarId -> { summary, backgroundColor, foregroundColor }
+    const calMeta = Object.fromEntries(calendars.map(c => [c.id, c]))
 
-    const results = await Promise.all(calendarIds.map(async calendarId => {
+    const results = await Promise.all(calendars.map(async ({ id: calendarId }) => {
       const evRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?${params.toString()}`, {
         headers: { Authorization: `Bearer ${accessToken}` },
       })
@@ -95,27 +103,34 @@ export default async function handler(req, res) {
         console.error('[api/calendar/events] failed to fetch events for calendar', calendarId, evData.error?.message || evData)
         return { calendarId, events: [], error: evData.error?.message }
       }
+      const meta = calMeta[calendarId] || {}
       return {
         calendarId,
         events: (evData.items || []).map(e => ({
           id: e.id,
           calendarId,
+          calendarName: meta.summary || calendarId,
+          calendarColor: meta.backgroundColor || '#4285f4',
+          calendarFg: meta.foregroundColor || '#ffffff',
           summary: e.summary || '(No title)',
           start: e.start?.dateTime || e.start?.date,
           end: e.end?.dateTime || e.end?.date,
           allDay: !e.start?.dateTime,
+          description: e.description || '',
+          location: e.location || '',
         })),
       }
     }))
 
     const events = results.flatMap(r => r.events).sort((a, b) => new Date(a.start) - new Date(b.start))
+    const calendarMeta = calendars
     const firstError = results.find(r => r.error)?.error
 
     if (events.length === 0 && firstError) {
-      return res.status(200).json({ connected: true, error: firstError, events: [] })
+      return res.status(200).json({ connected: true, error: firstError, events: [], calendars: calendarMeta })
     }
 
-    return res.status(200).json({ connected: true, events })
+    return res.status(200).json({ connected: true, events, calendars: calendarMeta })
   }
 
   if (req.method === 'POST') {

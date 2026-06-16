@@ -255,7 +255,8 @@ input[type="range"]::-webkit-slider-thumb {
 }
 
 /* ── App layout ── */
-.app-layout { display: flex; height: 100vh; overflow: hidden; }
+/* overflow: clip (not hidden) so fixed-position modals are never clipped by Safari */
+.app-layout { display: flex; height: 100vh; overflow: clip; }
 
 .main-content {
   flex: 1;
@@ -468,12 +469,18 @@ input[type="range"]::-webkit-slider-thumb {
 .modal-overlay {
   position: fixed;
   inset: 0;
+  /* Explicit width + height ensure full coverage even in browsers where
+     inset alone doesn't stretch past a clipping ancestor. */
+  width: 100vw;
+  height: 100vh;
   background: rgba(13,10,8,0.55);
   backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 100;
+  /* 1000 clears the sidebar stacking context and any inline-zIndex panels */
+  z-index: 1000;
   padding: 16px;
 }
 .modal {

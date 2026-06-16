@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, CalendarDays, Target, CheckSquare, Film,
   TrendingUp, Users, LogOut, Sun, Moon, Sparkles, PiggyBank, Heart, Settings,
-  BookOpen, ListChecks, Search,
+  BookOpen, ListChecks, Search, Calendar,
 } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { useTheme } from '../../hooks/useTheme'
@@ -11,6 +11,7 @@ import NotificationsBell from './NotificationsBell'
 const navItems = [
   { to: '/',          label: 'Dashboard',   icon: LayoutDashboard, section: 'career'   },
   { to: '/weekly',    label: 'Weekly',      icon: CalendarDays,    section: 'career'   },
+  { to: '/calendar',  label: 'Calendar',    icon: Calendar,        section: 'career'   },
   { to: '/goals',     label: 'Goals',       icon: Target,          section: 'career'   },
   { to: '/habits',    label: 'Habits',      icon: CheckSquare,     section: 'personal' },
   { to: '/content',   label: 'Content',     icon: Film,            section: 'creative' },

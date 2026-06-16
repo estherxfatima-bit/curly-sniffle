@@ -166,6 +166,7 @@ export default function AIPlanningPanel({ onClose }) {
     <div style={{
       position: 'fixed', top: 0, right: 0, bottom: 0,
       width: 420, maxWidth: '100vw',
+      zIndex: 1200,
       background: 'var(--card-bg)',
       borderLeft: '1px solid var(--border)',
       boxShadow: 'var(--shadow-lg)',

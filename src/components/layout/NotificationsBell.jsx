@@ -48,7 +48,7 @@ export default function NotificationsBell({ variant = 'sidebar' }) {
 
       {open && (
         <div
-          style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(2px)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '10vh 16px' }}
+          style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh', zIndex: 1100, background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(2px)', WebkitBackdropFilter: 'blur(2px)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '10vh 16px' }}
           onClick={() => setOpen(false)}
         >
           <div
