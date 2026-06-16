@@ -187,13 +187,23 @@ export default function DailyTodos({ compact = false }) {
   async function loadTodosForDate(date) {
     if (latestViewDateRef.current !== date) return
     setLoading(true)
-    const { data: td } = await supabase
+
+    // For today: only show active (non-archived) todos.
+    // For past days: show active todos + archived ones that were carried forward,
+    // so the user can see what they had that day including items they didn't finish.
+    let query = supabase
       .from('daily_todos')
       .select('*')
       .eq('user_id', user.id)
       .eq('date', date)
-      .eq('archived', false)
       .order('created_at')
+
+    if (date === today) {
+      query = query.eq('archived', false)
+    }
+    // Past dates: no archived filter — show everything including carried-forward items
+
+    const { data: td } = await query
 
     // Bail if the user navigated to a different day while this request was in flight.
     if (latestViewDateRef.current !== date) return
@@ -593,7 +603,7 @@ function TodoItem({ todo, categories, goals, isTimerRunning, onToggle, onRemove,
       flexDirection: 'column',
       justifyContent: 'center',
       transition: 'opacity 0.2s, transform 0.2s',
-      opacity: todo.complete ? 0.62 : 1,
+      opacity: todo.complete ? 0.62 : todo.archived ? 0.5 : 1,
     }}>
       {/* Main row */}
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9 }}>
@@ -664,9 +674,12 @@ function TodoItem({ todo, categories, goals, isTimerRunning, onToggle, onRemove,
           </span>
         )}
 
-        {/* Carried-from label */}
-        {todo.carried_from && (
-          <span className="badge badge-warning" style={{ fontSize: 9, flexShrink: 0 }}>yesterday</span>
+        {/* Carried label */}
+        {todo.carried_from && !todo.archived && (
+          <span className="badge badge-warning" style={{ fontSize: 9, flexShrink: 0 }}>carried</span>
+        )}
+        {todo.archived && (
+          <span className="badge" style={{ fontSize: 9, flexShrink: 0, background: 'var(--bg-3)', color: 'var(--text-3)' }}>carried forward →</span>
         )}
 
         {/* Pinned priority label */}
