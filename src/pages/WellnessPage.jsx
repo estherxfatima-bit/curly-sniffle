@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
-import { format, startOfWeek, subDays, parseISO } from 'date-fns'
-import { Plus, Trash2, Check, Droplets, Dumbbell, ChevronDown, ChevronRight, Archive, Pencil, Image as ImageIcon } from 'lucide-react'
+import { format, startOfWeek, subDays, parseISO, differenceInCalendarDays } from 'date-fns'
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
+import { Plus, Trash2, Check, Droplets, Dumbbell, ChevronDown, ChevronRight, Archive, Pencil, Image as ImageIcon, Moon } from 'lucide-react'
 import ArcRing from '../components/ui/ArcRing'
 import GoalModal from '../components/goals/GoalModal'
 import SavedMealModal from '../components/wellness/SavedMealModal'
@@ -11,6 +12,54 @@ import WellnessDashboard from '../components/wellness/WellnessDashboard'
 
 const WORKOUT_TYPES = ['Gym', 'Run', 'Yoga', 'Swim', 'Cycle', 'Walk', 'HIIT', 'Other']
 const HYDRATION_GOAL = 2500
+const MOOD_OPTIONS = [
+  { emoji: '😞', label: 'Bad' },
+  { emoji: '😕', label: 'Low' },
+  { emoji: '😐', label: 'Okay' },
+  { emoji: '🙂', label: 'Good' },
+  { emoji: '😄', label: 'Great' },
+]
+const FREQUENCY_UNITS = ['days', 'weeks', 'months']
+
+function frequencyToDays(value, unit) {
+  if (unit === 'weeks') return value * 7
+  if (unit === 'months') return value * 30
+  return value
+}
+
+function routineStatus(routine) {
+  if (!routine.last_done_date) return { label: 'Not started', tone: 'muted', daysUntilDue: null, nextDue: null }
+  const last = new Date(`${routine.last_done_date}T00:00:00`)
+  const intervalDays = frequencyToDays(routine.frequency_value, routine.frequency_unit)
+  const next = new Date(last)
+  next.setDate(next.getDate() + intervalDays)
+  const daysUntilDue = differenceInCalendarDays(next, new Date())
+  let label, tone
+  if (daysUntilDue < 0) { label = 'Overdue'; tone = 'danger' }
+  else if (daysUntilDue <= routine.remind_days_before) { label = 'Due soon'; tone = 'warning' }
+  else { label = 'On track'; tone = 'success' }
+  return { label, tone, daysUntilDue, nextDue: next }
+}
+
+function DotGrid({ days }) {
+  // days: array of { date, status: 'workout' | 'rest' | 'none' }, oldest first
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6, maxWidth: 220 }}>
+      {days.map(d => (
+        <div
+          key={d.date}
+          title={`${d.date} — ${d.status}`}
+          style={{
+            width: 14, height: 14, borderRadius: '50%',
+            background: d.status === 'workout' ? 'var(--wellness)' : 'transparent',
+            border: d.status === 'rest' ? '2px solid #8fbf9f' : d.status === 'none' ? '1px solid var(--border)' : 'none',
+            opacity: d.status === 'none' ? 0.4 : 1,
+          }}
+        />
+      ))}
+    </div>
+  )
+}
 
 function WellnessDecoration() {
   return (
@@ -54,8 +103,15 @@ export default function WellnessPage() {
   const today = format(new Date(), 'yyyy-MM-dd')
   const weekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
 
-  const [tab, setTab]                 = useState('dashboard')
+  const [tab, setTab]                 = useState(() => new URLSearchParams(window.location.search).get('tab') || 'dashboard')
   const [mealTab, setMealTab]         = useState('plan')
+  const [routines, setRoutines]       = useState([])
+  const [newRoutine, setNewRoutine]   = useState({ name: '', frequency_value: 1, frequency_unit: 'weeks', remind_days_before: 2 })
+  const [measurements, setMeasurements] = useState([])
+  const [weightUnit, setWeightUnit]   = useState('kg')
+  const [newMeasurement, setNewMeasurement] = useState({ date: format(new Date(), 'yyyy-MM-dd'), weight: '', custom: [] })
+  const [newCustomName, setNewCustomName] = useState('')
+  const [recentWorkoutDays, setRecentWorkoutDays] = useState([])
   const [workouts, setWorkouts]       = useState([])
   const [scheduledWorkouts, setScheduledWorkouts] = useState([])
   const [hydrationHistory, setHydrationHistory]   = useState([])
