@@ -461,7 +461,11 @@ export default function WeeklyPage() {
                       <Fragment key={task.id}>
                         <tr
                           onClick={() => setExpandedTask(expanded ? null : task.id)}
-                          style={{ opacity: task.complete ? 0.55 : 1, transition: 'opacity 0.2s', cursor: 'pointer', borderLeft: `3px solid ${task.priority_level === 'urgent' ? PRIORITY_COLORS.urgent : areaColor(task.area)}` }}
+                          style={{
+                            opacity: task.complete ? 0.55 : 1, transition: 'opacity 0.2s', cursor: 'pointer',
+                            borderLeft: `3px solid ${task.priority_level === 'urgent' ? PRIORITY_COLORS.urgent : areaColor(task.area)}`,
+                            ...(isWorkGroup ? { background: 'rgba(100,116,139,0.08)' } : {}),
+                          }}
                         >
                           <td>
                             <div className={`toggle-dot ${task.complete ? 'done' : ''}`} onClick={e => { e.stopPropagation(); toggleTask(task) }} style={{ margin: '0 auto' }}>
@@ -517,7 +521,7 @@ export default function WeeklyPage() {
                     )
                   })}
                 </Fragment>
-              ))
+              )})
             )}
           </tbody>
         </table>
@@ -560,8 +564,16 @@ export default function WeeklyPage() {
         ) : tasks.length === 0 && !showAddRow ? (
           <p style={{ textAlign: 'center', padding: 40, color: 'var(--text-3)', fontStyle: 'italic' }}>No tasks this week — tap "Add task" to start</p>
         ) : (
-          groups.map(group => (
-            <div key={group.key} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          groups.map(group => {
+            const isWorkGroup = groupBy === 'area' && group.key === WORK_AREA
+            return (
+            <div
+              key={group.key}
+              style={{
+                display: 'flex', flexDirection: 'column', gap: 8,
+                ...(isWorkGroup ? { background: 'rgba(100,116,139,0.08)', borderLeft: '3px solid #64748b', borderRadius: 'var(--radius)', padding: '6px 8px 8px' } : {}),
+              }}
+            >
               <div style={{ padding: '4px 2px' }}>
                 {groupBy === 'area' ? (
                   <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 600, color: group.color, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -592,7 +604,7 @@ export default function WeeklyPage() {
                 />
               ))}
             </div>
-          ))
+          )})
         )}
       </div>
 

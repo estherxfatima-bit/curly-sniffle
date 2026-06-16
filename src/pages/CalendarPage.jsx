@@ -60,6 +60,7 @@ function layoutEvents(events) {
 
 export default function CalendarPage() {
   const { session } = useAuth()
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 769)
   const [weekRef, setWeekRef] = useState(new Date())
   const [events, setEvents] = useState([])
   const [calendars, setCalendars] = useState([])
@@ -89,6 +90,14 @@ export default function CalendarPage() {
   }, [session, weekStart.toISOString()]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { load() }, [load])
+
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < 769)
+    window.addEventListener('resize', handler)
+    return () => window.removeEventListener('resize', handler)
+  }, [])
+
+  const gridCols = isMobile ? '32px repeat(7, minmax(60px, 1fr))' : '48px repeat(7, 1fr)'
 
   function openNewEventForm(day, hour) {
     const date = format(day || new Date(), 'yyyy-MM-dd')
