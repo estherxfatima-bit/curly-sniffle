@@ -799,6 +799,136 @@ export default function WellnessPage() {
         </div>
       )}
 
+      {/* Routines tab */}
+      {tab === 'routines' && (
+        <div>
+          <div className="card mb-4">
+            <h3 style={{ fontSize: '0.9rem', marginBottom: 12 }}>Add a routine</h3>
+            <div className="flex items-center gap-2 wrap mb-2">
+              <input placeholder="Routine name (e.g. Haircut)" value={newRoutine.name} onChange={e => setNewRoutine(p => ({ ...p, name: e.target.value }))} style={{ fontSize: 13, flex: 1, minWidth: 160 }} />
+              <span style={{ fontSize: 12, color: 'var(--text-3)' }}>every</span>
+              <input type="number" min={1} value={newRoutine.frequency_value} onChange={e => setNewRoutine(p => ({ ...p, frequency_value: e.target.value }))} style={{ fontSize: 12, width: 60 }} />
+              <select value={newRoutine.frequency_unit} onChange={e => setNewRoutine(p => ({ ...p, frequency_unit: e.target.value }))} style={{ fontSize: 12 }}>
+                {FREQUENCY_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+              </select>
+            </div>
+            <div className="flex items-center gap-2 mb-3">
+              <span style={{ fontSize: 12, color: 'var(--text-3)' }}>remind</span>
+              <input type="number" min={0} value={newRoutine.remind_days_before} onChange={e => setNewRoutine(p => ({ ...p, remind_days_before: e.target.value }))} style={{ fontSize: 12, width: 60 }} />
+              <span style={{ fontSize: 12, color: 'var(--text-3)' }}>days before due</span>
+            </div>
+            <button className="btn btn-sm btn-wellness" style={{ color: '#fff' }} onClick={addRoutine}><Plus size={12} /> Add routine</button>
+          </div>
+
+          {routines.length === 0 ? (
+            <div className="empty-state"><p>No routines yet. Add recurring things like haircuts, dentist visits, or deep cleans.</p></div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
+              {routines.map(routine => {
+                const status = routineStatus(routine)
+                const daysSince = routine.last_done_date ? differenceInCalendarDays(new Date(), new Date(`${routine.last_done_date}T00:00:00`)) : null
+                const badgeClass = status.tone === 'danger' ? 'badge-danger' : status.tone === 'warning' ? 'badge-warning' : status.tone === 'success' ? 'badge-success' : 'badge-muted'
+                return (
+                  <div key={routine.id} className="card">
+                    <div className="flex items-center justify-between mb-2">
+                      <p style={{ fontSize: 14, fontWeight: 600 }}>{routine.name}</p>
+                      <button className="btn-icon btn" onClick={() => deleteRoutine(routine.id)}><Trash2 size={12} /></button>
+                    </div>
+                    <span className={`badge ${badgeClass}`}>{status.label}</span>
+                    <p style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 8 }}>
+                      {routine.last_done_date ? `Last done ${routine.last_done_date} (${daysSince} day${daysSince === 1 ? '' : 's'} ago)` : 'Never logged'}
+                    </p>
+                    {status.nextDue && (
+                      <p style={{ fontSize: 12, color: 'var(--text-3)' }}>Next due {format(status.nextDue, 'd MMM yyyy')}</p>
+                    )}
+                    <p style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 10 }}>Every {routine.frequency_value} {routine.frequency_unit}</p>
+                    <button className="btn btn-sm btn-wellness" style={{ color: '#fff' }} onClick={() => markRoutineDone(routine)}><Check size={12} /> Mark as done today</button>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Body tab */}
+      {tab === 'body' && (
+        <div>
+          <div className="card mb-4">
+            <h3 style={{ fontSize: '0.9rem', marginBottom: 12 }}>Log measurement</h3>
+            <div className="flex items-center gap-2 wrap mb-2">
+              <input type="date" value={newMeasurement.date} onChange={e => setNewMeasurement(p => ({ ...p, date: e.target.value }))} style={{ fontSize: 12 }} />
+              <input type="number" step="0.1" placeholder={`Weight (${weightUnit})`} value={newMeasurement.weight} onChange={e => setNewMeasurement(p => ({ ...p, weight: e.target.value }))} style={{ fontSize: 12, width: 140 }} />
+            </div>
+            {newMeasurement.custom.map((c, idx) => (
+              <div key={idx} className="flex items-center gap-2 mb-2">
+                <span style={{ fontSize: 12, width: 100 }}>{c.name}</span>
+                <input type="number" step="0.1" value={c.value} onChange={e => updateCustomMeasurementRow(idx, e.target.value)} style={{ fontSize: 12, width: 100 }} />
+                <button className="btn-icon btn" onClick={() => removeCustomMeasurementRow(idx)}><Trash2 size={12} /></button>
+              </div>
+            ))}
+            <div className="flex items-center gap-2 mb-3">
+              <input placeholder="Custom measurement name (e.g. Waist)" value={newCustomName} onChange={e => setNewCustomName(e.target.value)} style={{ fontSize: 12, flex: 1, minWidth: 160 }} onKeyDown={e => e.key === 'Enter' && addCustomMeasurementRow()} />
+              <button className="btn btn-ghost btn-sm" onClick={addCustomMeasurementRow}><Plus size={12} /> Add</button>
+            </div>
+            <button className="btn btn-sm btn-wellness" style={{ color: '#fff' }} onClick={saveMeasurement}>Save measurement</button>
+          </div>
+
+          {measurements.length === 0 ? (
+            <div className="empty-state"><p>No measurements logged yet.</p></div>
+          ) : (
+            (() => {
+              const customKeys = [...new Set(measurements.flatMap(m => Object.keys(m.custom_measurements || {})))]
+              const series = [
+                { key: 'weight', label: `Weight (${weightUnit})`, data: measurements.filter(m => m.weight != null).map(m => ({ date: m.date, value: m.weight })) },
+                ...customKeys.map(k => ({ key: k, label: k, data: measurements.filter(m => m.custom_measurements?.[k] != null).map(m => ({ date: m.date, value: m.custom_measurements[k] })) })),
+              ].filter(s => s.data.length)
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  {series.map(s => (
+                    <div key={s.key} className="card">
+                      <h3 style={{ fontSize: '0.9rem', marginBottom: 12 }}>{s.label}</h3>
+                      <ResponsiveContainer width="100%" height={160}>
+                        <LineChart data={s.data}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                          <XAxis dataKey="date" tick={{ fontFamily: 'var(--font-mono)', fontSize: 9, fill: 'var(--text-3)' }} />
+                          <YAxis tick={{ fontFamily: 'var(--font-mono)', fontSize: 9, fill: 'var(--text-3)' }} width={30} />
+                          <Tooltip
+                            contentStyle={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: 8, fontFamily: 'var(--font-mono)', fontSize: 11 }}
+                            labelStyle={{ color: 'var(--text-3)' }}
+                            itemStyle={{ color: 'var(--wellness)' }}
+                          />
+                          <Line type="monotone" dataKey="value" stroke="var(--wellness)" strokeWidth={2} dot />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  ))}
+
+                  <div className="card">
+                    <h3 style={{ fontSize: '0.9rem', marginBottom: 12 }}>Log</h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {measurements.slice().reverse().map(m => (
+                        <div key={m.id} className="flex items-center justify-between gap-3" style={{ padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
+                          <div>
+                            <p style={{ fontSize: 13 }}>{m.date}{m.weight != null ? ` · ${m.weight}${weightUnit}` : ''}</p>
+                            {Object.keys(m.custom_measurements || {}).length > 0 && (
+                              <p style={{ fontSize: 11, color: 'var(--text-3)' }}>
+                                {Object.entries(m.custom_measurements).map(([k, v]) => `${k}: ${v}`).join(', ')}
+                              </p>
+                            )}
+                          </div>
+                          <button className="btn-icon btn" onClick={() => deleteMeasurement(m.id)}><Trash2 size={12} /></button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )
+            })()
+          )}
+        </div>
+      )}
+
       {editingGoal && (
         <GoalModal
           goal={editingGoal}
