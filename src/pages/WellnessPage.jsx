@@ -141,7 +141,8 @@ export default function WellnessPage() {
   async function load() {
     setLoading(true)
     const sevenDaysAgo = format(subDays(new Date(), 6), 'yyyy-MM-dd')
-    const [wRes, swRes, mpRes, glRes, wlRes, hhRes, goalsRes, weeklyRes, dailyRes, metricsRes, mpaRes, glaRes, smRes] = await Promise.all([
+    const twentyEightDaysAgo = format(subDays(new Date(), 27), 'yyyy-MM-dd')
+    const [wRes, swRes, mpRes, glRes, wlRes, hhRes, goalsRes, weeklyRes, dailyRes, metricsRes, mpaRes, glaRes, smRes, routinesRes, measurementsRes, prefsRes, recentRes] = await Promise.all([
       supabase.from('workout_logs').select('*').eq('user_id', user.id).eq('planned', false).order('log_date', { ascending: false }).limit(30),
       supabase.from('workout_logs').select('*').eq('user_id', user.id).eq('planned', true).order('log_date'),
       supabase.from('meal_plans').select('*').eq('user_id', user.id).eq('week_start', weekStart).maybeSingle(),
@@ -155,6 +156,10 @@ export default function WellnessPage() {
       supabase.from('meal_plan_archive').select('*').eq('user_id', user.id).order('archived_at', { ascending: false }),
       supabase.from('grocery_list_archive').select('*').eq('user_id', user.id).order('archived_at', { ascending: false }),
       supabase.from('saved_meals').select('*').eq('user_id', user.id).order('created_at', { ascending: false }),
+      supabase.from('wellness_routines').select('*').eq('user_id', user.id).order('created_at'),
+      supabase.from('body_measurements').select('*').eq('user_id', user.id).order('date'),
+      supabase.from('user_preferences').select('weight_unit').eq('user_id', user.id).maybeSingle(),
+      supabase.from('workout_logs').select('log_date, type, planned').eq('user_id', user.id).gte('log_date', twentyEightDaysAgo),
     ])
     setWorkouts(wRes.data || [])
     setScheduledWorkouts(swRes.data || [])
@@ -169,6 +174,10 @@ export default function WellnessPage() {
     setMealArchive(mpaRes.data || [])
     setGroceryArchive(glaRes.data || [])
     setSavedMeals(smRes.data || [])
+    setRoutines(routinesRes.data || [])
+    setMeasurements(measurementsRes.data || [])
+    setWeightUnit(prefsRes.data?.weight_unit || 'kg')
+    setRecentWorkoutDays((recentRes.data || []).filter(w => !w.planned))
     setLoading(false)
   }
 
@@ -214,6 +223,85 @@ export default function WellnessPage() {
   async function deleteScheduledWorkout(id) {
     await supabase.from('workout_logs').delete().eq('id', id)
     setScheduledWorkouts(prev => prev.filter(w => w.id !== id))
+  }
+
+  async function logRestDay() {
+    const { data } = await supabase.from('workout_logs').insert({
+      user_id: user.id, log_date: today, type: 'rest', duration_min: null, planned: false,
+    }).select().single()
+    if (data) {
+      setWorkouts(prev => [data, ...prev])
+      setRecentWorkoutDays(prev => [...prev, { log_date: data.log_date, type: 'rest', planned: false }])
+    }
+  }
+
+  // Routines
+  async function addRoutine() {
+    if (!newRoutine.name.trim()) return
+    const { data } = await supabase.from('wellness_routines').insert({
+      user_id: user.id,
+      name: newRoutine.name.trim(),
+      frequency_value: parseInt(newRoutine.frequency_value) || 1,
+      frequency_unit: newRoutine.frequency_unit,
+      remind_days_before: parseInt(newRoutine.remind_days_before) || 0,
+    }).select().single()
+    if (data) setRoutines(prev => [...prev, data])
+    setNewRoutine({ name: '', frequency_value: 1, frequency_unit: 'weeks', remind_days_before: 2 })
+  }
+
+  async function markRoutineDone(routine) {
+    const { data } = await supabase.from('wellness_routines').update({ last_done_date: today }).eq('id', routine.id).select().single()
+    if (data) setRoutines(prev => prev.map(r => r.id === routine.id ? data : r))
+  }
+
+  async function deleteRoutine(id) {
+    await supabase.from('wellness_routines').delete().eq('id', id)
+    setRoutines(prev => prev.filter(r => r.id !== id))
+  }
+
+  // Body measurements
+  function addCustomMeasurementRow() {
+    if (!newCustomName.trim()) return
+    setNewMeasurement(p => ({ ...p, custom: [...p.custom, { name: newCustomName.trim(), value: '' }] }))
+    setNewCustomName('')
+  }
+  function updateCustomMeasurementRow(idx, value) {
+    setNewMeasurement(p => ({ ...p, custom: p.custom.map((c, i) => i === idx ? { ...c, value } : c) }))
+  }
+  function removeCustomMeasurementRow(idx) {
+    setNewMeasurement(p => ({ ...p, custom: p.custom.filter((_, i) => i !== idx) }))
+  }
+  async function saveMeasurement() {
+    const custom_measurements = {}
+    for (const c of newMeasurement.custom) {
+      if (c.name && c.value !== '') custom_measurements[c.name] = parseFloat(c.value)
+    }
+    const { data } = await supabase.from('body_measurements').insert({
+      user_id: user.id,
+      date: newMeasurement.date,
+      weight: newMeasurement.weight !== '' ? parseFloat(newMeasurement.weight) : null,
+      custom_measurements,
+    }).select().single()
+    if (data) setMeasurements(prev => [...prev, data].sort((a, b) => a.date.localeCompare(b.date)))
+    setNewMeasurement({ date: format(new Date(), 'yyyy-MM-dd'), weight: '', custom: [] })
+  }
+  async function deleteMeasurement(id) {
+    await supabase.from('body_measurements').delete().eq('id', id)
+    setMeasurements(prev => prev.filter(m => m.id !== id))
+  }
+
+  // Mood
+  async function setMood(emoji, label) {
+    if (wellnessLog) {
+      const { data } = await supabase.from('wellness_logs').update({ mood: label, mood_emoji: emoji }).eq('id', wellnessLog.id).select().single()
+      if (data) setWellnessLog(data)
+    } else {
+      const { data } = await supabase.from('wellness_logs').upsert(
+        { user_id: user.id, log_date: today, mood: label, mood_emoji: emoji },
+        { onConflict: 'user_id,log_date' }
+      ).select().single()
+      if (data) setWellnessLog(data)
+    }
   }
 
   async function logHydration() {
@@ -375,7 +463,7 @@ export default function WellnessPage() {
 
       {/* Tabs */}
       <div className="flex gap-2 mb-5" style={{ '--section-tab-color': 'var(--wellness)' }}>
-        {['dashboard', 'workouts', 'meals', 'hydration'].map(t => (
+        {['dashboard', 'workouts', 'meals', 'hydration', 'routines', 'body'].map(t => (
           <button key={t} onClick={() => setTab(t)} className={`btn btn-sm tab-item ${tab === t ? 'active' : 'btn-ghost'}`}
             style={tab === t ? { color: '#fff', background: 'var(--wellness)' } : {}}>
             {t.charAt(0).toUpperCase() + t.slice(1)}
