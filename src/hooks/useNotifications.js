@@ -220,6 +220,63 @@ async function generateStreakWarnings(user) {
   }
 }
 
+async function generateRoutineReminders(user) {
+  const { data: routines } = await supabase.from('wellness_routines').select('*').eq('user_id', user.id)
+  if (!routines?.length) return
+
+  const todayStr = format(new Date(), 'yyyy-MM-dd')
+  const today = new Date()
+  const rows = []
+  for (const r of routines) {
+    if (!r.last_done_date) continue
+    const last = new Date(`${r.last_done_date}T00:00:00`)
+    const intervalDays = r.frequency_unit === 'weeks' ? r.frequency_value * 7
+      : r.frequency_unit === 'months' ? r.frequency_value * 30
+      : r.frequency_value
+    const due = new Date(last)
+    due.setDate(due.getDate() + intervalDays)
+    const daysUntilDue = Math.ceil((due - today) / (1000 * 60 * 60 * 24))
+    if (daysUntilDue > r.remind_days_before) continue
+
+    rows.push({
+      user_id: user.id,
+      type: 'routine_reminder',
+      source_id: r.id,
+      title: daysUntilDue < 0 ? `${r.name} is overdue` : `${r.name} is due soon`,
+      body: daysUntilDue < 0
+        ? `Overdue by ${Math.abs(daysUntilDue)} day${Math.abs(daysUntilDue) === 1 ? '' : 's'}.`
+        : `Due in ${daysUntilDue} day${daysUntilDue === 1 ? '' : 's'}.`,
+      link: '/wellness?tab=routines',
+    })
+  }
+  if (rows.length) {
+    await supabase.from('notifications').upsert(rows, { onConflict: 'user_id,type,source_id', ignoreDuplicates: true })
+  }
+}
+
+async function generateHydrationReminder(user) {
+  const { data: prefs } = await supabase.from('user_preferences').select('hydration_reminder_time').eq('user_id', user.id).maybeSingle()
+  const reminderTime = prefs?.hydration_reminder_time || '13:00'
+  const [rh, rm] = reminderTime.split(':').map(Number)
+  const now = new Date()
+  if (now.getHours() * 60 + now.getMinutes() < rh * 60 + rm) return
+
+  const todayStr = format(now, 'yyyy-MM-dd')
+  const { data: log } = await supabase.from('wellness_logs').select('hydration_ml').eq('user_id', user.id).eq('log_date', todayStr).maybeSingle()
+  const total = log?.hydration_ml || 0
+  const HYDRATION_GOAL = 2500
+  if (total >= HYDRATION_GOAL * 0.5) return
+
+  await supabase.from('notifications').upsert([{
+    user_id: user.id,
+    type: 'hydration_reminder',
+    source_id: todayStr,
+    title: "You're behind on hydration today",
+    body: `Only ${total}ml logged so far — aim for ${HYDRATION_GOAL}ml.`,
+    link: '/wellness?tab=hydration',
+  }], { onConflict: 'user_id,type,source_id', ignoreDuplicates: true })
+}
+
 export function useNotifications() {
   const { user } = useAuth()
   const [notifications, setNotifications] = useState([])
@@ -246,6 +303,8 @@ export function useNotifications() {
           generatePlanTomorrowReminder(user),
           generatePartnerNudgePrompts(user),
           generateStreakWarnings(user),
+          generateRoutineReminders(user),
+          generateHydrationReminder(user),
         ])
       }
       await load(user)

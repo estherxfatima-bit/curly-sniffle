@@ -225,8 +225,10 @@ export default function CalendarPage() {
         <p style={{ padding: 40, textAlign: 'center', color: 'var(--text-3)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>Loading…</p>
       ) : (
         <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+        <div style={{ overflowX: isMobile ? 'auto' : 'visible' }}>
+          <div style={{ minWidth: isMobile ? 32 + 7 * 60 : 'auto' }}>
           {/* Day headers */}
-          <div style={{ display: 'grid', gridTemplateColumns: '48px repeat(7, 1fr)', borderBottom: '1px solid var(--border)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: gridCols, borderBottom: '1px solid var(--border)' }}>
             <div />
             {weekDays.map((day, i) => {
               const isToday = format(day, 'yyyy-MM-dd') === todayStr
@@ -241,7 +243,7 @@ export default function CalendarPage() {
 
           {/* All-day row */}
           {allDayEvents.length > 0 && (
-            <div style={{ display: 'grid', gridTemplateColumns: '48px repeat(7, 1fr)', borderBottom: '1px solid var(--border)', minHeight: 28 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: gridCols, borderBottom: '1px solid var(--border)', minHeight: 28 }}>
               <div style={{ padding: '4px 6px', fontSize: 9, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', display: 'flex', alignItems: 'flex-start' }}>all day</div>
               {allDayByDay.map((dayEvs, di) => (
                 <div key={di} style={{ borderLeft: '1px solid var(--border)', padding: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -262,7 +264,7 @@ export default function CalendarPage() {
 
           {/* Timed grid — scrollable */}
           <div style={{ overflowY: 'auto', maxHeight: 'calc(100vh - 320px)' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '48px repeat(7, 1fr)', position: 'relative' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: gridCols, position: 'relative' }}>
               {/* Hour labels */}
               <div style={{ position: 'relative', height: GRID_HEIGHT }}>
                 {hours.map(h => (
@@ -328,6 +330,8 @@ export default function CalendarPage() {
                 )
               })}
             </div>
+          </div>
+          </div>
           </div>
         </div>
       )}
