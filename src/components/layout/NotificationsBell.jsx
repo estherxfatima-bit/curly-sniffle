@@ -31,8 +31,8 @@ export default function NotificationsBell({ variant = 'sidebar' }) {
 
   return (
     <>
-      <div style={{ position: 'relative', width: variant === 'sidebar' ? '100%' : 'auto' }}>
-        <button onClick={() => setOpen(true)} style={buttonStyle}>
+      <div style={{ position: 'relative', width: variant === 'sidebar' ? '100%' : 'auto', flex: variant === 'sidebar' ? undefined : 1 }}>
+        <button onClick={() => setOpen(true)} style={{ ...buttonStyle, width: '100%' }}>
           <span style={{ position: 'relative', display: 'inline-flex' }}>
             <Bell size={variant === 'sidebar' ? 14 : 18} />
             {unreadCount > 0 && (

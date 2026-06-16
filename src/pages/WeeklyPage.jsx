@@ -1,4 +1,5 @@
 import { useState, useEffect, Fragment } from 'react'
+import { Link } from 'react-router-dom'
 import { format, startOfWeek, endOfWeek, addWeeks, subWeeks } from 'date-fns'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
@@ -508,10 +509,10 @@ export default function WeeklyPage() {
 
       {/* This week's calendar */}
       <div className="card mt-4">
-        <div className="flex items-center justify-between mb-4">
+        <Link to="/calendar" className="flex items-center justify-between mb-4" style={{ textDecoration: 'none', color: 'inherit' }}>
           <h3>This week's calendar</h3>
           <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-3)' }}>Mon → Sun</p>
-        </div>
+        </Link>
         <WeeklyAgenda weekStart={weekStartStr} />
       </div>
 

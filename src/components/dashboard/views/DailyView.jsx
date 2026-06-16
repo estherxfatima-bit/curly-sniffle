@@ -156,10 +156,10 @@ export default function DailyView({
 
     calendar: (
       <div className="card card-finance">
-        <div className="flex items-center justify-between mb-3">
+        <Link to="/calendar" className="flex items-center justify-between mb-3" style={{ textDecoration: 'none', color: 'inherit' }}>
           <h3>Today's calendar</h3>
           <CalendarIcon size={14} color="var(--finance)" />
-        </div>
+        </Link>
         <DailyAgenda />
       </div>
     ),

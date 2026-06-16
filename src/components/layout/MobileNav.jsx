@@ -12,6 +12,7 @@ const primaryItems = [
 ]
 
 const overflowItems = [
+  { to: '/calendar', label: 'Calendar' },
   { to: '/goals',    label: 'Goals'    },
   { to: '/habits',   label: 'Habits'   },
   { to: '/finance',  label: 'Finance'  },
