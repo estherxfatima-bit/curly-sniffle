@@ -64,6 +64,14 @@ export default function FinancePage() {
   const [aiLoading, setAiLoading] = useState(false)
   const [aiSummary, setAiSummary] = useState('')
 
+  // Net worth tracker state
+  const [debts, setDebts]                   = useState([])
+  const [savingsAccounts, setSavingsAccounts] = useState([])
+  const [investments, setInvestments]       = useState([])
+  const [newDebt, setNewDebt]               = useState({ name: '', category: 'Other', current_balance: '', original_balance: '', interest_rate: '', minimum_payment: '' })
+  const [newSavingsAccount, setNewSavingsAccount] = useState({ name: '', current_balance: '', target_amount: '', target_date: '' })
+  const [newInvestment, setNewInvestment]   = useState({ name: '', type: 'Other', current_value: '' })
+
   // New item forms
   const [newIncome, setNewIncome]     = useState({ name: '', amount: '', frequency: 'monthly', is_self_employed: false })
   const [newFixed, setNewFixed]       = useState({ name: '', amount: '', category: 'Other' })
@@ -101,7 +109,7 @@ export default function FinancePage() {
 
   async function load() {
     setLoading(true)
-    const [incRes, fixRes, varRes, savRes, budRes, layoutRes, prefRes] = await Promise.all([
+    const [incRes, fixRes, varRes, savRes, budRes, layoutRes, prefRes, debtsRes, savAccRes, invRes] = await Promise.all([
       supabase.from('income_sources').select('*').eq('user_id', user.id).order('created_at'),
       supabase.from('fixed_expenses').select('*').eq('user_id', user.id).order('created_at'),
       supabase.from('variable_expenses').select('*').eq('user_id', user.id).order('date', { ascending: false }),
@@ -109,6 +117,9 @@ export default function FinancePage() {
       supabase.from('budgets').select('*').eq('user_id', user.id),
       supabase.from('dashboard_layout').select('card_order').eq('user_id', user.id).eq('view', 'finance').maybeSingle(),
       supabase.from('user_preferences').select('hidden_budget_categories').eq('user_id', user.id).maybeSingle(),
+      supabase.from('debts').select('*').eq('user_id', user.id).order('created_at'),
+      supabase.from('savings_accounts').select('*').eq('user_id', user.id).order('created_at'),
+      supabase.from('investments').select('*').eq('user_id', user.id).order('created_at'),
     ])
     setIncome(incRes.data || [])
     setFixed(fixRes.data || [])
@@ -117,6 +128,9 @@ export default function FinancePage() {
     setBudgets(budRes.data || [])
     setCardOrder(normalizeOrder(layoutRes.data?.card_order))
     setHiddenCats(prefRes.data?.hidden_budget_categories || [])
+    setDebts(debtsRes.data || [])
+    setSavingsAccounts(savAccRes.data || [])
+    setInvestments(invRes.data || [])
     setLoading(false)
   }
 
@@ -190,6 +204,62 @@ export default function FinancePage() {
   async function deleteSavings(id) {
     await supabase.from('savings_allocations').delete().eq('id', id)
     setSavings(prev => prev.filter(i => i.id !== id))
+  }
+
+  // Net worth CRUD
+  async function addDebt() {
+    if (!newDebt.name || !newDebt.current_balance) return
+    const payload = {
+      user_id: user.id,
+      name: newDebt.name,
+      category: newDebt.category,
+      current_balance: parseFloat(newDebt.current_balance),
+      original_balance: newDebt.original_balance ? parseFloat(newDebt.original_balance) : null,
+      interest_rate: newDebt.interest_rate ? parseFloat(newDebt.interest_rate) : null,
+      minimum_payment: newDebt.minimum_payment ? parseFloat(newDebt.minimum_payment) : null,
+    }
+    const { data } = await supabase.from('debts').insert(payload).select().single()
+    setDebts(prev => [...prev, data])
+    setNewDebt({ name: '', category: 'Other', current_balance: '', original_balance: '', interest_rate: '', minimum_payment: '' })
+  }
+  async function deleteDebt(id) {
+    await supabase.from('debts').delete().eq('id', id)
+    setDebts(prev => prev.filter(i => i.id !== id))
+  }
+
+  async function addSavingsAccount() {
+    if (!newSavingsAccount.name || !newSavingsAccount.current_balance) return
+    const payload = {
+      user_id: user.id,
+      name: newSavingsAccount.name,
+      current_balance: parseFloat(newSavingsAccount.current_balance),
+      target_amount: newSavingsAccount.target_amount ? parseFloat(newSavingsAccount.target_amount) : null,
+      target_date: newSavingsAccount.target_date || null,
+    }
+    const { data } = await supabase.from('savings_accounts').insert(payload).select().single()
+    setSavingsAccounts(prev => [...prev, data])
+    setNewSavingsAccount({ name: '', current_balance: '', target_amount: '', target_date: '' })
+  }
+  async function deleteSavingsAccount(id) {
+    await supabase.from('savings_accounts').delete().eq('id', id)
+    setSavingsAccounts(prev => prev.filter(i => i.id !== id))
+  }
+
+  async function addInvestment() {
+    if (!newInvestment.name || !newInvestment.current_value) return
+    const payload = {
+      user_id: user.id,
+      name: newInvestment.name,
+      type: newInvestment.type,
+      current_value: parseFloat(newInvestment.current_value),
+    }
+    const { data } = await supabase.from('investments').insert(payload).select().single()
+    setInvestments(prev => [...prev, data])
+    setNewInvestment({ name: '', type: 'Other', current_value: '' })
+  }
+  async function deleteInvestment(id) {
+    await supabase.from('investments').delete().eq('id', id)
+    setInvestments(prev => prev.filter(i => i.id !== id))
   }
 
   // Inline row editing — income/fixed/variable/savings
@@ -783,6 +853,173 @@ export default function FinancePage() {
           {savingsCard}
         </div>
       )}
+
+      {/* Net Worth section */}
+      {(() => {
+        const totalDebt = debts.reduce((s, d) => s + (parseFloat(d.current_balance) || 0), 0)
+        const totalSavingsAccounts = savingsAccounts.reduce((s, a) => s + (parseFloat(a.current_balance) || 0), 0)
+        const totalInvestments = investments.reduce((s, i) => s + (parseFloat(i.current_value) || 0), 0)
+        const netWorth = totalSavingsAccounts + totalInvestments - totalDebt
+        const DEBT_CATS = ['Credit Card', 'Loan', 'Overdraft', 'Borrowing', 'Other']
+        const INV_TYPES = ['ISA', 'Pension', 'Stocks', 'Other']
+        return (
+          <div className="card mb-6" style={{ padding: '24px 28px' }}>
+            {/* Net Worth headline */}
+            <div style={{ marginBottom: 24 }}>
+              <p className="mono" style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 6 }}>Net Worth</p>
+              <p style={{ fontFamily: 'var(--font-serif)', fontSize: 'clamp(1.7rem, 8vw, 2.6rem)', fontWeight: 700, letterSpacing: '-0.02em', color: netWorth >= 0 ? 'var(--finance)' : 'var(--danger)' }}>
+                {netWorth < 0 ? '-' : ''}£{Math.abs(netWorth).toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+              </p>
+              <p className="mono" style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 4 }}>
+                £{totalSavingsAccounts.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} savings + £{totalInvestments.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} investments − £{totalDebt.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} debt
+              </p>
+            </div>
+
+            {/* 3-column grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 20 }}>
+
+              {/* Debt column */}
+              <div>
+                <div className="flex items-center justify-between" style={{ marginBottom: 12 }}>
+                  <h3 style={{ fontSize: '0.9rem' }}>Debt</h3>
+                  <span className="mono" style={{ fontSize: 13, fontWeight: 700, color: totalDebt > 0 ? 'var(--danger)' : 'var(--text-3)' }}>
+                    £{totalDebt.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+                {totalDebt > 0 && (
+                  <div style={{ background: 'color-mix(in srgb, var(--danger) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--danger) 25%, transparent)', borderRadius: 'var(--radius)', padding: '8px 12px', marginBottom: 12, fontSize: 12, color: 'var(--danger)' }}>
+                    You have £{totalDebt.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} in debt across {debts.length} account{debts.length !== 1 ? 's' : ''}
+                  </div>
+                )}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+                  {debts.map(d => (
+                    <div key={d.id} className="flex items-center justify-between gap-2">
+                      <div style={{ minWidth: 0, overflow: 'hidden' }}>
+                        <p style={{ fontSize: 13 }}>{d.name}</p>
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 2 }}>
+                          <span className="badge" style={{ fontSize: 10, background: 'color-mix(in srgb, var(--danger) 12%, transparent)', color: 'var(--danger)', border: '1px solid color-mix(in srgb, var(--danger) 25%, transparent)', borderRadius: 4, padding: '1px 6px' }}>{d.category}</span>
+                          {d.interest_rate && <span className="mono" style={{ fontSize: 10, color: 'var(--text-3)' }}>{d.interest_rate}% APR</span>}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2" style={{ flexShrink: 0 }}>
+                        <span className="mono" style={{ fontSize: 13, fontWeight: 600, color: 'var(--danger)' }}>£{parseFloat(d.current_balance).toFixed(2)}</span>
+                        <button className="btn-icon btn" onClick={() => deleteDebt(d.id)}><Trash2 size={12} /></button>
+                      </div>
+                    </div>
+                  ))}
+                  {debts.length === 0 && <p style={{ fontSize: 12, color: 'var(--text-3)', fontStyle: 'italic' }}>No debts tracked.</p>}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+                  <input placeholder="Debt name (e.g. Visa card)" value={newDebt.name} onChange={e => setNewDebt(p => ({ ...p, name: e.target.value }))} style={{ fontSize: 12 }} />
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    <select value={newDebt.category} onChange={e => setNewDebt(p => ({ ...p, category: e.target.value }))} style={{ fontSize: 12 }}>
+                      {DEBT_CATS.map(c => <option key={c}>{c}</option>)}
+                    </select>
+                    <input type="text" inputMode="decimal" placeholder="Balance £" value={newDebt.current_balance} onChange={e => setNewDebt(p => ({ ...p, current_balance: sanitizeAmountInput(e.target.value) }))} style={{ fontSize: 12, flex: '1 1 80px', minWidth: 70 }} />
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    <input type="text" inputMode="decimal" placeholder="Original balance £ (opt)" value={newDebt.original_balance} onChange={e => setNewDebt(p => ({ ...p, original_balance: sanitizeAmountInput(e.target.value) }))} style={{ fontSize: 12, flex: '1 1 100px' }} />
+                    <input type="text" inputMode="decimal" placeholder="Interest % (opt)" value={newDebt.interest_rate} onChange={e => setNewDebt(p => ({ ...p, interest_rate: sanitizeAmountInput(e.target.value) }))} style={{ fontSize: 12, flex: '1 1 80px' }} />
+                    <input type="text" inputMode="decimal" placeholder="Min payment £ (opt)" value={newDebt.minimum_payment} onChange={e => setNewDebt(p => ({ ...p, minimum_payment: sanitizeAmountInput(e.target.value) }))} style={{ fontSize: 12, flex: '1 1 80px' }} />
+                  </div>
+                  <button className="btn btn-sm btn-ghost" onClick={addDebt}><Plus size={12} /> Add debt</button>
+                </div>
+              </div>
+
+              {/* Savings Accounts column */}
+              <div>
+                <div className="flex items-center justify-between" style={{ marginBottom: 12 }}>
+                  <h3 style={{ fontSize: '0.9rem' }}>Savings</h3>
+                  <span className="mono" style={{ fontSize: 13, fontWeight: 700, color: 'var(--finance)' }}>
+                    £{totalSavingsAccounts.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+                  {savingsAccounts.map(a => {
+                    const bal = parseFloat(a.current_balance) || 0
+                    const target = a.target_amount ? parseFloat(a.target_amount) : null
+                    const pct = target ? Math.min(100, (bal / target) * 100) : null
+                    const r = 16
+                    const circ = 2 * Math.PI * r
+                    return (
+                      <div key={a.id} className="flex items-center justify-between gap-2">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, overflow: 'hidden' }}>
+                          {pct !== null && (
+                            <svg width={40} height={40} style={{ flexShrink: 0 }}>
+                              <circle cx={20} cy={20} r={r} fill="none" stroke="var(--border)" strokeWidth={3} />
+                              <circle cx={20} cy={20} r={r} fill="none" stroke="var(--finance)" strokeWidth={3}
+                                strokeDasharray={circ}
+                                strokeDashoffset={circ * (1 - pct / 100)}
+                                strokeLinecap="round"
+                                transform="rotate(-90 20 20)"
+                              />
+                              <text x={20} y={24} textAnchor="middle" style={{ fontSize: 9, fontFamily: 'var(--font-mono)', fill: 'var(--text-3)' }}>{Math.round(pct)}%</text>
+                            </svg>
+                          )}
+                          <div style={{ minWidth: 0 }}>
+                            <p style={{ fontSize: 13 }}>{a.name}</p>
+                            {target && <p className="mono" style={{ fontSize: 10, color: 'var(--text-3)' }}>target £{target.toLocaleString('en-GB')}{a.target_date ? ` by ${a.target_date}` : ''}</p>}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2" style={{ flexShrink: 0 }}>
+                          <span className="mono" style={{ fontSize: 13, fontWeight: 600, color: 'var(--finance)' }}>£{bal.toFixed(2)}</span>
+                          <button className="btn-icon btn" onClick={() => deleteSavingsAccount(a.id)}><Trash2 size={12} /></button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                  {savingsAccounts.length === 0 && <p style={{ fontSize: 12, color: 'var(--text-3)', fontStyle: 'italic' }}>No savings accounts tracked.</p>}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+                  <input placeholder="Account name (e.g. Emergency fund)" value={newSavingsAccount.name} onChange={e => setNewSavingsAccount(p => ({ ...p, name: e.target.value }))} style={{ fontSize: 12 }} />
+                  <input type="text" inputMode="decimal" placeholder="Current balance £" value={newSavingsAccount.current_balance} onChange={e => setNewSavingsAccount(p => ({ ...p, current_balance: sanitizeAmountInput(e.target.value) }))} style={{ fontSize: 12 }} />
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    <input type="text" inputMode="decimal" placeholder="Target amount £ (opt)" value={newSavingsAccount.target_amount} onChange={e => setNewSavingsAccount(p => ({ ...p, target_amount: sanitizeAmountInput(e.target.value) }))} style={{ fontSize: 12, flex: '1 1 120px' }} />
+                    <input type="date" placeholder="Target date (opt)" value={newSavingsAccount.target_date} onChange={e => setNewSavingsAccount(p => ({ ...p, target_date: e.target.value }))} style={{ fontSize: 12, flex: '1 1 120px' }} />
+                  </div>
+                  <button className="btn btn-sm btn-ghost" onClick={addSavingsAccount}><Plus size={12} /> Add savings account</button>
+                </div>
+              </div>
+
+              {/* Investments column */}
+              <div>
+                <div className="flex items-center justify-between" style={{ marginBottom: 12 }}>
+                  <h3 style={{ fontSize: '0.9rem' }}>Investments</h3>
+                  <span className="mono" style={{ fontSize: 13, fontWeight: 700, color: 'var(--career)' }}>
+                    £{totalInvestments.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+                  {investments.map(inv => (
+                    <div key={inv.id} className="flex items-center justify-between gap-2">
+                      <div style={{ minWidth: 0, overflow: 'hidden' }}>
+                        <p style={{ fontSize: 13 }}>{inv.name}</p>
+                        <span className="badge" style={{ fontSize: 10, background: 'color-mix(in srgb, var(--career) 12%, transparent)', color: 'var(--career)', border: '1px solid color-mix(in srgb, var(--career) 25%, transparent)', borderRadius: 4, padding: '1px 6px', display: 'inline-block', marginTop: 2 }}>{inv.type}</span>
+                      </div>
+                      <div className="flex items-center gap-2" style={{ flexShrink: 0 }}>
+                        <span className="mono" style={{ fontSize: 13, fontWeight: 600, color: 'var(--career)' }}>£{parseFloat(inv.current_value).toFixed(2)}</span>
+                        <button className="btn-icon btn" onClick={() => deleteInvestment(inv.id)}><Trash2 size={12} /></button>
+                      </div>
+                    </div>
+                  ))}
+                  {investments.length === 0 && <p style={{ fontSize: 12, color: 'var(--text-3)', fontStyle: 'italic' }}>No investments tracked.</p>}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+                  <input placeholder="Investment name (e.g. Vanguard ISA)" value={newInvestment.name} onChange={e => setNewInvestment(p => ({ ...p, name: e.target.value }))} style={{ fontSize: 12 }} />
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    <select value={newInvestment.type} onChange={e => setNewInvestment(p => ({ ...p, type: e.target.value }))} style={{ fontSize: 12 }}>
+                      {INV_TYPES.map(t => <option key={t}>{t}</option>)}
+                    </select>
+                    <input type="text" inputMode="decimal" placeholder="Current value £" value={newInvestment.current_value} onChange={e => setNewInvestment(p => ({ ...p, current_value: sanitizeAmountInput(e.target.value) }))} style={{ fontSize: 12, flex: '1 1 100px' }} />
+                  </div>
+                  <button className="btn btn-sm btn-ghost" onClick={addInvestment}><Plus size={12} /> Add investment</button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Customisable card grid */}
       {editing && (
