@@ -1,33 +1,17 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { format, startOfWeek } from 'date-fns'
-import { ArrowLeft, MessageSquare, Send, Flame, Target, CheckSquare, ListTodo } from 'lucide-react'
+import { format, startOfWeek, addWeeks, addDays } from 'date-fns'
+import { ArrowLeft, MessageSquare, Send, Flame, Target, CheckSquare, ListTodo, ChevronLeft, ChevronRight } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import ArcRing from '../components/ui/ArcRing'
-import { getCurrentQuarter, AREA_COLORS } from '../lib/constants'
+import GoalCard from '../components/goals/GoalCard'
+import { getCurrentQuarter, AREA_COLORS, QUARTERS } from '../lib/constants'
 import { simulateHabit } from '../lib/habitUtils'
 
 const today = format(new Date(), 'yyyy-MM-dd')
-const weekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
 const currentQuarter = getCurrentQuarter()
 const currentYear = new Date().getFullYear()
-
-function goalProgress(goal, metrics, weeklyTasks) {
-  if (goal.tracking_type === 'metric') {
-    const history = metrics.filter(m => m.goal_id === goal.id)
-    const start = Number(goal.metric_start ?? 0)
-    const target = Number(goal.metric_target ?? 0)
-    const current = history.length ? Number(history[history.length - 1].value) : start
-    const span = target - start
-    const pct = span !== 0 ? Math.round(Math.min(Math.max((current - start) / span, 0), 1) * 100) : 0
-    return { pct, label: `${current}/${target}` }
-  }
-  const linked = weeklyTasks.filter(t => t.goal_id === goal.id)
-  const done = linked.filter(t => t.complete).length
-  const pct = linked.length ? Math.round((done / linked.length) * 100) : 0
-  return { pct, label: `${done}/${linked.length} tasks` }
-}
 
 function momentumScore(habits, habitLogs, weekTasks, moodLogs) {
   const logSet = new Map()
@@ -97,11 +81,36 @@ function NudgeButton({ onSend, label = 'Nudge' }) {
   )
 }
 
-function CompareColumn({ name, data, onNudge, isSelf }) {
+function MiniNav({ label, onPrev, onNext, onToday, isCurrent }) {
+  return (
+    <div className="flex items-center gap-2">
+      <button className="btn-icon btn btn-sm" onClick={onPrev} title="Previous"><ChevronLeft size={13} /></button>
+      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-2)', minWidth: 90, textAlign: 'center' }}>{label}</span>
+      <button className="btn-icon btn btn-sm" onClick={onNext} title="Next"><ChevronRight size={13} /></button>
+      {!isCurrent && onToday && (
+        <button className="btn btn-xs btn-ghost" onClick={onToday}>Now</button>
+      )}
+    </div>
+  )
+}
+
+function linkedTasksFor(goalId, weeklyTasks, dailyTodos) {
+  return [
+    ...weeklyTasks.filter(t => t.goal_id === goalId).map(t => ({ text: t.specific_task, complete: t.complete, area: t.area })),
+    ...dailyTodos.filter(t => t.goal_id === goalId).map(t => ({ text: t.text, complete: t.complete, area: t.category })),
+  ]
+}
+
+function CompareColumn({
+  name, data, onNudge, isSelf,
+  weekStart, onWeekShift, onWeekToday, isCurrentWeek,
+  todoDate, onTodoShift, onTodoToday, isCurrentTodoDate,
+  goalQuarter, goalYear, onGoalPeriodShift, onGoalPeriodToday, isCurrentGoalPeriod,
+}) {
   if (!data) return <div className="card" style={{ flex: 1 }}><p className="text-dim" style={{ fontSize: 12 }}>Loading…</p></div>
 
-  const { goals, metrics, weekTasks, habits, habitLogs, moodLogs, todos } = data
-  const currentGoals = goals.filter(g => g.quarter === currentQuarter && g.year === currentYear)
+  const { goals, metrics, weekTasks, habits, habitLogs, moodLogs, todos, allWeeklyTasks, allDailyTodos } = data
+  const periodGoals = goals.filter(g => g.quarter === goalQuarter && g.year === goalYear)
   const weekDone = weekTasks.filter(t => t.complete).length
   const weekPct = weekTasks.length ? Math.round((weekDone / weekTasks.length) * 100) : 0
   const momentum = momentumScore(habits, habitLogs, weekTasks, moodLogs)
@@ -125,17 +134,20 @@ function CompareColumn({ name, data, onNudge, isSelf }) {
 
       {/* Weekly Tasks */}
       <div className="card">
-        <div className="flex items-center gap-2 mb-3">
-          <CheckSquare size={14} color="var(--career)" />
-          <p style={{ fontSize: 12, fontWeight: 600 }}>Weekly tasks</p>
+        <div className="flex items-center justify-between mb-3 wrap" style={{ gap: 8 }}>
+          <div className="flex items-center gap-2">
+            <CheckSquare size={14} color="var(--career)" />
+            <p style={{ fontSize: 12, fontWeight: 600 }}>Weekly tasks</p>
+          </div>
+          <MiniNav label={format(new Date(weekStart), 'd MMM')} onPrev={() => onWeekShift(-1)} onNext={() => onWeekShift(1)} onToday={onWeekToday} isCurrent={isCurrentWeek} />
         </div>
         <div className="flex items-center gap-3 mb-3">
           <ArcRing value={weekPct} max={100} size={52} strokeWidth={5} color="var(--career)" label={`${weekPct}%`} fontSize={10} />
-          <p style={{ fontSize: 12, color: 'var(--text-2)' }}>{weekDone} of {weekTasks.length} done this week</p>
+          <p style={{ fontSize: 12, color: 'var(--text-2)' }}>{weekDone} of {weekTasks.length} done that week</p>
         </div>
         {weekTasks.length > 0 && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {weekTasks.slice(0, 8).map(t => (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 280, overflowY: 'auto' }}>
+            {weekTasks.map(t => (
               <div key={t.id}>
                 <div className="flex items-center gap-2">
                   <span style={{ fontSize: 11, flex: 1, color: t.complete ? 'var(--text-3)' : 'var(--text-2)', textDecoration: t.complete ? 'line-through' : 'none' }}>
@@ -152,14 +164,17 @@ function CompareColumn({ name, data, onNudge, isSelf }) {
 
       {/* Daily Todos */}
       <div className="card">
-        <div className="flex items-center gap-2 mb-3">
-          <ListTodo size={14} color="var(--personal)" />
-          <p style={{ fontSize: 12, fontWeight: 600 }}>Today's to-dos</p>
+        <div className="flex items-center justify-between mb-3 wrap" style={{ gap: 8 }}>
+          <div className="flex items-center gap-2">
+            <ListTodo size={14} color="var(--personal)" />
+            <p style={{ fontSize: 12, fontWeight: 600 }}>To-dos</p>
+          </div>
+          <MiniNav label={format(new Date(todoDate), 'd MMM')} onPrev={() => onTodoShift(-1)} onNext={() => onTodoShift(1)} onToday={onTodoToday} isCurrent={isCurrentTodoDate} />
         </div>
         {todos.length === 0 ? (
-          <p style={{ fontSize: 11, color: 'var(--text-3)', fontStyle: 'italic' }}>No to-dos for today.</p>
+          <p style={{ fontSize: 11, color: 'var(--text-3)', fontStyle: 'italic' }}>No to-dos for this day.</p>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 280, overflowY: 'auto' }}>
             {todos.map(t => (
               <div key={t.id}>
                 <div className="flex items-center gap-2">
@@ -177,26 +192,29 @@ function CompareColumn({ name, data, onNudge, isSelf }) {
 
       {/* Goals */}
       <div className="card">
-        <div className="flex items-center gap-2 mb-3">
-          <Target size={14} color="var(--creative)" />
-          <p style={{ fontSize: 12, fontWeight: 600 }}>{currentQuarter} {currentYear} goals</p>
+        <div className="flex items-center justify-between mb-3 wrap" style={{ gap: 8 }}>
+          <div className="flex items-center gap-2">
+            <Target size={14} color="var(--creative)" />
+            <p style={{ fontSize: 12, fontWeight: 600 }}>{goalQuarter} {goalYear} goals</p>
+          </div>
+          <MiniNav label={`${goalQuarter} ${goalYear}`} onPrev={() => onGoalPeriodShift(-1)} onNext={() => onGoalPeriodShift(1)} onToday={onGoalPeriodToday} isCurrent={isCurrentGoalPeriod} />
         </div>
-        {currentGoals.length === 0 ? (
-          <p style={{ fontSize: 11, color: 'var(--text-3)', fontStyle: 'italic' }}>No goals this quarter.</p>
+        {periodGoals.length === 0 ? (
+          <p style={{ fontSize: 11, color: 'var(--text-3)', fontStyle: 'italic' }}>No goals this period.</p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {currentGoals.map(g => {
-              const { pct, label } = goalProgress(g, metrics, weekTasks)
+            {periodGoals.map(g => {
               const color = AREA_COLORS[g.category] || 'var(--career)'
               return (
                 <div key={g.id}>
-                  <div className="flex items-center gap-3">
-                    <ArcRing value={pct} max={100} size={40} strokeWidth={4} color={color} label={`${pct}%`} fontSize={9} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontSize: 12, fontWeight: 500, lineHeight: 1.3 }}>{g.primary_goal}</p>
-                      <p style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>{label}</p>
-                    </div>
-                  </div>
+                  <GoalCard
+                    goal={g}
+                    color={color}
+                    linkedTasks={linkedTasksFor(g.id, allWeeklyTasks, allDailyTodos)}
+                    metricHistory={metrics.filter(m => m.goal_id === g.id)}
+                    parentGoal={goals.find(p => p.id === g.parent_goal_id)}
+                    readOnly
+                  />
                   {!isSelf && <NudgeButton onSend={msg => onNudge(msg, null)} label="Nudge on goal" />}
                 </div>
               )
@@ -247,15 +265,41 @@ export default function ComparePage() {
   const [loading, setLoading] = useState(true)
   const [nudgeSent, setNudgeSent] = useState(false)
 
+  // Shared navigation state — applies to both columns so the comparison stays apples-to-apples.
+  const [weekRef, setWeekRef] = useState(new Date())
+  const [todoDate, setTodoDate] = useState(new Date())
+  const [goalQuarter, setGoalQuarter] = useState(currentQuarter)
+  const [goalYear, setGoalYear] = useState(currentYear)
+
+  const weekStartStr = format(startOfWeek(weekRef, { weekStartsOn: 1 }), 'yyyy-MM-dd')
+  const todoDateStr = format(todoDate, 'yyyy-MM-dd')
+  const isCurrentWeek = weekStartStr === format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
+  const isCurrentTodoDate = todoDateStr === today
+  const isCurrentGoalPeriod = goalQuarter === currentQuarter && goalYear === currentYear
+
+  function shiftWeek(dir) { setWeekRef(d => addWeeks(d, dir)) }
+  function shiftTodoDate(dir) { setTodoDate(d => addDays(d, dir)) }
+  function shiftGoalPeriod(dir) {
+    const idx = QUARTERS.indexOf(goalQuarter)
+    let newIdx = idx + dir
+    let newYear = goalYear
+    if (newIdx < 0) { newIdx = QUARTERS.length - 1; newYear -= 1 }
+    if (newIdx >= QUARTERS.length) { newIdx = 0; newYear += 1 }
+    setGoalQuarter(QUARTERS[newIdx])
+    setGoalYear(newYear)
+  }
+
   async function loadForUser(uid) {
-    const [goalsRes, metricsRes, weekTasksRes, habitsRes, habitLogsRes, moodRes, todosRes] = await Promise.all([
+    const [goalsRes, metricsRes, weekTasksRes, habitsRes, habitLogsRes, moodRes, todosRes, allWeeklyTasksRes, allDailyTodosRes] = await Promise.all([
       supabase.from('goals').select('*').eq('user_id', uid),
       supabase.from('goal_metrics').select('*').eq('user_id', uid).order('recorded_at'),
-      supabase.from('weekly_tasks').select('*').eq('user_id', uid).eq('week_start', weekStart),
+      supabase.from('weekly_tasks').select('*').eq('user_id', uid).eq('week_start', weekStartStr),
       supabase.from('habits').select('*').eq('user_id', uid),
       supabase.from('habit_logs').select('*').eq('user_id', uid),
-      supabase.from('mood_logs').select('*').eq('user_id', uid).gte('date', weekStart),
-      supabase.from('daily_todos').select('*').eq('user_id', uid).eq('date', today).eq('archived', false).order('sort_order'),
+      supabase.from('mood_logs').select('*').eq('user_id', uid).gte('date', weekStartStr),
+      supabase.from('daily_todos').select('*').eq('user_id', uid).eq('date', todoDateStr).eq('archived', false).order('sort_order'),
+      supabase.from('weekly_tasks').select('id, goal_id, area, specific_task, complete').eq('user_id', uid).not('goal_id', 'is', null),
+      supabase.from('daily_todos').select('id, goal_id, category, text, complete').eq('user_id', uid).not('goal_id', 'is', null),
     ])
     return {
       goals: goalsRes.data || [],
@@ -265,6 +309,8 @@ export default function ComparePage() {
       habitLogs: habitLogsRes.data || [],
       moodLogs: moodRes.data || [],
       todos: todosRes.data || [],
+      allWeeklyTasks: allWeeklyTasksRes.data || [],
+      allDailyTodos: allDailyTodosRes.data || [],
     }
   }
 
@@ -284,7 +330,7 @@ export default function ComparePage() {
 
   useEffect(() => {
     if (user && partnerId) loadAll() // eslint-disable-line react-hooks/set-state-in-effect
-  }, [user, partnerId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user, partnerId, weekStartStr, todoDateStr]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function sendNudge(content, taskId) {
     await supabase.from('comments').insert({
@@ -306,7 +352,7 @@ export default function ComparePage() {
           </Link>
         </div>
         <h1>Compare</h1>
-        <p>You vs {partnerName} — {currentQuarter} {currentYear}</p>
+        <p>You vs {partnerName} — navigate weeks, days and quarters independently of "now"</p>
         {nudgeSent && (
           <span style={{ fontSize: 11, color: 'var(--success)', fontFamily: 'var(--font-mono)' }}>Nudge sent!</span>
         )}
@@ -321,12 +367,18 @@ export default function ComparePage() {
             data={selfData}
             onNudge={() => {}}
             isSelf={true}
+            weekStart={weekStartStr} onWeekShift={shiftWeek} onWeekToday={() => setWeekRef(new Date())} isCurrentWeek={isCurrentWeek}
+            todoDate={todoDateStr} onTodoShift={shiftTodoDate} onTodoToday={() => setTodoDate(new Date())} isCurrentTodoDate={isCurrentTodoDate}
+            goalQuarter={goalQuarter} goalYear={goalYear} onGoalPeriodShift={shiftGoalPeriod} onGoalPeriodToday={() => { setGoalQuarter(currentQuarter); setGoalYear(currentYear) }} isCurrentGoalPeriod={isCurrentGoalPeriod}
           />
           <CompareColumn
             name={partnerName}
             data={partnerData}
             onNudge={sendNudge}
             isSelf={false}
+            weekStart={weekStartStr} onWeekShift={shiftWeek} onWeekToday={() => setWeekRef(new Date())} isCurrentWeek={isCurrentWeek}
+            todoDate={todoDateStr} onTodoShift={shiftTodoDate} onTodoToday={() => setTodoDate(new Date())} isCurrentTodoDate={isCurrentTodoDate}
+            goalQuarter={goalQuarter} goalYear={goalYear} onGoalPeriodShift={shiftGoalPeriod} onGoalPeriodToday={() => { setGoalQuarter(currentQuarter); setGoalYear(currentYear) }} isCurrentGoalPeriod={isCurrentGoalPeriod}
           />
         </div>
       )}

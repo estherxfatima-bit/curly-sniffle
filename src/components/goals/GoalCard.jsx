@@ -13,7 +13,7 @@ const STATUS_BADGE = {
   'Complete':    'badge-success',
 }
 
-export default function GoalCard({ goal, color, linkedTasks, metricHistory, parentGoal, onEdit, onDelete, onAddMetric, onUpdatePriority, onTogglePrivate }) {
+export default function GoalCard({ goal, color, linkedTasks, metricHistory, parentGoal, onEdit, onDelete, onAddMetric, onUpdatePriority, onTogglePrivate, readOnly = false }) {
   const [updating, setUpdating] = useState(false)
   const [newValue, setNewValue] = useState('')
 
@@ -66,7 +66,7 @@ export default function GoalCard({ goal, color, linkedTasks, metricHistory, pare
       <div className="flex items-start justify-between gap-3 mb-3">
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="flex items-center gap-2">
-            <PriorityDot priority={goal.priority_level} onChange={onUpdatePriority} />
+            <PriorityDot priority={goal.priority_level} onChange={readOnly ? undefined : onUpdatePriority} />
             <p style={{ fontSize: 14, fontWeight: 600, lineHeight: 1.4 }}>{goal.primary_goal}</p>
           </div>
           <div className="flex items-center gap-2 mt-1 wrap">
@@ -83,18 +83,20 @@ export default function GoalCard({ goal, color, linkedTasks, metricHistory, pare
         </div>
         <div className="flex items-center gap-1" style={{ flexShrink: 0 }}>
           <ArcRing value={pct} max={100} size={64} strokeWidth={6} color={color} label={`${pct}%`} fontSize={13} />
-          <div className="flex flex-col items-center gap-1">
-            <button
-              className="btn-icon btn btn-sm"
-              onClick={() => onTogglePrivate(goal)}
-              title={goal.is_private ? 'Private — hidden from accountability partners. Click to share.' : 'Shared with accepted accountability partners. Click to make private.'}
-              style={{ color: goal.is_private ? 'var(--text-3)' : 'var(--career)' }}
-            >
-              {goal.is_private ? <Lock size={12} /> : <Unlock size={12} />}
-            </button>
-            <button className="btn-icon btn btn-sm" onClick={() => onEdit(goal)} title="Edit goal"><Edit2 size={12} /></button>
-            <button className="btn-icon btn btn-sm" onClick={() => onDelete(goal.id)} title="Delete goal"><Trash2 size={12} /></button>
-          </div>
+          {!readOnly && (
+            <div className="flex flex-col items-center gap-1">
+              <button
+                className="btn-icon btn btn-sm"
+                onClick={() => onTogglePrivate(goal)}
+                title={goal.is_private ? 'Private — hidden from accountability partners. Click to share.' : 'Shared with accepted accountability partners. Click to make private.'}
+                style={{ color: goal.is_private ? 'var(--text-3)' : 'var(--career)' }}
+              >
+                {goal.is_private ? <Lock size={12} /> : <Unlock size={12} />}
+              </button>
+              <button className="btn-icon btn btn-sm" onClick={() => onEdit(goal)} title="Edit goal"><Edit2 size={12} /></button>
+              <button className="btn-icon btn btn-sm" onClick={() => onDelete(goal.id)} title="Delete goal"><Trash2 size={12} /></button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -123,7 +125,7 @@ export default function GoalCard({ goal, color, linkedTasks, metricHistory, pare
         <div>
           <div className="flex items-center justify-between mb-2">
             <p className="mono">{goal.metric_name || 'Metric'}: {current} / {goal.metric_target}</p>
-            {!updating && (
+            {!readOnly && !updating && (
               <button className="btn btn-xs btn-ghost" onClick={() => { setUpdating(true); setNewValue(String(current ?? '')) }}>
                 <RefreshCw size={11} /> Update
               </button>
