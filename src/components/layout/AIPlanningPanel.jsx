@@ -140,17 +140,23 @@ export default function AIPlanningPanel({ onClose }) {
 
   async function addSuggestedTask(task, index) {
     const priority_level = taskPriorities[index] ?? task.priority_level ?? null
+    let error
     if (task.type === 'weekly') {
       const weekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
-      await supabase.from('weekly_tasks').insert({
+      ;({ error } = await supabase.from('weekly_tasks').insert({
         user_id: user.id, week_start: weekStart,
-        area: task.area, action: task.action, frequency: task.frequency, specific_task: task.specific_task,
+        area: task.area || 'Personal', action: task.action, frequency: task.frequency, specific_task: task.specific_task,
         complete: false, carried_forward: false, priority_level,
-      })
+      }))
     } else if (task.type === 'daily') {
-      await supabase.from('daily_todos').insert({
+      ;({ error } = await supabase.from('daily_todos').insert({
         user_id: user.id, text: task.title, date: task.due_date, complete: false, priority_level,
-      })
+      }))
+    }
+    if (error) {
+      console.error('addSuggestedTask failed:', error)
+      alert('Could not add task: ' + error.message)
+      return
     }
     setAddedTasks(prev => new Set(prev).add(index))
   }
