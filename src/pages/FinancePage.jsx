@@ -62,6 +62,8 @@ export default function FinancePage() {
   const [variable, setVariable] = useState([])
   const [savings, setSavings]   = useState([])
   const [budgets, setBudgets]   = useState([])
+  const [moneyOwed, setMoneyOwed] = useState([])
+  const [newMoneyOwed, setNewMoneyOwed] = useState({ person: '', amount: '', note: '', date: new Date().toISOString().slice(0, 10) })
   const [loading, setLoading]   = useState(true)
   const [aiLoading, setAiLoading] = useState(false)
   const [aiSummary, setAiSummary] = useState('')
@@ -137,7 +139,7 @@ export default function FinancePage() {
 
   async function load() {
     setLoading(true)
-    const [incRes, fixRes, varRes, savRes, budRes, layoutRes, prefRes, debtsRes, savAccRes, invRes] = await Promise.all([
+    const [incRes, fixRes, varRes, savRes, budRes, layoutRes, prefRes, debtsRes, savAccRes, invRes, owedRes] = await Promise.all([
       supabase.from('income_sources').select('*').eq('user_id', user.id).order('created_at'),
       supabase.from('fixed_expenses').select('*').eq('user_id', user.id).order('created_at'),
       supabase.from('variable_expenses').select('*').eq('user_id', user.id).order('date', { ascending: false }),
@@ -148,6 +150,7 @@ export default function FinancePage() {
       supabase.from('debts').select('*').eq('user_id', user.id).order('created_at'),
       supabase.from('savings_accounts').select('*').eq('user_id', user.id).order('created_at'),
       supabase.from('investments').select('*').eq('user_id', user.id).order('created_at'),
+      supabase.from('money_owed').select('*').eq('user_id', user.id).order('date', { ascending: false }),
     ])
     setIncome(incRes.data || [])
     setFixed(fixRes.data || [])
@@ -159,6 +162,7 @@ export default function FinancePage() {
     setDebts(debtsRes.data || [])
     setSavingsAccounts(savAccRes.data || [])
     setInvestments(invRes.data || [])
+    setMoneyOwed(owedRes.data || [])
     // Pending savings transactions older than 3 days
     const threeDaysAgo = format(subDays(new Date(), 3), 'yyyy-MM-dd')
     const { data: pendingData } = await supabase
@@ -241,6 +245,27 @@ export default function FinancePage() {
   async function deleteSavings(id) {
     await supabase.from('savings_allocations').delete().eq('id', id)
     setSavings(prev => prev.filter(i => i.id !== id))
+  }
+
+  // Money owed to me
+  async function addMoneyOwed() {
+    if (!newMoneyOwed.person || !newMoneyOwed.amount) return
+    const { data } = await supabase.from('money_owed').insert({
+      user_id: user.id, person: newMoneyOwed.person, amount: parseFloat(newMoneyOwed.amount),
+      note: newMoneyOwed.note || null, date: newMoneyOwed.date,
+    }).select().single()
+    setMoneyOwed(prev => [data, ...prev])
+    setNewMoneyOwed({ person: '', amount: '', note: '', date: new Date().toISOString().slice(0, 10) })
+  }
+  async function toggleMoneyOwedSettled(id, settled) {
+    const { data } = await supabase.from('money_owed')
+      .update({ settled, settled_at: settled ? new Date().toISOString() : null })
+      .eq('id', id).select().single()
+    setMoneyOwed(prev => prev.map(i => i.id === id ? data : i))
+  }
+  async function deleteMoneyOwed(id) {
+    await supabase.from('money_owed').delete().eq('id', id)
+    setMoneyOwed(prev => prev.filter(i => i.id !== id))
   }
 
   // Net worth CRUD
@@ -571,7 +596,8 @@ export default function FinancePage() {
   const totalSavings  = savings.reduce((s, i) => s + toMonthly(i.amount, i.frequency), 0)
   const varThisMonth  = variable.filter(v => v.date.startsWith(thisMonth))
   const totalVariable = varThisMonth.reduce((s, i) => s + i.amount, 0)
-  const takeHome      = totalIncome - taxPot - totalFixed - totalSavings - totalVariable
+  const totalOwedToMe = moneyOwed.filter(o => !o.settled).reduce((s, o) => s + o.amount, 0)
+  const takeHome      = totalIncome - taxPot - totalFixed - totalSavings - totalVariable + totalOwedToMe
 
   const monthBudgets = budgets.filter(b => b.month_year === refMonthYear)
   const overallBudget = monthBudgets.find(b => b.category === null)?.amount || 0
@@ -597,7 +623,7 @@ export default function FinancePage() {
 
   // Disposable income for the selected period: income/tax/fixed costs are monthly
   // constants, scaled to the period, minus that period's actual variable spending.
-  const monthlyDisposableBase = totalIncome - taxPot - totalFixed - totalSavings
+  const monthlyDisposableBase = totalIncome - taxPot - totalFixed - totalSavings + totalOwedToMe
   const periodIncome = totalIncome * BUDGET_SCALE[activeView]
   const periodDisposableAllowance = monthlyDisposableBase * BUDGET_SCALE[activeView]
   const periodTakeHome = periodDisposableAllowance - periodTotal
@@ -836,6 +862,45 @@ export default function FinancePage() {
     </div>
   )
 
+  const moneyOwedCard = (
+    <div className="card">
+      <h3 style={{ fontSize: '0.9rem', marginBottom: 14 }}>
+        Owed to me <span className="mono" style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 400 }}>£{totalOwedToMe.toFixed(0)} pending</span>
+      </h3>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+        {moneyOwed.map(o => (
+          <div key={o.id} className="flex items-center justify-between gap-2">
+            <div style={{ minWidth: 0, overflow: 'hidden' }}>
+              <p style={{ fontSize: 13, textDecoration: o.settled ? 'line-through' : 'none', color: o.settled ? 'var(--text-3)' : 'var(--text)' }}>{o.person}</p>
+              <p className="mono" style={{ fontSize: 10, color: 'var(--text-3)' }}>{o.note ? `${o.note} · ` : ''}{o.date}</p>
+            </div>
+            <div className="flex items-center gap-2" style={{ flexShrink: 0 }}>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, color: o.settled ? 'var(--text-3)' : 'var(--finance)', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                £{o.amount.toFixed(0)}
+              </span>
+              <button className="btn btn-sm btn-ghost" onClick={() => toggleMoneyOwedSettled(o.id, !o.settled)}>
+                {o.settled ? 'Unsettle' : 'Settled'}
+              </button>
+              <button className="btn-icon btn" onClick={() => deleteMoneyOwed(o.id)}><Trash2 size={12} /></button>
+            </div>
+          </div>
+        ))}
+        {moneyOwed.length === 0 && (
+          <p style={{ fontSize: 12, color: 'var(--text-3)', fontStyle: 'italic' }}>Nobody owes you anything right now.</p>
+        )}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+        <input placeholder="Who owes you" value={newMoneyOwed.person} onChange={e => setNewMoneyOwed(p => ({ ...p, person: e.target.value }))} style={{ fontSize: 12 }} />
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <input type="text" inputMode="decimal" placeholder="Amount £" value={newMoneyOwed.amount} onChange={e => setNewMoneyOwed(p => ({ ...p, amount: sanitizeAmountInput(e.target.value) }))} style={{ fontSize: 14, flex: '1 1 90px', minWidth: 80 }} />
+          <input type="date" value={newMoneyOwed.date} onChange={e => setNewMoneyOwed(p => ({ ...p, date: e.target.value }))} style={{ fontSize: 12, flex: '1 1 110px' }} />
+        </div>
+        <input placeholder="What for (optional)" value={newMoneyOwed.note} onChange={e => setNewMoneyOwed(p => ({ ...p, note: e.target.value }))} style={{ fontSize: 12 }} />
+        <button className="btn btn-sm btn-ghost" onClick={addMoneyOwed}><Plus size={12} /> Add entry</button>
+      </div>
+    </div>
+  )
+
   const CARDS = {
     'category-budgets': (
       <div className="card card-finance">
@@ -963,6 +1028,11 @@ export default function FinancePage() {
             </p>
           </div>
         </div>
+        {totalOwedToMe > 0 && (
+          <p className="mono" style={{ fontSize: 10, color: 'var(--text-3)', alignSelf: 'flex-start' }}>
+            Includes £{totalOwedToMe.toFixed(0)} pending from unsettled "owed to me"
+          </p>
+        )}
       </div>
     ),
 
@@ -1104,6 +1174,7 @@ export default function FinancePage() {
           {incomeCard}
           {fixedCard}
           {savingsCard}
+          {moneyOwedCard}
         </div>
       )}
 
