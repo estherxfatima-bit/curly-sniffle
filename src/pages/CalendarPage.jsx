@@ -91,6 +91,15 @@ export default function CalendarPage() {
 
   useEffect(() => { load() }, [load])
 
+  // Other features (e.g. "Time-block my day" on the Weekly page) dispatch this
+  // after creating Google Calendar events so the calendar view picks them up
+  // immediately, without requiring a manual page refresh.
+  useEffect(() => {
+    const handler = () => load(true)
+    window.addEventListener('calendar:refresh', handler)
+    return () => window.removeEventListener('calendar:refresh', handler)
+  }, [load])
+
   useEffect(() => {
     const handler = () => setIsMobile(window.innerWidth < 769)
     window.addEventListener('resize', handler)

@@ -5,7 +5,8 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { TASK_AREAS, AREA_COLORS, priorityRank, priorityFilterOptions, PRIORITY_COLORS, DAY_LABELS } from '../lib/constants'
 import PriorityDot from '../components/shared/PriorityDot'
-import { toMinutes, minutesToTimeString } from '../lib/timeBlocking'
+import { toMinutes, minutesToTimeString, dateAndMinutesToISO } from '../lib/timeBlocking'
+import { createCalendarEvent } from '../lib/googleCalendar'
 import { ChevronLeft, ChevronRight, ChevronDown, Plus, Trash2, RotateCcw, Repeat, MessageSquare, Check, Target, Star, CalendarClock } from 'lucide-react'
 import WeeklyReviewModal from '../components/weekly/WeeklyReviewModal'
 import PastReviews from '../components/weekly/PastReviews'
@@ -53,7 +54,7 @@ function WeekDecoration() {
 }
 
 export default function WeeklyPage() {
-  const { user } = useAuth()
+  const { user, session } = useAuth()
   const [currentWeek, setCurrentWeek] = useState(new Date())
   const [tasks, setTasks] = useState([])
   const [goals, setGoals] = useState([])
@@ -92,7 +93,9 @@ export default function WeeklyPage() {
   // Minimal "time-block my day": walk 30-min slots from 6am-10pm, skip slots that
   // fall within configured work hours/work days unless the task's area is Work,
   // or personal-overlap is allowed for that day/hour. Assigns scheduled_time to
-  // today's incomplete, unscheduled tasks (day_of_week matching today or unset).
+  // today's incomplete, unscheduled tasks (day_of_week matching today or unset),
+  // and creates a matching event on the user's Google Calendar for each slot so
+  // the time-blocked plan actually shows up there (not just in the app).
   async function timeBlockMyDay() {
     if (!prefs) return
     setTimeBlocking(true)
@@ -100,6 +103,7 @@ export default function WeeklyPage() {
       const now = new Date()
       const todayIdx = (now.getDay() + 6) % 7 // 0=Mon..6=Sun
       const todayLabel = DAY_LABELS[todayIdx]
+      const todayStr = format(now, 'yyyy-MM-dd')
 
       const candidates = tasks
         .filter(t => !t.complete && !t.scheduled_time && (t.day_of_week == null || t.day_of_week === todayIdx))
@@ -146,13 +150,41 @@ export default function WeeklyPage() {
         if (!placed) continue
       }
 
+      // Create a matching Google Calendar event for each slot (best-effort —
+      // a failure here shouldn't stop the local schedule from being saved).
+      if (session?.access_token) {
+        for (const u of updates) {
+          const task = candidates.find(t => t.id === u.id)
+          const startMin = toMinutes(u.scheduled_time, 0)
+          const result = await createCalendarEvent(session, {
+            summary: task?.specific_task || task?.action || 'Time-blocked task',
+            description: 'Auto-scheduled by Life OS — Time-block my day',
+            start: dateAndMinutesToISO(todayStr, startMin),
+            end: dateAndMinutesToISO(todayStr, startMin + SLOT),
+          })
+          if (result?.id) {
+            u.google_event_id = result.id
+          } else {
+            console.error('[WeeklyPage] timeBlockMyDay: failed to create Google Calendar event', result?.error, { task, slot: u })
+          }
+        }
+      } else {
+        console.error('[WeeklyPage] timeBlockMyDay: no Google session — skipping calendar event creation', updates)
+      }
+
       for (const u of updates) {
-        await supabase.from('weekly_tasks').update({ scheduled_time: u.scheduled_time }).eq('id', u.id)
+        await supabase.from('weekly_tasks')
+          .update({ scheduled_time: u.scheduled_time, ...(u.google_event_id ? { google_event_id: u.google_event_id } : {}) })
+          .eq('id', u.id)
       }
       setTasks(prev => prev.map(t => {
         const u = updates.find(x => x.id === t.id)
-        return u ? { ...t, scheduled_time: u.scheduled_time } : t
+        return u ? { ...t, scheduled_time: u.scheduled_time, ...(u.google_event_id ? { google_event_id: u.google_event_id } : {}) } : t
       }))
+
+      // Let the app's calendar view (and anything else listening) know new
+      // events may exist so it can refresh without a manual page reload.
+      window.dispatchEvent(new CustomEvent('calendar:refresh'))
     } finally {
       setTimeBlocking(false)
     }
