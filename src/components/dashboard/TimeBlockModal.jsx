@@ -14,6 +14,7 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { X, AlertCircle, GripVertical, Trash2, Plus, RotateCcw } from 'lucide-react'
 import PriorityDot from '../shared/PriorityDot'
+import useLockBodyScroll from '../../hooks/useLockBodyScroll'
 
 // Error states the modal can land in before a schedule is generated.
 const ERRORS = {
@@ -102,6 +103,7 @@ function SortableBlock({ block, onChangeTime, onChangeDuration, onChangePriority
 }
 
 export default function TimeBlockModal({ session, todos, date, workingHours, onClose, onApply }) {
+  useLockBodyScroll()
   const [loading, setLoading] = useState(true)
   const [applying, setApplying] = useState(false)
   const [connected, setConnected] = useState(false)
@@ -259,7 +261,7 @@ export default function TimeBlockModal({ session, todos, date, workingHours, onC
   const sortedProposal = [...proposal].sort((a, b) => a.startMin - b.startMin)
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={onClose}>
+    <div style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.35)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={onClose}>
       <div className="card" style={{ width: 460, maxHeight: '80vh', overflow: 'auto', padding: 18 }} onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
           <h3 style={{ fontSize: '0.95rem' }}>Time-block my day</h3>

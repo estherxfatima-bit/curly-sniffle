@@ -1,8 +1,10 @@
 import { useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import useLockBodyScroll from '../../hooks/useLockBodyScroll'
 
 export default function SavedMealModal({ meal, userId, onClose, onSave }) {
+  useLockBodyScroll()
   const isNew = !meal?.id
   const fileRef = useRef(null)
   const [form, setForm] = useState({

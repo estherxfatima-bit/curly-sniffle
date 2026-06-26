@@ -6,6 +6,7 @@ import { format, startOfWeek, subWeeks, subDays } from 'date-fns'
 import { X, Send, Sparkles, Plus, ChevronDown, Check } from 'lucide-react'
 import { getCurrentQuarter } from '../../lib/constants'
 import PriorityDot from '../shared/PriorityDot'
+import useLockBodyScroll from '../../hooks/useLockBodyScroll'
 
 // Pull a trailing ```json ... ``` block with a "suggested_tasks" array out of an AI
 // response, returning the cleaned display text and the parsed task list (if any).
@@ -22,6 +23,7 @@ function parseSuggestedTasks(text) {
 }
 
 export default function AIPlanningPanel({ onClose }) {
+  useLockBodyScroll()
   const { user } = useAuth()
   const [question, setQuestion] = useState('')
   const [loading, setLoading] = useState(false)

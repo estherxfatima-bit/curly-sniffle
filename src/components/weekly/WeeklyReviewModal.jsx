@@ -2,9 +2,11 @@ import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
 import { generateWeeklyReviewSummary } from '../../lib/aiLog'
+import useLockBodyScroll from '../../hooks/useLockBodyScroll'
 import { X } from 'lucide-react'
 
 export default function WeeklyReviewModal({ weekStart, incompleteTasks, onClose, onComplete }) {
+  useLockBodyScroll()
   const { user } = useAuth()
   const [form, setForm] = useState({ shipped: '', didnt_ship: '', energy_level: 3, one_win: '', one_to_drop: '' })
   const [saving, setSaving] = useState(false)

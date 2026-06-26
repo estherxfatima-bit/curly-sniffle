@@ -13,6 +13,7 @@ import AddWidgetMenu from '../components/dashboard/AddWidgetMenu'
 import { VARIABLE_CATS, CAT_COLORS, CAT_EMOJI, toMonthly, sanitizeAmountInput, shouldShowSpendingReminder, isReminderDismissedToday, dismissReminderToday } from '../lib/financeUtils'
 import PeriodNav from '../components/ui/PeriodNav'
 import { getCurrentPeriodBounds, getTrailingBounds } from '../lib/periodNav'
+import useLockBodyScroll from '../hooks/useLockBodyScroll'
 import { Plus, Trash2, Sparkles, Pencil, Check as CheckIcon, X as XIcon, AlertCircle } from 'lucide-react'
 
 const TAX_RATE = 0.25 // 25% tax pot estimate for self-employed
@@ -76,6 +77,7 @@ export default function FinancePage() {
   const [selectedDebt, setSelectedDebt]               = useState(null)
   const [selectedSavingsAccount, setSelectedSavingsAccount] = useState(null)
   const [selectedInvestment, setSelectedInvestment]   = useState(null)
+  useLockBodyScroll(!!(selectedDebt || selectedSavingsAccount || selectedInvestment))
   const [debtRepayments, setDebtRepayments]           = useState({}) // { debtId: [...] }
   const [savingsTxns, setSavingsTxns]                 = useState({}) // { accountId: [...] }
   const [investmentTxns, setInvestmentTxns]           = useState({}) // { investmentId: [...] }
@@ -1338,7 +1340,7 @@ export default function FinancePage() {
         const overThreshold = d.warning_threshold != null && d.current_balance > d.warning_threshold
         const progressPct = d.original_balance ? Math.max(0, Math.min(100, 100 - (d.current_balance / d.original_balance) * 100)) : 0
         return (
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={() => { setSelectedDebt(null); setEditingDebt(null) }}>
+          <div style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.5)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={() => { setSelectedDebt(null); setEditingDebt(null) }}>
             <div className="card" style={{ maxWidth: 480, width: '100%', maxHeight: '90vh', overflowY: 'auto', padding: 20 }} onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between mb-3">
                 <h3 style={{ fontSize: 16, fontWeight: 700 }}>{d.name}</h3>
@@ -1440,7 +1442,7 @@ export default function FinancePage() {
         const isEditing = editingSavingsAcc === a.id
         const progressPct = a.target_amount ? Math.max(0, Math.min(100, (a.current_balance / a.target_amount) * 100)) : 0
         return (
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={() => { setSelectedSavingsAccount(null); setEditingSavingsAcc(null) }}>
+          <div style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.5)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={() => { setSelectedSavingsAccount(null); setEditingSavingsAcc(null) }}>
             <div className="card" style={{ maxWidth: 480, width: '100%', maxHeight: '90vh', overflowY: 'auto', padding: 20 }} onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between mb-3">
                 <h3 style={{ fontSize: 16, fontWeight: 700 }}>{a.name}</h3>
@@ -1514,7 +1516,7 @@ export default function FinancePage() {
         const txns = investmentTxns[inv.id] || []
         const isEditing = editingInvestment === inv.id
         return (
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={() => { setSelectedInvestment(null); setEditingInvestment(null) }}>
+          <div style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.5)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={() => { setSelectedInvestment(null); setEditingInvestment(null) }}>
             <div className="card" style={{ maxWidth: 480, width: '100%', maxHeight: '90vh', overflowY: 'auto', padding: 20 }} onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between mb-3">
                 <h3 style={{ fontSize: 16, fontWeight: 700 }}>{inv.name}</h3>

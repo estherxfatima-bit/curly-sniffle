@@ -3,8 +3,10 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
 import { format } from 'date-fns'
 import { X } from 'lucide-react'
+import useLockBodyScroll from '../../hooks/useLockBodyScroll'
 
 export default function PastReviews({ onClose }) {
+  useLockBodyScroll()
   const { user } = useAuth()
   const [reviews, setReviews] = useState([])
   const [selected, setSelected] = useState(null)

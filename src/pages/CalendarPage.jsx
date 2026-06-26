@@ -3,6 +3,7 @@ import { format, startOfWeek, addDays, addWeeks, subWeeks, differenceInMinutes, 
 import { ChevronLeft, ChevronRight, RefreshCw, AlertTriangle, Calendar, Plus, Pencil, Trash2, Check, X } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { fetchCalendarEvents, createCalendarEvent, updateCalendarEvent, deleteCalendarEvent } from '../lib/googleCalendar'
+import useLockBodyScroll from '../hooks/useLockBodyScroll'
 import { Link } from 'react-router-dom'
 
 // Grid spans 6am – 11pm (17 hours × 60 = 1020 minutes)
@@ -71,6 +72,7 @@ export default function CalendarPage() {
   const [selected, setSelected] = useState(null) // selected event for detail
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState(null) // { eventId?, calendarId?, summary, description, date, startTime, endTime }
+  useLockBodyScroll(!!(selected || form))
 
   const weekStart = startOfWeek(weekRef, { weekStartsOn: 1 })
 

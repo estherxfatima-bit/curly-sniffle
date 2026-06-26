@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
+import useLockBodyScroll from '../../hooks/useLockBodyScroll'
 import { Search, X, CalendarDays, CheckSquare, Target, Film, Lightbulb, Heart, Utensils, BookOpen } from 'lucide-react'
 
 const TYPE_META = {
@@ -16,6 +17,7 @@ const TYPE_META = {
 }
 
 export default function GlobalSearch({ onClose }) {
+  useLockBodyScroll()
   const { user } = useAuth()
   const navigate = useNavigate()
   const [query, setQuery] = useState('')

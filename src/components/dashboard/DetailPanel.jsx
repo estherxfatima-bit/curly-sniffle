@@ -2,6 +2,7 @@ import { X, Check, ArrowRight, Trash2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { format } from 'date-fns'
 import ArcRing from '../ui/ArcRing'
+import useLockBodyScroll from '../../hooks/useLockBodyScroll'
 
 const TITLES = {
   habits:          'Today\'s habits',
@@ -25,6 +26,7 @@ const TITLES = {
 }
 
 export default function DetailPanel({ panel, onClose }) {
+  useLockBodyScroll(!!panel)
   if (!panel) return null
   const { type, data } = panel
 

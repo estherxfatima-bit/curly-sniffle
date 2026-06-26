@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { searchBooks } from '../lib/openLibrary'
 import { getCurrentQuarter } from '../lib/constants'
+import useLockBodyScroll from '../hooks/useLockBodyScroll'
 import { Search, Plus, BookOpen, Check, Pause, X, Trash2, Heart, Star, FileText, Pencil } from 'lucide-react'
 
 const STATUSES = ['wishlist', 'reading', 'paused', 'completed']
@@ -259,6 +260,7 @@ function BookCard({ book, onSetStatus, onRemove, onSaveNotes, onEditReview }) {
 }
 
 function ReviewModal({ book, onSave, onClose }) {
+  useLockBodyScroll()
   const [rating, setRating] = useState(book.rating || 0)
   const [review, setReview] = useState(book.review || '')
 
@@ -293,6 +295,7 @@ function ReviewModal({ book, onSave, onClose }) {
 }
 
 function BookSearchModal({ onAdd, onClose }) {
+  useLockBodyScroll()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
   const [searching, setSearching] = useState(false)

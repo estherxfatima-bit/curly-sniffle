@@ -2,9 +2,11 @@ import { useState } from 'react'
 import { format, addDays } from 'date-fns'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
+import useLockBodyScroll from '../../hooks/useLockBodyScroll'
 import { X } from 'lucide-react'
 
 export default function ReflectionModal({ onClose }) {
+  useLockBodyScroll()
   const { user } = useAuth()
   const [reflectionText, setReflectionText] = useState('')
   const [priorities, setPriorities] = useState(['', '', ''])
@@ -38,7 +40,7 @@ export default function ReflectionModal({ onClose }) {
   }
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={onClose}>
+    <div style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.35)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={onClose}>
       <div className="card" style={{ width: 440, maxHeight: '85vh', overflow: 'auto', padding: 18 }} onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
           <h3 style={{ fontSize: '0.95rem' }}>Daily reflection</h3>

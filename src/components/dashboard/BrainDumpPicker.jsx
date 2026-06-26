@@ -1,8 +1,10 @@
 import { X, Lightbulb } from 'lucide-react'
+import useLockBodyScroll from '../../hooks/useLockBodyScroll'
 
 export default function BrainDumpPicker({ ideas, onSelect, onClose }) {
+  useLockBodyScroll()
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={onClose}>
+    <div style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.35)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={onClose}>
       <div className="card" style={{ width: 420, maxHeight: '70vh', overflow: 'auto', padding: 18 }} onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
           <h3 style={{ fontSize: '0.95rem' }}>Pull from brain dump</h3>

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { X } from 'lucide-react'
 import { DAY_NAMES } from '../../lib/habitUtils'
+import useLockBodyScroll from '../../hooks/useLockBodyScroll'
 
 const EMOJI_OPTIONS = ['💪','📚','🧘','🏃','✍️','🎯','💧','🌿','🎨','🧠','😴','🥗','💊','🎵','🌅','🛁','🧴','🫧']
 
@@ -20,6 +21,7 @@ const TIME_OF_DAY_OPTIONS = [
 ]
 
 export default function HabitModal({ habit, onClose, onSave }) {
+  useLockBodyScroll()
   const isNew = !habit?.id
   const [form, setForm] = useState({
     name: habit?.name || '',

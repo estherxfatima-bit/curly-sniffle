@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { AREA_COLORS } from '../../lib/constants'
 import { X, CalendarDays, ChevronDown, ChevronRight } from 'lucide-react'
+import useLockBodyScroll from '../../hooks/useLockBodyScroll'
 
 const DAY_SHORT_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
@@ -9,10 +10,11 @@ function areaColor(area) {
 }
 
 export default function WeeklyPlanPicker({ tasks, viewDayOfWeek, onSelect, onClose }) {
+  useLockBodyScroll()
   const [expanded, setExpanded] = useState(null)
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={onClose}>
+    <div style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.35)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={onClose}>
       <div className="card" style={{ width: 420, maxHeight: '70vh', overflow: 'auto', padding: 18 }} onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
           <h3 style={{ fontSize: '0.95rem' }}>Pull from weekly plan</h3>

@@ -4,6 +4,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { useContentPillars } from '../../hooks/useContentPillars'
 import { PRODUCTION_STAGES, CONTENT_FORMATS } from '../../lib/constants'
 import { smartBatchIdeas } from '../../lib/claude'
+import useLockBodyScroll from '../../hooks/useLockBodyScroll'
 import { Sparkles, X, ChevronRight } from 'lucide-react'
 
 const EDITING_CHECKLIST = [
@@ -232,6 +233,7 @@ function KanbanCard({ idea, stages, onMove, onClick }) {
 }
 
 function IdeaDetailModal({ idea, onClose, onSaveNotes, onChecklistChange, onMove, stages }) {
+  useLockBodyScroll()
   const [notes, setNotes] = useState(idea.filming_notes || '')
   const checklist = idea.editing_checklist || {}
   const isFilming = idea.production_stage === 'Filmed'

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { formatDistanceToNow } from 'date-fns'
 import { Bell, X, MessageSquare, Flame, CalendarDays, Info, Sun, Moon, ListTodo, Users } from 'lucide-react'
 import { useNotifications } from '../../hooks/useNotifications'
+import useLockBodyScroll from '../../hooks/useLockBodyScroll'
 
 const TYPE_ICON = {
   nudge:            { icon: MessageSquare, color: 'var(--personal)' },
@@ -17,6 +18,7 @@ const TYPE_ICON = {
 export default function NotificationsBell({ variant = 'sidebar' }) {
   const { notifications, unreadCount, markRead, markAllRead } = useNotifications()
   const [open, setOpen] = useState(false)
+  useLockBodyScroll(open)
   const navigate = useNavigate()
 
   function handleClick(n) {

@@ -2,9 +2,11 @@ import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
 import { GOAL_CATEGORIES, GOAL_TIMEFRAMES, getCurrentQuarter, PRIORITY_LEVELS, PRIORITY_LABELS } from '../../lib/constants'
+import useLockBodyScroll from '../../hooks/useLockBodyScroll'
 import { X, Plus, Trash2 } from 'lucide-react'
 
 export default function GoalModal({ goal, defaults, goals, onClose, onSave }) {
+  useLockBodyScroll()
   const { user } = useAuth()
   const isNew = !goal?.id
   const [form, setForm] = useState({

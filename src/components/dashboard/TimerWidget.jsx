@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { useTimer } from '../../hooks/useTimer'
+import useLockBodyScroll from '../../hooks/useLockBodyScroll'
 import { X, Hourglass, Timer as TimerIcon, Coffee } from 'lucide-react'
 
 export default function TimerWidget({ todo, onClose }) {
+  useLockBodyScroll()
   const { timer, startTimer, stopTimer } = useTimer()
   const isRunningHere = timer?.todoId === todo.id
   const [mode, setMode] = useState(todo.duration_minutes ? 'countdown' : 'stopwatch')
@@ -20,7 +22,7 @@ export default function TimerWidget({ todo, onClose }) {
   }
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={onClose}>
+    <div style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.35)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={onClose}>
       <div className="card" style={{ width: 320, padding: 18 }} onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
           <h3 style={{ fontSize: '0.95rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{todo.text}</h3>
