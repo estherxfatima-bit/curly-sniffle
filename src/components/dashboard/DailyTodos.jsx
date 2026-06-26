@@ -5,6 +5,7 @@ import { useTimer } from '../../hooks/useTimer'
 import { format, subDays, addDays, startOfWeek, getDay, parseISO } from 'date-fns'
 import { parseTimeAllocationToMinutes, priorityRank, priorityFilterOptions, PRIORITY_COLORS } from '../../lib/constants'
 import PriorityDot from '../shared/PriorityDot'
+import SubtaskList from '../shared/SubtaskList'
 import { deleteCalendarEvent } from '../../lib/googleCalendar'
 import WeeklyPlanPicker from './WeeklyPlanPicker'
 import GoalTaskPicker from './GoalTaskPicker'
@@ -264,6 +265,23 @@ export default function DailyTodos({ compact = false }) {
 
   async function addSubtask(todo, text) {
     const subs = [...(todo.subtasks || []), { id: String(Date.now()), text, complete: false }]
+    await supabase.from('daily_todos').update({ subtasks: subs }).eq('id', todo.id)
+    setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, subtasks: subs } : t))
+  }
+
+  async function editSubtaskText(todo, subId, text) {
+    const subs = (todo.subtasks || []).map(s => s.id === subId ? { ...s, text } : s)
+    await supabase.from('daily_todos').update({ subtasks: subs }).eq('id', todo.id)
+    setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, subtasks: subs } : t))
+  }
+
+  async function removeSubtask(todo, subId) {
+    const subs = (todo.subtasks || []).filter(s => s.id !== subId)
+    await supabase.from('daily_todos').update({ subtasks: subs }).eq('id', todo.id)
+    setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, subtasks: subs } : t))
+  }
+
+  async function reorderSubtasks(todo, subs) {
     await supabase.from('daily_todos').update({ subtasks: subs }).eq('id', todo.id)
     setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, subtasks: subs } : t))
   }
@@ -528,6 +546,9 @@ export default function DailyTodos({ compact = false }) {
                 onUpdateField={(f, v) => updateField(todo.id, f, v)}
                 onToggleSubtask={sid => toggleSubtask(todo, sid)}
                 onAddSubtask={text => addSubtask(todo, text)}
+                onEditSubtask={(sid, text) => editSubtaskText(todo, sid, text)}
+                onRemoveSubtask={sid => removeSubtask(todo, sid)}
+                onReorderSubtasks={subs => reorderSubtasks(todo, subs)}
                 onOpenTimer={() => setTimerTodo(todo)}
               />
             ))}
@@ -565,7 +586,7 @@ export default function DailyTodos({ compact = false }) {
   )
 }
 
-function TodoItem({ todo, categories, goals, isTimerRunning, onToggle, onRemove, onPushTomorrow, onUpdateField, onToggleSubtask, onAddSubtask, onOpenTimer }) {
+function TodoItem({ todo, categories, goals, isTimerRunning, onToggle, onRemove, onPushTomorrow, onUpdateField, onToggleSubtask, onAddSubtask, onEditSubtask, onRemoveSubtask, onReorderSubtasks, onOpenTimer }) {
   const [expanded,     setExpanded]     = useState(false)
   const [showOptions,  setShowOptions]  = useState(false)
   const [addingSub,    setAddingSub]    = useState(false)
@@ -824,18 +845,15 @@ function TodoItem({ todo, categories, goals, isTimerRunning, onToggle, onRemove,
 
       {/* Subtasks */}
       {expanded && subtasks.length > 0 && (
-        <div style={{ marginTop: 8, paddingLeft: 42, display: 'flex', flexDirection: 'column', gap: 5 }}>
-          {subtasks.map(s => (
-            <div key={s.id} onClick={() => onToggleSubtask(s.id)}
-              style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-              <div className={`toggle-dot ${s.complete ? 'done' : ''}`} style={{ width: 16, height: 16, borderColor: cc, flexShrink: 0 }}>
-                {s.complete && <Check size={8} color="white" strokeWidth={3} />}
-              </div>
-              <span style={{ fontSize: 12, color: s.complete ? 'var(--text-3)' : 'var(--text-2)', textDecoration: s.complete ? 'line-through' : 'none' }}>
-                {s.text}
-              </span>
-            </div>
-          ))}
+        <div style={{ marginTop: 8, paddingLeft: 42 }}>
+          <SubtaskList
+            subtasks={subtasks}
+            accentColor={cc}
+            onToggle={sid => onToggleSubtask(sid)}
+            onEditText={(sid, text) => onEditSubtask(sid, text)}
+            onDelete={sid => onRemoveSubtask(sid)}
+            onReorder={onReorderSubtasks}
+          />
         </div>
       )}
 

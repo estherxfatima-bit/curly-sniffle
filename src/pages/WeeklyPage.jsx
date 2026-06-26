@@ -292,6 +292,23 @@ export default function WeeklyPage() {
     setTasks(prev => prev.map(t => t.id === task.id ? { ...t, subtasks: subs } : t))
   }
 
+  async function editSubtaskText(task, subId, text) {
+    const subs = (task.subtasks || []).map(s => s.id === subId ? { ...s, text } : s)
+    await supabase.from('weekly_tasks').update({ subtasks: subs }).eq('id', task.id)
+    setTasks(prev => prev.map(t => t.id === task.id ? { ...t, subtasks: subs } : t))
+  }
+
+  async function removeSubtask(task, subId) {
+    const subs = (task.subtasks || []).filter(s => s.id !== subId)
+    await supabase.from('weekly_tasks').update({ subtasks: subs }).eq('id', task.id)
+    setTasks(prev => prev.map(t => t.id === task.id ? { ...t, subtasks: subs } : t))
+  }
+
+  async function reorderSubtasks(task, subs) {
+    await supabase.from('weekly_tasks').update({ subtasks: subs }).eq('id', task.id)
+    setTasks(prev => prev.map(t => t.id === task.id ? { ...t, subtasks: subs } : t))
+  }
+
   const incompleteCount = tasks.filter(t => !t.complete).length
   const doneCount = tasks.filter(t => t.complete).length
 
@@ -512,6 +529,9 @@ export default function WeeklyPage() {
                                 onUpdateField={(field, value) => updateTaskField(task.id, field, value)}
                                 onToggleSubtask={subId => toggleSubtask(task, subId)}
                                 onAddSubtask={text => addSubtask(task, text)}
+                                onEditSubtask={(subId, text) => editSubtaskText(task, subId, text)}
+                                onRemoveSubtask={subId => removeSubtask(task, subId)}
+                                onReorderSubtasks={subs => reorderSubtasks(task, subs)}
                                 onPushNextWeek={pushToNextWeek}
                               />
                             </td>
@@ -598,6 +618,9 @@ export default function WeeklyPage() {
                   onUpdateField={(field, value) => updateTaskField(task.id, field, value)}
                   onToggleSubtask={subId => toggleSubtask(task, subId)}
                   onAddSubtask={text => addSubtask(task, text)}
+                  onEditSubtask={(subId, text) => editSubtaskText(task, subId, text)}
+                  onRemoveSubtask={subId => removeSubtask(task, subId)}
+                  onReorderSubtasks={subs => reorderSubtasks(task, subs)}
                   onPushNextWeek={pushToNextWeek}
                   onTogglePriority={togglePriority}
                   onDelete={deleteTask}

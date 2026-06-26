@@ -755,6 +755,13 @@ input[type="range"]::-webkit-slider-thumb {
 }
 .todo-item-row { min-height: 44px; }
 
+/* Subtask rows: delete (×) button hidden until hover on desktop, always tappable on touch */
+.subtask-delete { opacity: 0; transition: opacity 0.15s; }
+.subtask-row:hover .subtask-delete { opacity: 1; }
+@media (hover: none) {
+  .subtask-delete { opacity: 1; }
+}
+
 /* ── iPhone 16 / small mobile layout ── */
 @media (max-width: 480px) {
   body { font-size: 15px; }

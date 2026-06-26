@@ -3,12 +3,13 @@ import { format } from 'date-fns'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
 import { TASK_AREAS } from '../../lib/constants'
-import { Plus, Check, Clock, Target, Send, CalendarDays, SkipForward, Repeat, Tag } from 'lucide-react'
+import { Plus, Clock, Target, Send, CalendarDays, SkipForward, Repeat, Tag } from 'lucide-react'
+import SubtaskList from '../shared/SubtaskList'
 
 const TIME_OPTS = ['15 min', '30 min', '45 min', '1 hr', '1.5 hr', '2 hr', '3 hr']
 const DAY_LABELS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 
-export default function TaskExpansion({ task, goals, onUpdateField, onToggleSubtask, onAddSubtask, onPushNextWeek }) {
+export default function TaskExpansion({ task, goals, onUpdateField, onToggleSubtask, onAddSubtask, onEditSubtask, onRemoveSubtask, onReorderSubtasks, onPushNextWeek }) {
   const { user } = useAuth()
   const [subInput, setSubInput] = useState('')
   const [notes, setNotes] = useState(task.notes || '')
@@ -43,17 +44,17 @@ export default function TaskExpansion({ task, goals, onUpdateField, onToggleSubt
       {/* Subtasks */}
       <div>
         <p className="mono mb-2">Subtasks</p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {subtasks.map(s => (
-            <div key={s.id} onClick={() => onToggleSubtask(s.id)} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-              <div className={`toggle-dot ${s.complete ? 'done' : ''}`} style={{ width: 16, height: 16, flexShrink: 0 }}>
-                {s.complete && <Check size={8} color="white" strokeWidth={3} />}
-              </div>
-              <span style={{ fontSize: 12, color: s.complete ? 'var(--text-3)' : 'var(--text-2)', textDecoration: s.complete ? 'line-through' : 'none' }}>{s.text}</span>
-            </div>
-          ))}
-          {subtasks.length === 0 && <p style={{ fontSize: 12, color: 'var(--text-3)', fontStyle: 'italic' }}>No subtasks yet.</p>}
-        </div>
+        {subtasks.length > 0 ? (
+          <SubtaskList
+            subtasks={subtasks}
+            onToggle={onToggleSubtask}
+            onEditText={onEditSubtask}
+            onDelete={onRemoveSubtask}
+            onReorder={onReorderSubtasks}
+          />
+        ) : (
+          <p style={{ fontSize: 12, color: 'var(--text-3)', fontStyle: 'italic' }}>No subtasks yet.</p>
+        )}
         <div style={{ display: 'flex', gap: 7, marginTop: 8 }}>
           <input value={subInput} onChange={e => setSubInput(e.target.value)} placeholder="Add subtask…" style={{ fontSize: 12, flex: 1, maxWidth: 260 }}
             onKeyDown={e => e.key === 'Enter' && submitSub()} />
