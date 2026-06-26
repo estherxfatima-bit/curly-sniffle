@@ -1,6 +1,7 @@
-// /api/cron/daily-reflection — runs every 15 minutes via Vercel Cron (see vercel.json).
-// For each user with the daily reflection nudge enabled, sends a push notification
-// and/or SMS once per day at their configured reflection_time.
+// /api/cron/daily-reflection — runs once nightly via Vercel Cron (see vercel.json;
+// Hobby plan only allows once-per-day cron schedules). For each user with the
+// daily reflection nudge enabled whose reflection_time has passed and who hasn't
+// been sent today, sends a push notification and/or SMS.
 import { supabaseAdmin } from '../_lib/db.js'
 import { sendSms, isTwilioConfigured } from '../_lib/twilio.js'
 import { sendPushToSubscriptions, isWebPushConfigured } from '../_lib/webpush.js'
@@ -30,7 +31,7 @@ export default async function handler(req, res) {
 
   const due = (prefs || []).filter(p => {
     if (p.reflection_last_sent === today) return false
-    return withinWindow(p.reflection_time, currentHHMM, 15)
+    return hasPassed(p.reflection_time, currentHHMM)
   })
 
   let sentCount = 0
@@ -53,14 +54,11 @@ export default async function handler(req, res) {
   return res.status(200).json({ checked: (prefs || []).length, sent: sentCount })
 }
 
-// Returns true if `target` (HH:MM) falls within `windowMinutes` minutes at-or-before `current` (HH:MM).
-function withinWindow(target, current, windowMinutes) {
+// Returns true if `target` (HH:MM) is at-or-before `current` (HH:MM).
+function hasPassed(target, current) {
   const toMinutes = hhmm => {
     const [h, m] = hhmm.split(':').map(Number)
     return h * 60 + m
   }
-  const t = toMinutes(target)
-  const c = toMinutes(current)
-  const diff = c - t
-  return diff >= 0 && diff < windowMinutes
+  return toMinutes(current) >= toMinutes(target)
 }
