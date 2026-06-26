@@ -165,17 +165,21 @@ export default function AIPlanningPanel({ onClose }) {
   const TYPE_LABELS = { weekly_plan: 'Weekly', finance_summary: 'Finance', content_analysis: 'Content', smart_batch: 'Batch', brain_dump: 'Brain dump', custom: 'Custom' }
 
   return (
-    <div style={{
-      position: 'fixed', top: 0, right: 0, bottom: 0,
-      width: 420, maxWidth: '100vw',
-      zIndex: 1200,
-      background: 'var(--card-bg)',
-      borderLeft: '1px solid var(--border)',
-      boxShadow: 'var(--shadow-lg)',
-      display: 'flex', flexDirection: 'column',
-      zIndex: 200,
-      animation: 'slideRight 0.22s ease',
-    }}>
+    <>
+      <div
+        style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh', background: 'rgba(13,8,5,0.45)', zIndex: 1100, backdropFilter: 'blur(2px)', WebkitBackdropFilter: 'blur(2px)' }}
+        onClick={onClose}
+      />
+      <div style={{
+        position: 'fixed', top: 0, right: 0, bottom: 0,
+        width: 420, maxWidth: '100vw',
+        zIndex: 1200,
+        background: 'var(--card-bg)',
+        borderLeft: '1px solid var(--border)',
+        boxShadow: 'var(--shadow-lg)',
+        display: 'flex', flexDirection: 'column',
+        animation: 'slideRight 0.22s ease',
+      }}>
       {/* Header */}
       <div style={{ padding: '22px 24px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -274,6 +278,7 @@ export default function AIPlanningPanel({ onClose }) {
           )}
         </div>
       </div>
-    </div>
+      </div>
+    </>
   )
 }
