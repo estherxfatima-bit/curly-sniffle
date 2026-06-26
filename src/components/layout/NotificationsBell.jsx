@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { formatDistanceToNow } from 'date-fns'
 import { Bell, X, MessageSquare, Flame, CalendarDays, Info, Sun, Moon, ListTodo, Users } from 'lucide-react'
@@ -48,7 +49,7 @@ export default function NotificationsBell({ variant = 'sidebar' }) {
         </button>
       </div>
 
-      {open && (
+      {open && createPortal(
         <div
           style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh', zIndex: 1100, background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(2px)', WebkitBackdropFilter: 'blur(2px)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '10vh 16px' }}
           onClick={() => setOpen(false)}
@@ -97,7 +98,8 @@ export default function NotificationsBell({ variant = 'sidebar' }) {
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   )

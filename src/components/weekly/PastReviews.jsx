@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
 import { format } from 'date-fns'
@@ -21,7 +22,7 @@ export default function PastReviews({ onClose }) {
       .then(({ data }) => { setReviews(data || []); setLoading(false) })
   }, [user])
 
-  return (
+  return createPortal(
     <div className="modal-overlay">
       <div className="modal" style={{ maxWidth: '640px' }}>
         <div className="modal-header">
@@ -65,7 +66,8 @@ export default function PastReviews({ onClose }) {
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 

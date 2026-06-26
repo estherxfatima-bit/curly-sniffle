@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { format, subWeeks, subDays, subMonths, endOfWeek, getDaysInMonth } from 'date-fns'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { supabase } from '../lib/supabase'
@@ -1339,7 +1340,7 @@ export default function FinancePage() {
         }
         const overThreshold = d.warning_threshold != null && d.current_balance > d.warning_threshold
         const progressPct = d.original_balance ? Math.max(0, Math.min(100, 100 - (d.current_balance / d.original_balance) * 100)) : 0
-        return (
+        return createPortal(
           <div style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.5)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={() => { setSelectedDebt(null); setEditingDebt(null) }}>
             <div className="card" style={{ maxWidth: 480, width: '100%', maxHeight: '90vh', overflowY: 'auto', padding: 20 }} onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between mb-3">
@@ -1431,7 +1432,8 @@ export default function FinancePage() {
                 {reps.length === 0 && <p style={{ fontSize: 12, color: 'var(--text-3)', fontStyle: 'italic' }}>No repayments logged yet.</p>}
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         )
       })()}
 
@@ -1441,7 +1443,7 @@ export default function FinancePage() {
         const txns = savingsTxns[a.id] || []
         const isEditing = editingSavingsAcc === a.id
         const progressPct = a.target_amount ? Math.max(0, Math.min(100, (a.current_balance / a.target_amount) * 100)) : 0
-        return (
+        return createPortal(
           <div style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.5)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={() => { setSelectedSavingsAccount(null); setEditingSavingsAcc(null) }}>
             <div className="card" style={{ maxWidth: 480, width: '100%', maxHeight: '90vh', overflowY: 'auto', padding: 20 }} onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between mb-3">
@@ -1506,7 +1508,8 @@ export default function FinancePage() {
                 {txns.length === 0 && <p style={{ fontSize: 12, color: 'var(--text-3)', fontStyle: 'italic' }}>No transactions yet.</p>}
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         )
       })()}
 
@@ -1515,7 +1518,7 @@ export default function FinancePage() {
         const inv = selectedInvestment
         const txns = investmentTxns[inv.id] || []
         const isEditing = editingInvestment === inv.id
-        return (
+        return createPortal(
           <div style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.5)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={() => { setSelectedInvestment(null); setEditingInvestment(null) }}>
             <div className="card" style={{ maxWidth: 480, width: '100%', maxHeight: '90vh', overflowY: 'auto', padding: 20 }} onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between mb-3">
@@ -1576,7 +1579,8 @@ export default function FinancePage() {
                 {txns.length === 0 && <p style={{ fontSize: 12, color: 'var(--text-3)', fontStyle: 'italic' }}>No transactions yet.</p>}
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         )
       })()}
 

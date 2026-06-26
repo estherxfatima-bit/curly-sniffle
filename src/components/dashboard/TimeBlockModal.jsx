@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { format } from 'date-fns'
 import { Link } from 'react-router-dom'
 import { fetchCalendarEvents, createCalendarEvent } from '../../lib/googleCalendar'
@@ -260,7 +261,7 @@ export default function TimeBlockModal({ session, todos, date, workingHours, onC
   const addableTodos = todos.filter(t => !t.complete && !proposal.some(b => b.todoId === t.id))
   const sortedProposal = [...proposal].sort((a, b) => a.startMin - b.startMin)
 
-  return (
+  return createPortal(
     <div style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.35)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={onClose}>
       <div className="card" style={{ width: 460, maxHeight: '80vh', overflow: 'auto', padding: 18 }} onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
@@ -348,6 +349,7 @@ export default function TimeBlockModal({ session, todos, date, workingHours, onC
           </>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { format, startOfWeek, addDays, addWeeks, subWeeks, differenceInMinutes, parseISO, isSameDay } from 'date-fns'
 import { ChevronLeft, ChevronRight, RefreshCw, AlertTriangle, Calendar, Plus, Pencil, Trash2, Check, X } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
@@ -348,7 +349,7 @@ export default function CalendarPage() {
       )}
 
       {/* Event detail overlay */}
-      {selected && (
+      {selected && createPortal(
         <div
           style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh', zIndex: 1100, background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(2px)', WebkitBackdropFilter: 'blur(2px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
           onClick={() => setSelected(null)}
@@ -380,11 +381,12 @@ export default function CalendarPage() {
               <button className="btn btn-ghost btn-sm" onClick={() => setSelected(null)}>Close</button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Create / edit event form */}
-      {form && (
+      {form && createPortal(
         <div
           style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh', zIndex: 1150, background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(2px)', WebkitBackdropFilter: 'blur(2px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
           onClick={() => setForm(null)}
@@ -407,7 +409,8 @@ export default function CalendarPage() {
               <button className="btn btn-ghost btn-sm" onClick={() => setForm(null)}><X size={13} /> Cancel</button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

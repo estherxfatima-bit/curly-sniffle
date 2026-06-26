@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import useLockBodyScroll from '../../hooks/useLockBodyScroll'
@@ -49,7 +50,7 @@ export default function SavedMealModal({ meal, userId, onClose, onSave }) {
     setSaving(false)
   }
 
-  return (
+  return createPortal(
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal scale-in" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
@@ -95,6 +96,7 @@ export default function SavedMealModal({ meal, userId, onClose, onSave }) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

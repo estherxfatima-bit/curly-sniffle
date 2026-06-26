@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { searchBooks } from '../lib/openLibrary'
@@ -264,7 +265,7 @@ function ReviewModal({ book, onSave, onClose }) {
   const [rating, setRating] = useState(book.rating || 0)
   const [review, setReview] = useState(book.review || '')
 
-  return (
+  return createPortal(
     <div className="modal-overlay">
       <div className="modal scale-in" style={{ maxWidth: 420 }}>
         <div className="modal-header">
@@ -290,7 +291,8 @@ function ReviewModal({ book, onSave, onClose }) {
           Save
         </button>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
@@ -314,7 +316,7 @@ function BookSearchModal({ onAdd, onClose }) {
     return () => clearTimeout(timer.current)
   }, [query])
 
-  return (
+  return createPortal(
     <div className="modal-overlay">
       <div className="modal scale-in" style={{ maxWidth: 480 }}>
         <div className="modal-header">
@@ -364,6 +366,7 @@ function BookSearchModal({ onAdd, onClose }) {
           ))}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { DAY_NAMES } from '../../lib/habitUtils'
 import useLockBodyScroll from '../../hooks/useLockBodyScroll'
@@ -57,7 +58,7 @@ export default function HabitModal({ habit, onClose, onSave }) {
     setSaving(false)
   }
 
-  return (
+  return createPortal(
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal scale-in" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
@@ -161,6 +162,7 @@ export default function HabitModal({ habit, onClose, onSave }) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

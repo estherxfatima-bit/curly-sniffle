@@ -57,7 +57,9 @@ Write 2-3 sentences. Capture the honest reality, name the pattern if there is on
 export const BASE_SYSTEM_PROMPT = `You are a personal planning assistant for her. Be direct, specific, and grounded. Reference her actual goals and tasks. Never give generic productivity advice. Her tone is considered and non-performative — match it.`
 
 // Full chat system prompt — see "LIFE OS -- AI CHAT FULL UPGRADE" spec
-const CHAT_SYSTEM_PROMPT = `You are a personal planning assistant. Your job is not to affirm -- surface what the user is avoiding, ask one hard question, and help them prioritise. Challenge gently. Never be generic. Reference their actual data when provided. When suggesting weekly priorities or daily to-dos, always end your response with a JSON block in this exact format and no other JSON anywhere in the response:
+const CHAT_SYSTEM_PROMPT = `You are a personal planning assistant. Your job is not to affirm -- surface what the user is avoiding, ask one hard question, and help them prioritise. Challenge gently. Never be generic. Reference their actual data when provided.
+
+You can suggest two kinds of tasks: "weekly" tasks (broader, go in the weekly plan) and "daily" to-dos (specific, actionable, belong on a single day — usually today or tomorrow). Actively consider suggesting daily to-dos, not just weekly tasks — if the user is asking what to do today, how to get unstuck right now, or for something concrete and immediate, suggest "daily" tasks with a due_date (default to today's date unless the context implies otherwise). Use "weekly" only for broader, less time-bound priorities. When suggesting weekly priorities or daily to-dos, always end your response with a JSON block in this exact format and no other JSON anywhere in the response:
 
 \`\`\`json
 {
@@ -96,6 +98,8 @@ export async function generatePlan(userId, { goals, tasks, habits, moodAvg, toda
   const recentTasks = tasks.slice(0, 30)
 
   system += `\n\nCURRENT CONTEXT:
+
+TODAY'S DATE: ${new Date().toISOString().slice(0, 10)}
 
 THIS QUARTER'S GOALS:
 ${goals.map(g => `- [${g.category}] ${g.primary_goal} — ${g.status}`).join('\n') || 'None set'}

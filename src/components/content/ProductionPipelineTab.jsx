@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
 import { useContentPillars } from '../../hooks/useContentPillars'
@@ -239,7 +240,7 @@ function IdeaDetailModal({ idea, onClose, onSaveNotes, onChecklistChange, onMove
   const isFilming = idea.production_stage === 'Filmed'
   const isEditing = idea.production_stage === 'Editing'
 
-  return (
+  return createPortal(
     <div className="modal-overlay">
       <div className="modal" style={{ maxWidth: '500px' }}>
         <div className="modal-header">
@@ -314,6 +315,7 @@ function IdeaDetailModal({ idea, onClose, onSaveNotes, onChecklistChange, onMove
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

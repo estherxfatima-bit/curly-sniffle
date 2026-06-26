@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
 import { generateWeeklyReviewSummary } from '../../lib/aiLog'
@@ -42,7 +43,7 @@ export default function WeeklyReviewModal({ weekStart, incompleteTasks, onClose,
     }
   }
 
-  return (
+  return createPortal(
     <div className="modal-overlay">
       <div className="modal" style={{ maxWidth: '560px' }}>
         <div className="modal-header">
@@ -110,6 +111,7 @@ export default function WeeklyReviewModal({ weekStart, incompleteTasks, onClose,
           </>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

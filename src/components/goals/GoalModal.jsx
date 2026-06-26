@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
 import { GOAL_CATEGORIES, GOAL_TIMEFRAMES, getCurrentQuarter, PRIORITY_LEVELS, PRIORITY_LABELS } from '../../lib/constants'
@@ -65,7 +66,7 @@ export default function GoalModal({ goal, defaults, goals, onClose, onSave }) {
     if (!error) onSave(data)
   }
 
-  return (
+  return createPortal(
     <div className="modal-overlay">
       <div className="modal scale-in">
         <div className="modal-header">
@@ -185,6 +186,7 @@ export default function GoalModal({ goal, defaults, goals, onClose, onSave }) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
