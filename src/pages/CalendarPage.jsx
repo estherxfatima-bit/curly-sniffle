@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { format, startOfWeek, addDays, addWeeks, subWeeks, differenceInMinutes, parseISO, isSameDay } from 'date-fns'
 import { ChevronLeft, ChevronRight, RefreshCw, AlertTriangle, Calendar, Plus, Pencil, Trash2, Check, X } from 'lucide-react'
@@ -14,6 +14,7 @@ const GRID_MINUTES = (GRID_END_HOUR - GRID_START_HOUR) * 60
 const HOUR_HEIGHT = 64 // px per hour
 const GRID_HEIGHT = (GRID_END_HOUR - GRID_START_HOUR) * HOUR_HEIGHT
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+const DRAG_SNAP_MINUTES = 15
 
 function minutesFromGridStart(dateStr) {
   const d = parseISO(dateStr)
@@ -73,6 +74,8 @@ export default function CalendarPage() {
   const [selected, setSelected] = useState(null) // selected event for detail
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState(null) // { eventId?, calendarId?, summary, description, date, startTime, endTime }
+  const [dragState, setDragState] = useState(null) // { eventId, deltaMin } while actively dragging
+  const dragRef = useRef(null) // mutable drag info that doesn't need to trigger re-renders on its own
   useLockBodyScroll(!!(selected || form))
 
   const weekStart = startOfWeek(weekRef, { weekStartsOn: 1 })
@@ -154,6 +157,50 @@ export default function CalendarPage() {
     setSelected(null)
     await deleteCalendarEvent(session, ev.id, ev.calendarId)
     await load(true)
+  }
+
+  function startDrag(e, ev) {
+    if (ev.allDay) return
+    e.stopPropagation()
+    e.preventDefault()
+    dragRef.current = { eventId: ev.id, startY: e.clientY, deltaMin: 0 }
+    setDragState({ eventId: ev.id, deltaMin: 0 })
+
+    function onMove(moveEv) {
+      const d = dragRef.current
+      if (!d) return
+      const rawDeltaMin = ((moveEv.clientY - d.startY) / HOUR_HEIGHT) * 60
+      const snapped = Math.round(rawDeltaMin / DRAG_SNAP_MINUTES) * DRAG_SNAP_MINUTES
+      d.deltaMin = snapped
+      setDragState({ eventId: ev.id, deltaMin: snapped })
+    }
+
+    async function onUp() {
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+      const d = dragRef.current
+      dragRef.current = null
+      setDragState(null)
+      if (!d || d.deltaMin === 0) return
+
+      const newStart = new Date(new Date(ev.start).getTime() + d.deltaMin * 60000)
+      const newEnd = new Date(new Date(ev.end).getTime() + d.deltaMin * 60000)
+      setEvents(prev => prev.map(e2 => e2.id === ev.id ? { ...e2, start: newStart.toISOString(), end: newEnd.toISOString() } : e2))
+
+      const toLocalIso = date => format(date, "yyyy-MM-dd'T'HH:mm:ss")
+      const result = await updateCalendarEvent(session, ev.id, {
+        calendarId: ev.calendarId,
+        start: toLocalIso(newStart),
+        end: toLocalIso(newEnd),
+      })
+      if (result?.error) {
+        alert('Could not move event: ' + result.error)
+        await load(true)
+      }
+    }
+
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
   }
 
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
@@ -313,14 +360,18 @@ export default function CalendarPage() {
                       const left = `calc(${(col / cols) * 100}% + 2px)`
                       const startTime = format(parseISO(ev.start), 'HH:mm')
                       const endTime = format(parseISO(ev.end), 'HH:mm')
+                      const isDragging = dragState?.eventId === ev.id
+                      const dragOffsetPx = isDragging ? (dragState.deltaMin / 60) * HOUR_HEIGHT : 0
                       return (
                         <div
                           key={ev.id}
-                          onClick={e => { e.stopPropagation(); setSelected(ev) }}
-                          title={`${ev.summary}\n${startTime}–${endTime}`}
+                          onMouseDown={e => startDrag(e, ev)}
+                          onClick={e => { e.stopPropagation(); if (!isDragging) setSelected(ev) }}
+                          title={`${ev.summary}\n${startTime}–${endTime} (drag to move)`}
                           style={{
                             position: 'absolute',
                             top, left, width, height,
+                            transform: dragOffsetPx ? `translateY(${dragOffsetPx}px)` : undefined,
                             background: ev.calendarColor || 'var(--career)',
                             color: ev.calendarFg || '#fff',
                             borderRadius: 4,
@@ -328,9 +379,10 @@ export default function CalendarPage() {
                             fontSize: 10,
                             lineHeight: 1.3,
                             overflow: 'hidden',
-                            cursor: 'pointer',
-                            boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-                            zIndex: 1,
+                            cursor: isDragging ? 'grabbing' : 'grab',
+                            boxShadow: isDragging ? '0 4px 10px rgba(0,0,0,0.35)' : '0 1px 3px rgba(0,0,0,0.2)',
+                            opacity: isDragging ? 0.85 : 1,
+                            zIndex: isDragging ? 5 : 1,
                           }}
                         >
                           <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{ev.summary}</div>
