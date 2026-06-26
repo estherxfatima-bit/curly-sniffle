@@ -50,6 +50,7 @@ export default function DailyTodos({ compact = false }) {
   const [priorityFilter, setPriorityFilter] = useState('')       // '' | urgent | high | medium | low | none
   const [categories, setCategories] = useState(DEFAULT_CATS)
   const [categoryColors, setCategoryColors] = useState({})
+  const [colorsLoaded, setColorsLoaded] = useState(false)
   const [newCatInput, setNewCatInput] = useState('')
   const [showAddCat,  setShowAddCat]  = useState(false)
   const [colorPickerCat, setColorPickerCat] = useState(null)
@@ -69,6 +70,7 @@ export default function DailyTodos({ compact = false }) {
   const inputRef = useRef(null)
   const timerCtx = useTimer()
   const carriedRef = useRef(false)
+  const categoryColorsRef = useRef({})
   const latestViewDateRef = useRef(viewDate)
 
   const isToday = viewDate === today
@@ -99,22 +101,34 @@ export default function DailyTodos({ compact = false }) {
   async function loadCategoryColors() {
     const { data } = await supabase.from('todo_categories').select('name, colour').eq('user_id', user.id)
     if (data?.length) {
-      setCategoryColors(Object.fromEntries(data.map(r => [r.name, r.colour])))
+      const map = Object.fromEntries(data.map(r => [r.name, r.colour]))
+      categoryColorsRef.current = map
+      setCategoryColors(map)
+      setColorsLoaded(true)
       return
     }
     // First run: no rows yet — seed the default categories so they have a persisted colour.
     const { data: seeded } = await supabase.from('todo_categories')
       .insert(DEFAULT_TODO_CATEGORIES.map(c => ({ user_id: user.id, name: c.name, colour: c.colour })))
       .select('name, colour')
-    if (seeded?.length) setCategoryColors(Object.fromEntries(seeded.map(r => [r.name, r.colour])))
+    if (seeded?.length) {
+      const map = Object.fromEntries(seeded.map(r => [r.name, r.colour]))
+      categoryColorsRef.current = map
+      setCategoryColors(map)
+    }
+    setColorsLoaded(true)
   }
 
   // Lazily create a todo_categories row (with a default colour) the first time a category
   // that isn't tracked yet is touched — covers free-text categories typed before this feature existed.
+  // Reads/writes categoryColorsRef synchronously so concurrent calls (e.g. backfilling several
+  // categories in the same render pass) each see the others' just-assigned colours instead of
+  // all racing to read the same stale `categoryColors` state closure and landing on palette index 0.
   async function ensureCategoryColor(name) {
-    if (!name || categoryColors[name]) return
-    const colour = TODO_CATEGORY_COLOR_PALETTE[Object.keys(categoryColors).length % TODO_CATEGORY_COLOR_PALETTE.length]
-    setCategoryColors(prev => ({ ...prev, [name]: colour }))
+    if (!name || categoryColorsRef.current[name]) return
+    const colour = TODO_CATEGORY_COLOR_PALETTE[Object.keys(categoryColorsRef.current).length % TODO_CATEGORY_COLOR_PALETTE.length]
+    categoryColorsRef.current = { ...categoryColorsRef.current, [name]: colour }
+    setCategoryColors(categoryColorsRef.current)
     await supabase.from('todo_categories').upsert({ user_id: user.id, name, colour }, { onConflict: 'user_id,name' })
   }
 
@@ -393,8 +407,9 @@ export default function DailyTodos({ compact = false }) {
   // Backfill: any category in use (typed before this feature existed) that has no colour
   // row yet gets one lazily assigned from the palette.
   useEffect(() => {
-    allCategories.forEach(c => { if (!categoryColors[c]) ensureCategoryColor(c) })
-  }, [allCategories.join('|'), Object.keys(categoryColors).length])
+    if (!colorsLoaded) return
+    allCategories.forEach(c => { if (!categoryColorsRef.current[c]) ensureCategoryColor(c) })
+  }, [colorsLoaded, allCategories.join('|'), Object.keys(categoryColors).length])
 
   const filtered = todos.filter(t => {
     if (statusFilter === 'active' && t.complete) return false
