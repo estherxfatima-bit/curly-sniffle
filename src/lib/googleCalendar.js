@@ -15,17 +15,20 @@ export async function fetchCalendarEvents(session, timeMin, timeMax) {
 }
 
 // Creates an event on the user's primary Google Calendar.
-// `start`/`end` should be ISO datetime strings. Returns { id, ... } or { error }.
+// `start`/`end` should be ISO datetime strings (no UTC offset — interpreted in
+// the browser's IANA time zone, sent alongside so Google doesn't reject them).
+// Returns { id, ... } or { error }.
 export async function createCalendarEvent(session, { summary, description, start, end }) {
   if (!session?.access_token) return { error: 'Not signed in' }
   try {
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
     const res = await fetch('/api/calendar/events', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${session.access_token}`,
       },
-      body: JSON.stringify({ summary, description, start, end }),
+      body: JSON.stringify({ summary, description, start, end, timeZone }),
     })
     const data = await res.json()
     if (!res.ok) return { error: data.error || 'Failed to create event' }
@@ -39,13 +42,14 @@ export async function createCalendarEvent(session, { summary, description, start
 export async function updateCalendarEvent(session, eventId, { calendarId, summary, description, start, end }) {
   if (!session?.access_token || !eventId) return { error: 'Not signed in' }
   try {
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
     const res = await fetch('/api/calendar/events', {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${session.access_token}`,
       },
-      body: JSON.stringify({ eventId, calendarId, summary, description, start, end }),
+      body: JSON.stringify({ eventId, calendarId, summary, description, start, end, timeZone }),
     })
     const data = await res.json()
     if (!res.ok) return { error: data.error || 'Failed to update event' }

@@ -139,7 +139,7 @@ export default async function handler(req, res) {
     if (error === 'not_connected') return res.status(409).json({ error: 'Google Calendar is not connected' })
     if (error === 'reconnect') return res.status(409).json({ error: 'Missing refresh token — please reconnect Google Calendar' })
 
-    const { summary, description, start, end } = req.body || {}
+    const { summary, description, start, end, timeZone } = req.body || {}
     if (!summary || !start || !end) return res.status(400).json({ error: 'summary, start, and end are required' })
 
     const evRes = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
@@ -148,8 +148,8 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         summary,
         description: description || '',
-        start: { dateTime: start },
-        end: { dateTime: end },
+        start: { dateTime: start, timeZone: timeZone || 'UTC' },
+        end: { dateTime: end, timeZone: timeZone || 'UTC' },
       }),
     })
     const evData = await evRes.json()
@@ -163,14 +163,14 @@ export default async function handler(req, res) {
     if (error === 'not_connected') return res.status(409).json({ error: 'Google Calendar is not connected' })
     if (error === 'reconnect') return res.status(409).json({ error: 'Missing refresh token — please reconnect Google Calendar' })
 
-    const { eventId, calendarId, summary, description, start, end } = req.body || {}
+    const { eventId, calendarId, summary, description, start, end, timeZone } = req.body || {}
     if (!eventId) return res.status(400).json({ error: 'eventId is required' })
 
     const patch = {}
     if (summary !== undefined) patch.summary = summary
     if (description !== undefined) patch.description = description
-    if (start !== undefined) patch.start = start.length === 10 ? { date: start } : { dateTime: start }
-    if (end !== undefined) patch.end = end.length === 10 ? { date: end } : { dateTime: end }
+    if (start !== undefined) patch.start = start.length === 10 ? { date: start } : { dateTime: start, timeZone: timeZone || 'UTC' }
+    if (end !== undefined) patch.end = end.length === 10 ? { date: end } : { dateTime: end, timeZone: timeZone || 'UTC' }
 
     const evRes = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId || 'primary')}/events/${encodeURIComponent(eventId)}`, {
       method: 'PATCH',
