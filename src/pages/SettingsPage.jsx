@@ -344,6 +344,7 @@ export default function SettingsPage() {
         setPushEnabled(true)
       }
     } catch (e) {
+      console.error('[push] togglePush failed', e)
       alert(`Push setup failed: ${e.message}`)
     } finally {
       setPushLoading(false)

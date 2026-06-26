@@ -1,13 +1,22 @@
 self.addEventListener('push', event => {
-  const data = event.data ? event.data.json() : {}
+  let data = {}
+  try {
+    data = event.data ? event.data.json() : {}
+  } catch (err) {
+    console.error('[sw] failed to parse push payload', err)
+  }
   event.waitUntil(
     self.registration.showNotification(data.title || 'Life OS', {
       body: data.body || '',
-      icon: '/icon-192.png',
-      badge: '/icon-192.png',
+      icon: '/favicon.svg',
+      badge: '/favicon.svg',
       data: data.url ? { url: data.url } : {},
-    })
+    }).catch(err => console.error('[sw] showNotification failed', err))
   )
+})
+
+self.addEventListener('pushsubscriptionchange', event => {
+  console.error('[sw] push subscription changed/expired', event)
 })
 
 self.addEventListener('notificationclick', event => {
