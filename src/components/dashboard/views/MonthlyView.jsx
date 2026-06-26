@@ -1,7 +1,9 @@
 import ArcRing from '../../ui/ArcRing'
 import { Link } from 'react-router-dom'
+import { startOfMonth, endOfMonth } from 'date-fns'
 import { SortableCard, DraggableCardList } from '../DraggableCard'
 import AddWidgetMenu from '../AddWidgetMenu'
+import { calculateGoalCompletion, calculateExpectedOccurrences } from '../../../lib/habitUtils'
 
 export const CARD_LABELS = {
   'habit-rings': 'Habit completion',
@@ -26,11 +28,17 @@ export default function MonthlyView({
 }) {
   const order = cardOrder?.length ? cardOrder : DEFAULT_ORDER
 
-  // Calculate monthly completion per habit
-  const daysInMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate()
+  // Calculate monthly completion per habit, based on each habit's expected frequency
+  // for the current month (not a flat day count).
+  const now = new Date()
+  const monthStart = startOfMonth(now)
+  const monthEnd = endOfMonth(now)
   const habitRings = habits.map(h => {
-    const count = (monthHabitLogs || []).filter(l => l.habit_id === h.id).length
-    return { ...h, count, pct: Math.round((count / daysInMonth) * 100) }
+    const logs = (monthHabitLogs || []).filter(l => l.habit_id === h.id)
+    const count = logs.length
+    const expected = calculateExpectedOccurrences(h, monthStart, monthEnd)
+    const pct = calculateGoalCompletion(h, logs, monthStart, monthEnd) ?? 0
+    return { ...h, count, expected, pct }
   })
 
   // Finance summary
@@ -71,7 +79,7 @@ export default function MonthlyView({
               <div key={h.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
                 <ArcRing value={h.pct} max={100} size={72} strokeWidth={6} color="var(--personal)" label={`${h.pct}%`} fontSize={12} />
                 <p style={{ fontSize: 11, textAlign: 'center', color: 'var(--text-2)', lineHeight: 1.3 }}>{h.emoji} {h.name}</p>
-                <p style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-3)' }}>{h.count}/{daysInMonth} days</p>
+                <p style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-3)' }}>{h.count}/{h.expected}</p>
               </div>
             ))}
           </div>

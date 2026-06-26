@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
-import { format, eachDayOfInterval, subMonths, parseISO, differenceInCalendarDays } from 'date-fns'
+import { format, eachDayOfInterval, subMonths, parseISO, differenceInCalendarDays, startOfMonth, endOfMonth } from 'date-fns'
 import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, XAxis, YAxis, Tooltip,
   CartesianGrid, ResponsiveContainer, Cell, Legend,
@@ -12,6 +12,7 @@ import AddWidgetMenu from '../components/dashboard/AddWidgetMenu'
 import ArcRing from '../components/ui/ArcRing'
 import { Pencil, Check as CheckIcon } from 'lucide-react'
 import { longestStreak, bestDayOfWeek, DAY_NAMES, getBuckets } from '../lib/insightsUtils'
+import { calculateGoalCompletion } from '../lib/habitUtils'
 import PeriodNav from '../components/ui/PeriodNav'
 import { getTrailingBounds } from '../lib/periodNav'
 import { VARIABLE_CATS, toMonthly } from '../lib/financeUtils'
@@ -225,8 +226,9 @@ export default function InsightsPage() {
 
   // ── Habits ─────────────────────────────────────────────────────────────────
   const habitCompletionData = habits.map(h => {
-    const count = habitLogs.filter(l => l.habit_id === h.id && rangeDayStrs.includes(l.log_date)).length
-    return { name: `${h.emoji || ''} ${h.name}`.trim(), rate: rangeDayStrs.length ? Math.round((count / rangeDayStrs.length) * 100) : 0 }
+    const logs = habitLogs.filter(l => l.habit_id === h.id)
+    const rate = calculateGoalCompletion(h, logs, rangeStart, rangeEnd) ?? 0
+    return { name: `${h.emoji || ''} ${h.name}`.trim(), rate }
   })
 
   const habitBestDayData = habits.map(h => ({
@@ -239,19 +241,17 @@ export default function InsightsPage() {
     streak: longestStreak(habitLogs.filter(l => l.habit_id === h.id).map(l => l.log_date)),
   })).sort((a, b) => b.streak - a.streak)
 
-  const thisMonthStr = format(refDate, 'yyyy-MM')
+  const thisMonthStart = startOfMonth(refDate)
+  const thisMonthEnd = endOfMonth(refDate)
   const lastMonthDate = subMonths(refDate, 1)
-  const lastMonthStr = format(lastMonthDate, 'yyyy-MM')
-  const daysInThisMonth = new Date(refDate.getFullYear(), refDate.getMonth() + 1, 0).getDate()
-  const daysInLastMonth = new Date(lastMonthDate.getFullYear(), lastMonthDate.getMonth() + 1, 0).getDate()
+  const lastMonthStart = startOfMonth(lastMonthDate)
+  const lastMonthEnd = endOfMonth(lastMonthDate)
   const habitMomData = habits.map(h => {
     const logs = habitLogs.filter(l => l.habit_id === h.id)
-    const thisCount = logs.filter(l => l.log_date.startsWith(thisMonthStr)).length
-    const lastCount = logs.filter(l => l.log_date.startsWith(lastMonthStr)).length
     return {
       name: `${h.emoji || ''} ${h.name}`.trim(),
-      'This month': Math.round((thisCount / daysInThisMonth) * 100),
-      'Last month': Math.round((lastCount / daysInLastMonth) * 100),
+      'This month': calculateGoalCompletion(h, logs, thisMonthStart, thisMonthEnd) ?? 0,
+      'Last month': calculateGoalCompletion(h, logs, lastMonthStart, lastMonthEnd) ?? 0,
     }
   })
 

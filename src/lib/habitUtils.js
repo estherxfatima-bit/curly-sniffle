@@ -1,4 +1,4 @@
-import { format, addDays, startOfWeek, startOfMonth, endOfMonth, isAfter } from 'date-fns'
+import { format, addDays, startOfWeek, startOfMonth, endOfMonth, isAfter, differenceInCalendarDays } from 'date-fns'
 
 export const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
@@ -168,6 +168,68 @@ export function dayStatus(habit, logSet, frozenSet, date, today) {
   return 'missed'
 }
 
+// Expected number of occurrences for a habit within [periodStart, periodEnd] (inclusive),
+// clamped so that any time before the habit's creation date doesn't count.
+//   - 'specific_days'   -> count of matching weekdays in the (clamped) period
+//   - 'times_per_week'  -> (days in period ÷ 7) × frequency_count, rounded down (Math.floor)
+//   - 'daily' (default) -> number of days in the (clamped) period
+export function calculateExpectedOccurrences(habit, periodStart, periodEnd) {
+  let start = periodStart
+  const end = periodEnd
+  if (habit.created_at) {
+    const createdAt = new Date(habit.created_at)
+    if (createdAt > start) start = createdAt
+  }
+  if (start > end) return 0
+
+  if (habit.frequency_type === 'specific_days') {
+    const days = (habit.frequency_days || [])
+    if (!days.length) return 0
+    let count = 0
+    for (let d = new Date(start.getFullYear(), start.getMonth(), start.getDate()); d <= end; d = addDays(d, 1)) {
+      if (days.includes(dayName(d))) count++
+    }
+    return count
+  }
+
+  const daysInPeriod = differenceInCalendarDays(end, start) + 1
+  if (daysInPeriod <= 0) return 0
+
+  if (habit.frequency_type === 'times_per_week') {
+    const target = habit.frequency_count || 1
+    return Math.floor((daysInPeriod / 7) * target)
+  }
+
+  // 'daily' (default)
+  return daysInPeriod
+}
+
+// Goal completion % for a habit over [periodStart, periodEnd], given its logs (array of
+// objects with a log_date / date string field) or a Set of 'yyyy-MM-dd' strings.
+// Returns a number 0-100, or null if there are no expected occurrences (avoids NaN/Infinity).
+export function calculateGoalCompletion(habit, logs, periodStart, periodEnd, dateField = 'log_date') {
+  const expected = calculateExpectedOccurrences(habit, periodStart, periodEnd)
+  if (!expected) return null
+
+  const startStr = format(periodStart, 'yyyy-MM-dd')
+  const endStr = format(periodEnd, 'yyyy-MM-dd')
+
+  let actual
+  if (logs instanceof Set) {
+    actual = 0
+    for (const ds of logs) {
+      if (ds >= startStr && ds <= endStr) actual++
+    }
+  } else {
+    actual = (logs || []).filter(l => {
+      const ds = typeof l === 'string' ? l : l[dateField]
+      return ds >= startStr && ds <= endStr
+    }).length
+  }
+
+  return Math.round((actual / expected) * 100)
+}
+
 // Per-day status across a given month, plus completion stats for that month.
 // Returns:
 //   days          - array of { date, ds, status } for status in 'done'|'frozen'|'missed'|'na'|'future'
@@ -196,11 +258,16 @@ export function monthStats(habit, logSet, frozenSet, monthDate, today) {
     }
   }
 
-  const completionPct = expectedCount ? Math.round((loggedCount / expectedCount) * 100) : 0
+  // Goal completion % uses the shared frequency-aware calculation (expected occurrences
+  // for this exact month, clamped to the habit's creation date) rather than the raw
+  // day-grid expectedCount above (which also excludes future days for display purposes).
+  const periodEnd = today < monthEnd ? today : monthEnd
+  const completionPct = calculateGoalCompletion(habit, logSet, monthStart, periodEnd) ?? 0
 
   let monthlyGoal = null
   if (habit.frequency_type === 'times_per_week') {
-    monthlyGoal = { target: weeksInMonth(monthDate) * (habit.frequency_count || 1), current: loggedCount }
+    const target = calculateExpectedOccurrences(habit, monthStart, monthEnd)
+    monthlyGoal = { target, current: loggedCount }
   }
 
   return { days, completionPct, loggedCount, longestStreak: longest, monthlyGoal }
