@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react'
 import { format } from 'date-fns'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
-import { TASK_AREAS } from '../../lib/constants'
+import { TASK_AREAS, parseTimeAllocationToParts, buildTimeAllocation } from '../../lib/constants'
 import { Plus, Clock, Target, Send, CalendarDays, SkipForward, Repeat, Tag } from 'lucide-react'
 import SubtaskList from '../shared/SubtaskList'
 
-const TIME_OPTS = ['15 min', '30 min', '45 min', '1 hr', '1.5 hr', '2 hr', '3 hr']
+const HOUR_OPTS = Array.from({ length: 9 }, (_, i) => i) // 0-8 hours
+const MINUTE_OPTS = [0, 15, 30, 45]
 const DAY_LABELS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 
 export default function TaskExpansion({ task, goals, onUpdateField, onToggleSubtask, onAddSubtask, onEditSubtask, onRemoveSubtask, onReorderSubtasks, onPushNextWeek }) {
@@ -72,10 +73,19 @@ export default function TaskExpansion({ task, goals, onUpdateField, onToggleSubt
         </div>
         <div className="flex items-center gap-2">
           <Clock size={13} color="var(--text-3)" />
-          <select value={task.time_allocation || ''} onChange={e => onUpdateField('time_allocation', e.target.value || null)} style={{ fontSize: 12, padding: '4px 8px' }}>
-            <option value="">No time set</option>
-            {TIME_OPTS.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
+          {(() => {
+            const { hours, minutes } = parseTimeAllocationToParts(task.time_allocation)
+            return (
+              <>
+                <select value={hours} onChange={e => onUpdateField('time_allocation', buildTimeAllocation(Number(e.target.value), minutes))} style={{ fontSize: 12, padding: '4px 8px' }}>
+                  {HOUR_OPTS.map(h => <option key={h} value={h}>{h} hr</option>)}
+                </select>
+                <select value={minutes} onChange={e => onUpdateField('time_allocation', buildTimeAllocation(hours, Number(e.target.value)))} style={{ fontSize: 12, padding: '4px 8px' }}>
+                  {MINUTE_OPTS.map(m => <option key={m} value={m}>{m} min</option>)}
+                </select>
+              </>
+            )
+          })()}
         </div>
         <div className="flex items-center gap-2">
           <Target size={13} color="var(--text-3)" />

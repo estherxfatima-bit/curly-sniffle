@@ -70,8 +70,8 @@ function PanelContent({ type, data }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {habits.length === 0 && <p style={{ color: 'var(--text-3)', fontSize: 13, fontStyle: 'italic' }}>No habits yet. <Link to="/habits" style={{ color: 'var(--personal)' }}>Add some →</Link></p>}
         {habits.map(h => (
-          <div key={h.id} onClick={() => !h.done && toggleHabit(h)}
-            style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: 'var(--bg-2)', borderRadius: 'var(--radius)', cursor: h.done ? 'default' : 'pointer' }}>
+          <div key={h.id} onClick={() => toggleHabit(h)}
+            style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: 'var(--bg-2)', borderRadius: 'var(--radius)', cursor: 'pointer' }}>
             <div className={`toggle-dot ${h.done ? 'done' : ''}`} style={{ borderColor: 'var(--personal)' }}>
               {h.done && <Check size={11} color="white" strokeWidth={3} />}
             </div>

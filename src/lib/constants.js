@@ -107,14 +107,37 @@ export const PRODUCTION_STAGES = [
   'Posted',
 ]
 
-// Parses time-allocation strings like '15 min', '1 hr', '1.5 hr' into minutes.
+// Parses time-allocation strings like '15 min', '1 hr', '1.5 hr', '1 hr 30 min' into minutes.
 export function parseTimeAllocationToMinutes(value) {
   if (!value) return null
-  const match = String(value).match(/^([\d.]+)\s*(min|hr)/i)
-  if (!match) return null
-  const num = parseFloat(match[1])
-  if (Number.isNaN(num)) return null
-  return match[2].toLowerCase() === 'hr' ? Math.round(num * 60) : Math.round(num)
+  const str = String(value)
+  let total = 0
+  let matched = false
+  for (const m of str.matchAll(/([\d.]+)\s*(min|hr)/gi)) {
+    const num = parseFloat(m[1])
+    if (Number.isNaN(num)) continue
+    matched = true
+    total += m[2].toLowerCase() === 'hr' ? num * 60 : num
+  }
+  return matched ? Math.round(total) : null
+}
+
+// Splits a time-allocation string into { hours, minutes } for editing UI.
+export function parseTimeAllocationToParts(value) {
+  const total = parseTimeAllocationToMinutes(value)
+  if (total == null) return { hours: 0, minutes: 0 }
+  return { hours: Math.floor(total / 60), minutes: total % 60 }
+}
+
+// Builds a time-allocation string like '1 hr 30 min' from hours/minutes, or null if both are 0.
+export function buildTimeAllocation(hours, minutes) {
+  const h = Number(hours) || 0
+  const m = Number(minutes) || 0
+  if (h === 0 && m === 0) return null
+  const parts = []
+  if (h > 0) parts.push(`${h} hr`)
+  if (m > 0) parts.push(`${m} min`)
+  return parts.join(' ')
 }
 
 export const QUARTERS = ['Q1', 'Q2', 'Q3', 'Q4']
