@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { AREA_COLORS } from '../../lib/constants'
 import { X, CalendarDays, ChevronDown, ChevronRight } from 'lucide-react'
 import useLockBodyScroll from '../../hooks/useLockBodyScroll'
@@ -13,7 +14,8 @@ export default function WeeklyPlanPicker({ tasks, viewDayOfWeek, onSelect, onClo
   useLockBodyScroll()
   const [expanded, setExpanded] = useState(null)
 
-  return (
+  // Portal to document.body so this fixed overlay isn't clipped by .app-layout's `overflow: clip`.
+  return createPortal(
     <div style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.35)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={onClose}>
       <div className="card" style={{ width: 420, maxHeight: '70vh', overflow: 'auto', padding: 18 }} onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
@@ -87,6 +89,7 @@ export default function WeeklyPlanPicker({ tasks, viewDayOfWeek, onSelect, onClo
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

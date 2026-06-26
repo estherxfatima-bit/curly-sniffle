@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom'
 import { X, Target } from 'lucide-react'
 import useLockBodyScroll from '../../hooks/useLockBodyScroll'
 
@@ -5,7 +6,8 @@ export default function GoalTaskPicker({ goals, onSelect, onClose }) {
   useLockBodyScroll()
   const goalsWithTasks = goals.filter(g => g.tasks?.length > 0)
 
-  return (
+  // Portal to document.body so this fixed overlay isn't clipped by .app-layout's `overflow: clip`.
+  return createPortal(
     <div style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.35)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={onClose}>
       <div className="card" style={{ width: 420, maxHeight: '70vh', overflow: 'auto', padding: 18 }} onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
@@ -43,6 +45,7 @@ export default function GoalTaskPicker({ goals, onSelect, onClose }) {
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
