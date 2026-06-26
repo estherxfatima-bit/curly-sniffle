@@ -5,6 +5,7 @@ import { format, startOfWeek } from 'date-fns'
 import { Pin, X, ChevronDown, ChevronUp, Search, Plus, Check } from 'lucide-react'
 import { parseSuggestedTasks, insertSuggestedTask } from '../lib/suggestedTasks'
 import PriorityDot from '../components/shared/PriorityDot'
+import FormattedAiText from '../components/shared/FormattedAiText'
 
 const TYPE_LABELS = {
   weekly_plan:      'Weekly Plan',
@@ -141,7 +142,8 @@ export default function AILogPage() {
           {filtered.map(entry => {
             const isExpanded = !!expanded[entry.id]
             const { text: cleanResponse, tasks } = parseSuggestedTasks(entry.response)
-            const preview = cleanResponse.split('\n').filter(Boolean).slice(0, 2).join(' ')
+            const previewText = cleanResponse.replace(/\*\*/g, '').replace(/\s+/g, ' ').trim()
+            const preview = previewText.slice(0, 160)
             return (
               <div key={entry.id} className={`card ${entry.pinned ? 'card-career' : ''} fade-in`} style={{ position: 'relative' }}>
                 <div className="flex items-start justify-between gap-3 mb-2">
@@ -162,12 +164,15 @@ export default function AILogPage() {
 
                 <h3 style={{ fontSize: '1rem', marginBottom: 8 }}>{entry.title}</h3>
 
-                <p style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
-                  {isExpanded ? cleanResponse : preview}
-                  {!isExpanded && cleanResponse.length > preview.length && '…'}
-                </p>
+                <div style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.7 }}>
+                  {isExpanded ? (
+                    <FormattedAiText text={cleanResponse} />
+                  ) : (
+                    <p style={{ margin: 0 }}>{preview}{previewText.length > preview.length && '…'}</p>
+                  )}
+                </div>
 
-                {cleanResponse.length > preview.length && (
+                {previewText.length > preview.length && (
                   <button
                     onClick={() => setExpanded(p => ({ ...p, [entry.id]: !p[entry.id] }))}
                     style={{ background: 'transparent', color: 'var(--career)', fontSize: 12, marginTop: 8, display: 'flex', alignItems: 'center', gap: 4 }}

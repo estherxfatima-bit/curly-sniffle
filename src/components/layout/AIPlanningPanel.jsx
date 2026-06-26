@@ -8,6 +8,7 @@ import { format, startOfWeek, subWeeks, subDays } from 'date-fns'
 import { X, Send, Sparkles, Plus, ChevronDown, Check } from 'lucide-react'
 import { getCurrentQuarter } from '../../lib/constants'
 import PriorityDot from '../shared/PriorityDot'
+import FormattedAiText from '../shared/FormattedAiText'
 import useLockBodyScroll from '../../hooks/useLockBodyScroll'
 
 export default function AIPlanningPanel({ onClose }) {
@@ -199,7 +200,9 @@ export default function AIPlanningPanel({ onClose }) {
         {response && (
           <div style={{ background: 'var(--career-tint)', borderRadius: 'var(--radius-lg)', padding: '16px 18px', borderLeft: '3px solid var(--career)' }}>
             <p className="mono mb-2" style={{ color: 'var(--career)' }}>Response</p>
-            <p style={{ fontSize: 13, lineHeight: 1.75, color: 'var(--text)', whiteSpace: 'pre-wrap' }}>{response}</p>
+            <div style={{ fontSize: 13, lineHeight: 1.75, color: 'var(--text)' }}>
+              <FormattedAiText text={response} />
+            </div>
             {suggestedTasks.length === 0 ? (
               <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
                 <button className="btn btn-sm btn-ghost" onClick={() => addToWeeklyPlan(response.split('\n')[0])}>
