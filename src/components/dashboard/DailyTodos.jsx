@@ -12,7 +12,7 @@ import GoalTaskPicker from './GoalTaskPicker'
 import BrainDumpPicker from './BrainDumpPicker'
 import TimerWidget from './TimerWidget'
 import TimeBlockModal from './TimeBlockModal'
-import { Plus, Trash2, ChevronDown, ChevronRight, Check, Target, Hourglass, AlarmClock, Link2, Timer as TimerIcon, CalendarClock, ChevronLeft, Download, Lightbulb, Lock, Unlock } from 'lucide-react'
+import { Plus, Trash2, ChevronDown, ChevronRight, Check, Target, Hourglass, AlarmClock, Link2, Timer as TimerIcon, CalendarClock, ChevronLeft, Download, Lightbulb, Lock, Unlock, FastForward, Rewind } from 'lucide-react'
 
 const DEFAULT_CATS = DEFAULT_TODO_CATEGORIES.map(c => c.name)
 
@@ -282,6 +282,17 @@ export default function DailyTodos({ compact = false }) {
     const nextDate = format(addDays(parseISO(todo.date), 1), 'yyyy-MM-dd')
     await supabase.from('daily_todos').insert({
       user_id: user.id, text: todo.text, date: nextDate, complete: false,
+      category: todo.category, time_allocation: todo.time_allocation, subtasks: todo.subtasks,
+      carried_from: todo.date, duration_minutes: todo.duration_minutes, goal_id: todo.goal_id,
+    })
+    await supabase.from('daily_todos').update({ archived: true }).eq('id', todo.id)
+    setTodos(prev => prev.filter(t => t.id !== todo.id))
+  }
+
+  async function pushToYesterday(todo) {
+    const prevDate = format(addDays(parseISO(todo.date), -1), 'yyyy-MM-dd')
+    await supabase.from('daily_todos').insert({
+      user_id: user.id, text: todo.text, date: prevDate, complete: false,
       category: todo.category, time_allocation: todo.time_allocation, subtasks: todo.subtasks,
       carried_from: todo.date, duration_minutes: todo.duration_minutes, goal_id: todo.goal_id,
     })
@@ -613,6 +624,7 @@ export default function DailyTodos({ compact = false }) {
                 onToggle={() => toggle(todo)}
                 onRemove={() => remove(todo)}
                 onPushTomorrow={() => pushToTomorrow(todo)}
+                onPushYesterday={() => pushToYesterday(todo)}
                 onUpdateField={(f, v) => updateField(todo.id, f, v)}
                 onToggleSubtask={sid => toggleSubtask(todo, sid)}
                 onAddSubtask={text => addSubtask(todo, text)}
@@ -681,7 +693,7 @@ function CategoryColorPicker({ current, onPick, onClose }) {
   )
 }
 
-function TodoItem({ todo, categories, catColor, goals, isTimerRunning, onToggle, onRemove, onPushTomorrow, onUpdateField, onToggleSubtask, onAddSubtask, onEditSubtask, onRemoveSubtask, onReorderSubtasks, onOpenTimer }) {
+function TodoItem({ todo, categories, catColor, goals, isTimerRunning, onToggle, onRemove, onPushTomorrow, onPushYesterday, onUpdateField, onToggleSubtask, onAddSubtask, onEditSubtask, onRemoveSubtask, onReorderSubtasks, onOpenTimer }) {
   const [expanded,     setExpanded]     = useState(false)
   const [showOptions,  setShowOptions]  = useState(false)
   const [addingSub,    setAddingSub]    = useState(false)
@@ -917,10 +929,17 @@ function TodoItem({ todo, categories, catColor, goals, isTimerRunning, onToggle,
           <Plus size={12} />
         </button>
 
+        {/* Push to yesterday (undo an accidental push-forward) */}
+        {!todo.complete && (
+          <button className="btn-icon" style={{ padding: 2, color: 'var(--text-3)', flexShrink: 0 }} onClick={onPushYesterday} title="Move to yesterday">
+            <Rewind size={12} />
+          </button>
+        )}
+
         {/* Push to tomorrow */}
         {!todo.complete && (
           <button className="btn-icon" style={{ padding: 2, color: 'var(--text-3)', flexShrink: 0 }} onClick={onPushTomorrow} title="Push to tomorrow">
-            <ChevronRight size={12} />
+            <FastForward size={12} />
           </button>
         )}
 
