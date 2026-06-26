@@ -530,7 +530,11 @@ export default function DailyTodos({ compact = false }) {
                 <span
                   onClick={e => { e.stopPropagation(); setColorPickerCat(colorPickerCat === c ? null : c) }}
                   title="Change category colour"
-                  style={{ width: 8, height: 8, borderRadius: '50%', background: catColor(c), flexShrink: 0, cursor: 'pointer', boxShadow: categoryFilter === c ? '0 0 0 1px #fff' : 'none' }}
+                  style={{
+                    width: 11, height: 11, borderRadius: '50%', background: catColor(c), flexShrink: 0, cursor: 'pointer',
+                    border: categoryFilter === c ? '1.5px solid #fff' : '1.5px solid var(--bg)',
+                    boxShadow: '0 0 0 1px var(--border)',
+                  }}
                 />
                 {c}
               </button>
