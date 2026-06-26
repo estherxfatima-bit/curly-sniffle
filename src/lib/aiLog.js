@@ -122,43 +122,6 @@ ${(quarterlyWins || []).map(w => `- ${w}`).join('\n') || 'None'}`
   return { response, record }
 }
 
-// Re-export existing functions to route through ai_log
-export async function analyseInspiration(userId, inspirationItems) {
-  const system = `You are a creative strategist and content director. Analyse saved inspiration and extract signal — what they're actually drawn to, what it reveals about their creative direction, and what content ideas it suggests.
-
-The user's content pillars:
-1. Work & Becoming — portfolio careers, freelance, self-direction, building before it pays off
-2. Taste & Expression — fashion as self-direction, aesthetic, GRWM, beauty as creative act
-3. Life Design — systems, money, 5-9s, designing a life that fits you
-4. Creative Direct Your Life — the meta-pillar: being the creative director of your own life
-
-Her tone: cool, considered, non-performative. She documents the actual journey, not an aspirational version. She doesn't hype, she observes.
-
-Respond in valid JSON only.`
-
-  const prompt = `Here is my saved inspiration content:
-${inspirationItems.map((item, i) => `${i+1}. Platform: ${item.platform}, URL: ${item.url}, Notes: ${item.notes || 'none'}, Tags: ${item.tags?.join(', ') || 'none'}`).join('\n')}
-
-Return JSON:
-{
-  "dominantThemes": ["theme1", "theme2"],
-  "toneAndSentiment": "2-3 sentences",
-  "contentGaps": "2-3 sentences",
-  "contentIdeas": [
-    { "title": "...", "pillar": "...", "format": "...", "hook": "...", "rationale": "..." }
-  ]
-}`
-
-  const text = await callClaude(prompt, system, 1200)
-  const jsonMatch = text.match(/\{[\s\S]*\}/)
-  if (!jsonMatch) throw new Error('No JSON in Claude response')
-  const result = JSON.parse(jsonMatch[0])
-
-  const title = `Content analysis — ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`
-  await saveAndReturn(userId, 'content_analysis', title, text)
-  return result
-}
-
 export async function generateFinanceSummary(userId, { income, fixed, variable, totalIncome, totalFixed, totalVariable, taxPot, takeHome }) {
   const system = `You are a direct financial advisor. Analyse the user's income and expenses plainly. No cheerleading, no generic advice. Look at the actual numbers and give a specific observation about their financial health, what stands out, and one concrete thing to address. Max 3 sentences.`
 
@@ -188,27 +151,3 @@ Give a direct financial observation in 2-3 sentences.`
   return response
 }
 
-export async function smartBatchIdeas(userId, ideas) {
-  const system = `You are a production coordinator helping a content creator batch filming days efficiently. Group ideas by filming setup. Respond in valid JSON only.`
-
-  const prompt = `Here are my content ideas to batch:
-${ideas.map((idea, i) => `${i+1}. "${idea.title}", Format: ${idea.format}, Pillar: ${idea.pillar}, Status: ${idea.status}`).join('\n')}
-
-Group into 2-4 filming day clusters. Consider: talking head = same setup batch, video anchors by location/vibe, text over clip = B-roll/archive batch, carousels = no filming.
-
-Return JSON:
-{
-  "clusters": [
-    { "name": "...", "rationale": "1 sentence", "ideas": [1, 2, 3], "estimatedTime": "..." }
-  ]
-}`
-
-  const text = await callClaude(prompt, system, 800)
-  const jsonMatch = text.match(/\{[\s\S]*\}/)
-  if (!jsonMatch) throw new Error('No JSON in Claude response')
-  const result = JSON.parse(jsonMatch[0])
-
-  const title = `Smart batch — ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`
-  await saveAndReturn(userId, 'smart_batch', title, text)
-  return result
-}

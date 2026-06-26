@@ -3,7 +3,10 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
 import { useContentPillars } from '../../hooks/useContentPillars'
 import { CONTENT_FORMATS, CONTENT_STATUSES } from '../../lib/constants'
-import { Plus, Trash2 } from 'lucide-react'
+import { Plus, Trash2, Sparkles, Wand2, BarChart2 } from 'lucide-react'
+import IdeaGeneratorModal from './IdeaGeneratorModal'
+import FleshOutModal from './FleshOutModal'
+import MetricsModal from './MetricsModal'
 
 const STATUS_COLORS = {
   'Idea': 'badge-muted',
@@ -62,18 +65,27 @@ function InlineCell({ value, onChange, type = 'text', options, renderDisplay }) 
   )
 }
 
-export default function IdeaDumpTab({ refreshKey = 0 }) {
+export default function IdeaDumpTab({ refreshKey = 0, onIdeaSaved }) {
   const { user } = useAuth()
   const CONTENT_PILLARS = useContentPillars(user?.id)
+  const [pillarDefs, setPillarDefs] = useState([])
   const [ideas, setIdeas] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [filters, setFilters] = useState({ pillar: '', status: '', batch: '' })
   const [batches, setBatches] = useState([])
+  const [showGenerator, setShowGenerator] = useState(false)
+  const [fleshOutIdea, setFleshOutIdea] = useState(null)
+  const [metricsIdea, setMetricsIdea] = useState(null)
 
   useEffect(() => {
-    if (user) { loadIdeas(); loadBatches() }
+    if (user) { loadIdeas(); loadBatches(); loadPillarDefs() }
   }, [user, refreshKey])
+
+  async function loadPillarDefs() {
+    const { data } = await supabase.from('content_pillars').select('name, description').eq('user_id', user.id)
+    setPillarDefs(data || [])
+  }
 
   async function loadIdeas() {
     setLoading(true)
@@ -94,7 +106,40 @@ export default function IdeaDumpTab({ refreshKey = 0 }) {
     const { error } = await supabase.from('content_ideas').update({ [field]: clean }).eq('id', id)
     if (error) { setError(error.message); return }
     setIdeas(prev => prev.map(i => i.id === id ? { ...i, [field]: clean } : i))
+    if (field === 'status' && clean === 'Posted') {
+      const idea = ideas.find(i => i.id === id)
+      if (idea) setMetricsIdea({ ...idea, status: 'Posted' })
+    }
   }
+
+  async function saveMetrics(values) {
+    const { error } = await supabase.from('content_ideas')
+      .update({ ...values, metrics_updated_at: new Date().toISOString() })
+      .eq('id', metricsIdea.id)
+    if (error) { setError(error.message); return }
+    setIdeas(prev => prev.map(i => i.id === metricsIdea.id ? { ...i, ...values, metrics_updated_at: new Date().toISOString() } : i))
+    setMetricsIdea(null)
+  }
+
+  async function saveGeneratedIdea(idea) {
+    const { data, error } = await supabase.from('content_ideas').insert({
+      user_id: user.id,
+      title: idea.title,
+      pillar: idea.pillar || null,
+      format: idea.format || null,
+      hook: idea.hook || null,
+      status: 'Idea',
+      production_stage: 'Idea',
+    }).select().single()
+    if (error) { setError(error.message); return }
+    setIdeas(prev => [data, ...prev])
+    onIdeaSaved?.()
+  }
+
+  const postedWithMetrics = ideas.filter(i => i.status === 'Posted' && i.views != null)
+  const performanceSummary = postedWithMetrics.length
+    ? postedWithMetrics.map(i => `"${i.title}" (pillar: ${i.pillar || 'none'}, format: ${i.format || 'none'}) — views: ${i.views ?? '?'}, likes: ${i.likes ?? '?'}, comments: ${i.comments ?? '?'}, saves: ${i.saves ?? '?'}, shares: ${i.shares ?? '?'}`).join('\n')
+    : null
 
   async function addIdea(position) {
     const { data, error } = await supabase.from('content_ideas').insert({
@@ -162,6 +207,9 @@ export default function IdeaDumpTab({ refreshKey = 0 }) {
           {batches.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
         </select>
         <div style={{ flex: 1 }} />
+        <button className="btn btn-accent btn-sm flex items-center gap-2" onClick={() => setShowGenerator(true)}>
+          <Sparkles size={13} /> Generate ideas
+        </button>
         <AddRowButton position="top" />
       </div>
 
@@ -199,9 +247,19 @@ export default function IdeaDumpTab({ refreshKey = 0 }) {
                     </td>
                   ))}
                   <td>
-                    <button className="btn-icon btn" onClick={() => deleteIdea(idea.id)}>
-                      <Trash2 size={12} />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button className="btn-icon btn" title="Flesh this out" onClick={() => setFleshOutIdea(idea)}>
+                        <Wand2 size={12} />
+                      </button>
+                      {idea.status === 'Posted' && (
+                        <button className="btn-icon btn" title="Update metrics" onClick={() => setMetricsIdea(idea)}>
+                          <BarChart2 size={12} />
+                        </button>
+                      )}
+                      <button className="btn-icon btn" onClick={() => deleteIdea(idea.id)}>
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -216,6 +274,32 @@ export default function IdeaDumpTab({ refreshKey = 0 }) {
       <div className="flex justify-end mt-4">
         <AddRowButton position="bottom" />
       </div>
+
+      {showGenerator && (
+        <IdeaGeneratorModal
+          pillars={CONTENT_PILLARS}
+          pillarDefs={pillarDefs}
+          performanceSummary={performanceSummary}
+          onSave={saveGeneratedIdea}
+          onClose={() => setShowGenerator(false)}
+        />
+      )}
+
+      {fleshOutIdea && (
+        <FleshOutModal
+          idea={fleshOutIdea}
+          pillarDefs={pillarDefs}
+          onClose={() => setFleshOutIdea(null)}
+        />
+      )}
+
+      {metricsIdea && (
+        <MetricsModal
+          idea={metricsIdea}
+          onSave={saveMetrics}
+          onClose={() => setMetricsIdea(null)}
+        />
+      )}
     </div>
   )
 }

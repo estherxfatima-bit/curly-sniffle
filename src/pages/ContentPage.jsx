@@ -2,12 +2,12 @@ import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import PillarsTab from '../components/content/PillarsTab'
 import InspirationTab from '../components/content/InspirationTab'
-import AIAnalysisTab from '../components/content/AIAnalysisTab'
 import IdeaDumpTab from '../components/content/IdeaDumpTab'
 import BatchesTab from '../components/content/BatchesTab'
 import ProductionPipelineTab from '../components/content/ProductionPipelineTab'
+import PerformanceTab from '../components/content/PerformanceTab'
 
-const TABS = ['Pillars', 'Inspiration', 'AI Analysis', 'Idea Dump', 'Batches', 'Production Pipeline']
+const TABS = ['Pillars', 'Inspiration', 'Idea Dump', 'Batches', 'Production Pipeline', "What's working"]
 
 function ContentDecoration() {
   return (
@@ -49,10 +49,10 @@ export default function ContentPage() {
 
       {tab === 'Pillars'               && <PillarsTab />}
       {tab === 'Inspiration'          && <InspirationTab />}
-      {tab === 'AI Analysis'          && <AIAnalysisTab onSaveIdea={() => setIdeaDumpRefresh(v => v+1)} />}
-      {tab === 'Idea Dump'            && <IdeaDumpTab refreshKey={ideaDumpRefresh} />}
+      {tab === 'Idea Dump'            && <IdeaDumpTab refreshKey={ideaDumpRefresh} onIdeaSaved={() => setIdeaDumpRefresh(v => v+1)} />}
       {tab === 'Batches'              && <BatchesTab />}
       {tab === 'Production Pipeline'  && <ProductionPipelineTab />}
+      {tab === "What's working"       && <PerformanceTab />}
     </div>
   )
 }

@@ -39,37 +39,91 @@ Write a 2-3 sentence summary of this week that captures the honest reality, name
   return callClaude(prompt, system)
 }
 
-export async function analyseInspiration(inspirationItems) {
-  const system = `You are a creative strategist and content director. Your job is to analyse someone's saved inspiration and extract signal from it — what they're actually drawn to, what it reveals about their creative direction, and what content ideas it suggests.
+const TONE_GUIDANCE = `Her tone is: cool, considered, non-performative. She documents the actual journey, not an aspirational version. She doesn't hype, she observes. She's building in public but with taste.`
 
-The user's content pillars are:
-1. Work & Becoming — portfolio careers, freelance, self-direction, building before it pays off
-2. Taste & Expression — fashion as self-direction, aesthetic, GRWM, beauty as creative act
-3. Life Design — systems, money, 5-9s, designing a life that fits you
-4. Creative Direct Your Life — the meta-pillar: being the creative director of your own life
+function describePillar(pillarDefs, name) {
+  const def = pillarDefs.find(p => p.name === name)
+  return def ? `${name} — ${def.description}` : name
+}
 
-Her tone is: cool, considered, non-performative. She documents the actual journey, not an aspirational version. She doesn't hype, she observes. She's building in public but with taste.
+// Free-text prompt + optional pillar -> 3-5 new content ideas, grounded in the user's
+// pillars, tone, and (if available) what's actually performing well so far.
+export async function generateContentIdeas(userPrompt, pillar, pillarDefs, performanceSummary) {
+  const system = `You are a creative strategist and content director helping someone turn a rough idea into specific, postable content.
+
+Her content pillars:
+${pillarDefs.map(p => `- ${p.name} — ${p.description}`).join('\n')}
+
+${TONE_GUIDANCE}
+
+${performanceSummary ? `What's worked so far:\n${performanceSummary}\n` : ''}
+Respond in valid JSON only.`
+
+  const prompt = `Topic/prompt: ${userPrompt}
+${pillar ? `Pillar to focus on: ${describePillar(pillarDefs, pillar)}` : 'No specific pillar chosen — suggest whichever pillar(s) fit best.'}
+
+Return JSON:
+{
+  "ideas": [
+    { "title": "...", "pillar": "one of her pillars", "format": "Talking head | Video anchor | Carousel | Simple text over clip", "hook": "specific opening line or visual hook" }
+  ]
+}
+Return 3-5 ideas.`
+
+  const text = await callClaude(prompt, system)
+  const jsonMatch = text.match(/\{[\s\S]*\}/)
+  if (!jsonMatch) throw new Error('No JSON in Claude response')
+  return JSON.parse(jsonMatch[0]).ideas || []
+}
+
+// Takes a single saved idea and sharpens it into something filmable: a better hook,
+// a caption angle, repurposing suggestions, and format-specific structure beats.
+export async function fleshOutIdea(idea, pillarDefs) {
+  const system = `You are a creative strategist helping flesh out a single content idea into something ready to film.
+
+${TONE_GUIDANCE}
 
 Respond in valid JSON only.`
 
-  const prompt = `Here is my saved inspiration content:
+  const prompt = `Idea: "${idea.title}"
+Pillar: ${idea.pillar ? describePillar(pillarDefs, idea.pillar) : 'not set'}
+Format: ${idea.format || 'not set'}
+Existing notes: ${idea.notes || 'none'}
+Reference URL: ${idea.reference_url || 'none'}
 
-${inspirationItems.map((item, i) => `${i + 1}. Platform: ${item.platform}, URL: ${item.url}, Notes: ${item.notes || 'none'}, Tags: ${item.tags?.join(', ') || 'none'}`).join('\n')}
-
-Analyse this and return a JSON object with:
+Return JSON:
 {
-  "dominantThemes": ["theme1", "theme2", ...],  // 3-5 themes you see recurring
-  "toneAndSentiment": "2-3 sentences on the emotional register and aesthetic sensibility of what she saves",
-  "contentGaps": "2-3 sentences on what she saves vs what she likely posts — where the gap is",
-  "contentIdeas": [
-    {
-      "title": "specific idea title",
-      "pillar": "one of the four pillars",
-      "format": "Talking head | Video anchor | Carousel | Simple text over clip",
-      "hook": "specific opening line or visual hook",
-      "rationale": "1 sentence on why this idea fits her tone and saved content"
-    }
-  ]  // exactly 5 ideas
+  "sharperHook": "a stronger opening line/visual hook",
+  "captionAngle": "1-2 sentences on the caption's angle/POV",
+  "repurposing": ["1-3 ways this could be repurposed across formats"],
+  "structureBeats": ["3-6 short beats, in order, for actually filming/editing this in this format"]
+}`
+
+  const text = await callClaude(prompt, system)
+  const jsonMatch = text.match(/\{[\s\S]*\}/)
+  if (!jsonMatch) throw new Error('No JSON in Claude response')
+  return JSON.parse(jsonMatch[0])
+}
+
+// Looks across posted ideas with metrics and surfaces what's actually working.
+export async function analysePerformance(postedIdeas) {
+  const system = `You are a data-literate content strategist. Look at what actually performed, not what should theoretically perform. Be specific and concrete — no generic social media advice.
+
+Respond in valid JSON only.`
+
+  const lines = postedIdeas.map((i, idx) =>
+    `${idx + 1}. "${i.title}" — pillar: ${i.pillar || 'none'}, format: ${i.format || 'none'}, hook: "${i.hook || 'none'}" — views: ${i.views ?? '?'}, likes: ${i.likes ?? '?'}, comments: ${i.comments ?? '?'}, saves: ${i.saves ?? '?'}, shares: ${i.shares ?? '?'}`
+  ).join('\n')
+
+  const prompt = `Posted content with metrics:
+${lines}
+
+Return JSON:
+{
+  "bestPillar": "the pillar with the strongest engagement, with 1 sentence why",
+  "bestFormat": "the format with the strongest engagement, with 1 sentence why",
+  "patterns": "2-3 sentences on hook/topic patterns that correlate with higher engagement",
+  "recommendation": "1 specific, concrete thing to do differently next batch"
 }`
 
   const text = await callClaude(prompt, system)
