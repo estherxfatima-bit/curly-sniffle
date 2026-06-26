@@ -76,6 +76,7 @@ export default function IdeaDumpTab({ refreshKey = 0, onIdeaSaved }) {
   const [batches, setBatches] = useState([])
   const [showGenerator, setShowGenerator] = useState(false)
   const [fleshOutIdea, setFleshOutIdea] = useState(null)
+  const [fleshOutSavedLog, setFleshOutSavedLog] = useState(null)
   const [metricsIdea, setMetricsIdea] = useState(null)
 
   useEffect(() => {
@@ -150,6 +151,13 @@ export default function IdeaDumpTab({ refreshKey = 0, onIdeaSaved }) {
     }).select().single()
     if (error) { setError(error.message); return }
     setIdeas(prev => position === 'top' ? [data, ...prev] : [...prev, data])
+  }
+
+  async function viewLastFleshOut(idea) {
+    const { data, error } = await supabase.from('ai_log').select('*').eq('id', idea.last_flesh_out_id).single()
+    if (error) { setError(error.message); return }
+    setFleshOutSavedLog(data)
+    setFleshOutIdea(idea)
   }
 
   async function deleteIdea(id) {
@@ -248,9 +256,14 @@ export default function IdeaDumpTab({ refreshKey = 0, onIdeaSaved }) {
                   ))}
                   <td>
                     <div className="flex items-center gap-1">
-                      <button className="btn-icon btn" title="Flesh this out" onClick={() => setFleshOutIdea(idea)}>
+                      <button className="btn-icon btn" title="Flesh this out" onClick={() => { setFleshOutSavedLog(null); setFleshOutIdea(idea) }}>
                         <Wand2 size={12} />
                       </button>
+                      {idea.last_flesh_out_id && (
+                        <button className="btn-icon btn" title="View last flesh out" onClick={() => viewLastFleshOut(idea)}>
+                          <Sparkles size={12} />
+                        </button>
+                      )}
                       {idea.status === 'Posted' && (
                         <button className="btn-icon btn" title="Update metrics" onClick={() => setMetricsIdea(idea)}>
                           <BarChart2 size={12} />
@@ -289,7 +302,10 @@ export default function IdeaDumpTab({ refreshKey = 0, onIdeaSaved }) {
         <FleshOutModal
           idea={fleshOutIdea}
           pillarDefs={pillarDefs}
-          onClose={() => setFleshOutIdea(null)}
+          userId={user.id}
+          savedLog={fleshOutSavedLog}
+          onClose={() => { setFleshOutIdea(null); setFleshOutSavedLog(null) }}
+          onSaved={id => setIdeas(prev => prev.map(i => i.id === fleshOutIdea.id ? { ...i, last_flesh_out_id: id } : i))}
         />
       )}
 

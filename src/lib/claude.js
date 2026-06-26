@@ -2,7 +2,7 @@
 
 const CLAUDE_API_KEY = import.meta.env.VITE_CLAUDE_API_KEY
 
-async function callClaude(prompt, systemPrompt) {
+async function callClaude(prompt, systemPrompt, maxTokens = 1024) {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -13,7 +13,7 @@ async function callClaude(prompt, systemPrompt) {
     },
     body: JSON.stringify({
       model: 'claude-opus-4-8',
-      max_tokens: 1024,
+      max_tokens: maxTokens,
       system: systemPrompt,
       messages: [{ role: 'user', content: prompt }],
     }),
@@ -76,33 +76,76 @@ Return 3-5 ideas.`
   return JSON.parse(jsonMatch[0]).ideas || []
 }
 
-// Takes a single saved idea and sharpens it into something filmable: a better hook,
-// a caption angle, repurposing suggestions, and format-specific structure beats.
+// Takes a single saved idea and turns it into filmable, postable content: hook
+// options, ready-to-post captions, a numbered shot list, and repurposing ideas.
+// pillarDefs is the user's actual content_pillars rows ({ name, description }) —
+// never hardcode pillar names, always pull from what the user has saved.
 export async function fleshOutIdea(idea, pillarDefs) {
-  const system = `You are a creative strategist helping flesh out a single content idea into something ready to film.
+  const system = `You are a content strategist helping a creator develop a specific video idea into a filmable, postable piece of content. The creator's tone is cool, considered, non-performative — they document the actual journey, not an aspirational version of it. Never use em dashes. Be specific and actionable — every suggestion should be something they can act on immediately. Do not describe concepts — write actual usable copy and specific shots.`
 
-${TONE_GUIDANCE}
+  const pillarsList = pillarDefs.map(p => `${p.name}: ${p.description}`).join(', ')
 
-Respond in valid JSON only.`
+  const lines = [`Idea: ${idea.title}`]
+  lines.push(`Pillar: ${idea.pillar || 'not set'}`)
+  lines.push(`Format: ${idea.format || 'not set'}`)
+  lines.push(`Notes: ${idea.notes || 'none'}`)
+  if (idea.reference_url) lines.push(`Reference URL: ${idea.reference_url}`)
+  if (idea.hook) lines.push(`Hook field: ${idea.hook}`)
+  if (idea.caption_notes) lines.push(`Caption notes: ${idea.caption_notes}`)
+  if (idea.repurpose_from) lines.push(`Repurpose from: ${idea.repurpose_from}`)
+  if (idea.sound) lines.push(`Sound: ${idea.sound}`)
+  if (idea.status) lines.push(`Status: ${idea.status}`)
+  lines.push(`Creator's pillars: ${pillarsList || 'none saved'}`)
 
-  const prompt = `Idea: "${idea.title}"
-Pillar: ${idea.pillar ? describePillar(pillarDefs, idea.pillar) : 'not set'}
-Format: ${idea.format || 'not set'}
-Existing notes: ${idea.notes || 'none'}
-Reference URL: ${idea.reference_url || 'none'}
+  const prompt = `${lines.join('\n')}
 
-Return JSON:
-{
-  "sharperHook": "a stronger opening line/visual hook",
-  "captionAngle": "1-2 sentences on the caption's angle/POV",
-  "repurposing": ["1-3 ways this could be repurposed across formats"],
-  "structureBeats": ["3-6 short beats, in order, for actually filming/editing this in this format"]
-}`
+Return the following:
 
-  const text = await callClaude(prompt, system)
-  const jsonMatch = text.match(/\{[\s\S]*\}/)
-  if (!jsonMatch) throw new Error('No JSON in Claude response')
-  return JSON.parse(jsonMatch[0])
+HOOK OPTIONS (give 2):
+- Visual hook: describe the exact opening shot in one sentence — what the camera literally sees in the first 2 seconds, no words needed
+- Text hook: write the actual text that appears on screen, as if ready to type into CapCut. Under 8 words. Make it stop the scroll.
+
+CAPTION (write 2 full example captions, ready to post with minor edits):
+- Caption 1: [actual caption text with line breaks, 3-5 sentences max, no hashtags]
+- Caption 2: [different angle, different opening line, different energy]
+
+SHOT LIST (numbered, filmable):
+5-8 specific shots in order. Each: one sentence describing exactly what to film — include framing (close-up/wide), movement, and any relevant lighting or texture detail.
+
+REPURPOSING (1-2 specific ideas):
+Concrete ways this content could be reused or extended — not general suggestions.`
+
+  const text = await callClaude(prompt, system, 1800)
+  return parseFleshOutResponse(text)
+}
+
+function parseFleshOutResponse(text) {
+  const sections = { visualHook: '', textHook: '', caption1: '', caption2: '', shotList: [], repurposing: [] }
+
+  const hookBlock = text.match(/HOOK OPTIONS[\s\S]*?(?=CAPTION|$)/i)?.[0] || ''
+  sections.visualHook = hookBlock.match(/Visual hook:\s*(.+)/i)?.[1]?.trim() || ''
+  sections.textHook = hookBlock.match(/Text hook:\s*(.+)/i)?.[1]?.trim() || ''
+
+  const captionBlock = text.match(/CAPTION[\s\S]*?(?=SHOT LIST|$)/i)?.[0] || ''
+  sections.caption1 = captionBlock.match(/Caption 1:\s*([\s\S]*?)(?=Caption 2:|$)/i)?.[1]?.trim() || ''
+  sections.caption2 = captionBlock.match(/Caption 2:\s*([\s\S]*)/i)?.[1]?.trim() || ''
+
+  const shotBlock = text.match(/SHOT LIST[\s\S]*?(?=REPURPOSING|$)/i)?.[0] || ''
+  sections.shotList = shotBlock
+    .split('\n')
+    .map(l => l.replace(/^SHOT LIST.*$/i, '').trim())
+    .filter(l => /^\d+[.)]/.test(l))
+    .map(l => l.replace(/^\d+[.)]\s*/, ''))
+
+  const repurposeBlock = text.match(/REPURPOSING[\s\S]*$/i)?.[0] || ''
+  sections.repurposing = repurposeBlock
+    .split('\n')
+    .slice(1)
+    .map(l => l.replace(/^[-*\d.)]\s*/, '').trim())
+    .filter(Boolean)
+
+  sections.raw = text
+  return sections
 }
 
 // Looks across posted ideas with metrics and surfaces what's actually working.
