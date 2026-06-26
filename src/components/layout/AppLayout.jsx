@@ -40,13 +40,8 @@ export default function AppLayout({ children }) {
 
       <ActiveTimerBar isMobile={isMobile} />
 
-      {/* AI panel overlay */}
-      {showAI && (
-        <>
-          <div style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.45)', zIndex: 1100, backdropFilter: 'blur(2px)', WebkitBackdropFilter: 'blur(2px)' }} onClick={() => setShowAI(false)} />
-          <AIPlanningPanel onClose={() => setShowAI(false)} />
-        </>
-      )}
+      {/* AI panel overlay — AIPlanningPanel renders its own backdrop via a portal */}
+      {showAI && <AIPlanningPanel onClose={() => setShowAI(false)} />}
 
       {/* Floating AI trigger button */}
       <button

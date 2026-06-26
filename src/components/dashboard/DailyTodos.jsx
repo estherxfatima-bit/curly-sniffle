@@ -835,16 +835,9 @@ function TodoItem({ todo, categories, catColor, goals, isTimerRunning, onToggle,
 
         {/* Duration pill */}
         {editingDuration ? (
-          <input
-            type="number"
-            min="0"
-            step="5"
-            autoFocus
-            defaultValue={todo.duration_minutes || ''}
-            placeholder="min"
-            onBlur={e => { const v = e.target.value ? Number(e.target.value) : null; onUpdateField('duration_minutes', v); setEditingDuration(false) }}
-            onKeyDown={e => { if (e.key === 'Enter') e.target.blur() }}
-            style={{ fontSize: 11, padding: '2px 6px', width: 56, border: '1px solid var(--border)', borderRadius: 6 }}
+          <DurationSelect
+            minutes={todo.duration_minutes}
+            onChange={v => { onUpdateField('duration_minutes', v); setEditingDuration(false) }}
           />
         ) : todo.duration_minutes ? (
           <span
@@ -966,6 +959,42 @@ function TodoItem({ todo, categories, catColor, goals, isTimerRunning, onToggle,
           <button className="btn btn-career btn-xs" style={{ color: '#fff' }} onClick={submitSub}>Add</button>
         </div>
       )}
+    </div>
+  )
+}
+
+const DURATION_HOUR_OPTS = Array.from({ length: 9 }, (_, i) => i) // 0-8 hours
+const DURATION_MINUTE_OPTS = [0, 15, 30, 45]
+
+function DurationSelect({ minutes, onChange }) {
+  const total = minutes || 0
+  const [hours, setHours] = useState(Math.floor(total / 60))
+  const [mins, setMins]   = useState(total % 60)
+
+  // Closes once focus leaves both selects, so picking hours doesn't collapse the editor
+  // before minutes can be set.
+  function handleBlur(e) {
+    if (e.currentTarget.contains(e.relatedTarget)) return
+    onChange(hours * 60 + mins || null)
+  }
+
+  return (
+    <div className="flex items-center gap-1" onClick={e => e.stopPropagation()} onBlur={handleBlur}>
+      <select
+        autoFocus
+        value={hours}
+        onChange={e => setHours(Number(e.target.value))}
+        style={{ fontSize: 11, padding: '2px 4px', borderRadius: 6 }}
+      >
+        {DURATION_HOUR_OPTS.map(h => <option key={h} value={h}>{h} hr</option>)}
+      </select>
+      <select
+        value={mins}
+        onChange={e => setMins(Number(e.target.value))}
+        style={{ fontSize: 11, padding: '2px 4px', borderRadius: 6 }}
+      >
+        {DURATION_MINUTE_OPTS.map(m => <option key={m} value={m}>{m} min</option>)}
+      </select>
     </div>
   )
 }

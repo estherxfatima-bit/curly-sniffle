@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom'
 import { X, Check, ArrowRight, Trash2 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { format } from 'date-fns'
@@ -30,7 +31,8 @@ export default function DetailPanel({ panel, onClose }) {
   if (!panel) return null
   const { type, data } = panel
 
-  return (
+  // Portal to document.body so this fixed overlay isn't clipped by .app-layout's `overflow: clip`.
+  return createPortal(
     <>
       <div
         style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh', background: 'rgba(13,8,5,0.45)', zIndex: 1100, backdropFilter: 'blur(2px)', WebkitBackdropFilter: 'blur(2px)' }}
@@ -57,7 +59,8 @@ export default function DetailPanel({ panel, onClose }) {
           <PanelContent type={type} data={data} />
         </div>
       </div>
-    </>
+    </>,
+    document.body
   )
 }
 

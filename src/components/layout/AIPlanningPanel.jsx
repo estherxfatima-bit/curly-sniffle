@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
 import { generatePlan } from '../../lib/aiLog'
@@ -173,7 +174,8 @@ export default function AIPlanningPanel({ onClose }) {
 
   const TYPE_LABELS = { weekly_plan: 'Weekly', finance_summary: 'Finance', content_analysis: 'Content', smart_batch: 'Batch', brain_dump: 'Brain dump', custom: 'Custom' }
 
-  return (
+  // Portal to document.body so this fixed overlay isn't clipped by .app-layout's `overflow: clip`.
+  return createPortal(
     <>
       <div
         style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh', background: 'rgba(13,8,5,0.45)', zIndex: 1100, backdropFilter: 'blur(2px)', WebkitBackdropFilter: 'blur(2px)' }}
@@ -288,6 +290,7 @@ export default function AIPlanningPanel({ onClose }) {
         </div>
       </div>
       </div>
-    </>
+    </>,
+    document.body
   )
 }
