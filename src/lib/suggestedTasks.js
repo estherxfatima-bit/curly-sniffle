@@ -34,20 +34,32 @@ export function parseSuggestedTasks(text) {
   }
 }
 
+const VALID_PRIORITIES = ['urgent', 'high', 'medium', 'low']
+
+// The model is told to use a literal `null` for "no priority" in its example JSON,
+// but it sometimes writes the string "null" (or another stray value) instead, which
+// fails the `priority_level` check constraint and silently kills the whole insert.
+function sanitizePriority(value) {
+  return VALID_PRIORITIES.includes(value) ? value : null
+}
+
 // Insert a single AI-suggested task into weekly_tasks or daily_todos. Returns
 // the Supabase { error } result so callers can surface failures to the user.
 export async function insertSuggestedTask(userId, task, priority_level) {
+  const priority = sanitizePriority(priority_level)
   if (task.type === 'weekly') {
     const weekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
     return supabase.from('weekly_tasks').insert({
       user_id: userId, week_start: weekStart,
-      area: task.area || 'Personal', action: task.action, frequency: task.frequency, specific_task: task.specific_task,
-      complete: false, carried_forward: false, priority_level,
+      area: task.area || 'Personal', action: task.action, frequency: task.frequency,
+      specific_task: task.specific_task || task.action || task.title || 'Untitled task',
+      complete: false, carried_forward: false, priority_level: priority,
     })
   }
   if (task.type === 'daily') {
     return supabase.from('daily_todos').insert({
-      user_id: userId, text: task.title, date: task.due_date, complete: false, priority_level,
+      user_id: userId, text: task.title || task.specific_task || 'Untitled task',
+      date: task.due_date || format(new Date(), 'yyyy-MM-dd'), complete: false, priority_level: priority,
     })
   }
   return { error: new Error(`Unknown suggested task type: ${task.type}`) }
