@@ -20,6 +20,7 @@ import BucketListPage from './pages/BucketListPage'
 import ResetPasswordPage from './pages/ResetPasswordPage'
 import ComparePage from './pages/ComparePage'
 import CalendarPage from './pages/CalendarPage'
+import AdminAiUsagePage from './pages/AdminAiUsagePage'
 
 function AppRoutes() {
   const { session, loading } = useAuth()
@@ -55,6 +56,7 @@ function AppRoutes() {
             <Route path="/books" element={<BooksPage />} />
             <Route path="/bucket-list" element={<BucketListPage />} />
             <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/admin/ai-usage" element={<AdminAiUsagePage />} />
             <Route path="*"         element={<Navigate to="/" replace />} />
           </Routes>
         </AppLayout>

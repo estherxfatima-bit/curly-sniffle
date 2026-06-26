@@ -48,7 +48,8 @@ export default function FleshOutModal({ idea, pillarDefs, userId, savedLog, onCl
     setError(null)
     try {
       const analysis = await fleshOutIdea(idea, pillarDefs)
-      const record = await saveAndReturn(userId, 'flesh_out_idea', `Flesh out: ${idea.title}`, JSON.stringify(analysis))
+      const usage = analysis._usage
+      const record = await saveAndReturn(userId, 'flesh_out_idea', `Flesh out: ${idea.title}`, JSON.stringify(analysis), usage)
       await supabase.from('content_ideas').update({ last_flesh_out_id: record.id }).eq('id', idea.id)
       onSaved?.(record.id)
       setResult(analysis)

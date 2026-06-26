@@ -1,6 +1,8 @@
 // Claude API calls — each function is isolated so they can be built/tested one at a time
+import { estimateCost } from './aiPricing'
 
 const CLAUDE_API_KEY = import.meta.env.VITE_CLAUDE_API_KEY
+const MODEL = 'claude-opus-4-8'
 
 async function callClaude(prompt, systemPrompt, maxTokens = 1024) {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -12,7 +14,7 @@ async function callClaude(prompt, systemPrompt, maxTokens = 1024) {
       'anthropic-dangerous-direct-browser-access': 'true',
     },
     body: JSON.stringify({
-      model: 'claude-opus-4-8',
+      model: MODEL,
       max_tokens: maxTokens,
       system: systemPrompt,
       messages: [{ role: 'user', content: prompt }],
@@ -20,7 +22,15 @@ async function callClaude(prompt, systemPrompt, maxTokens = 1024) {
   })
   if (!res.ok) throw new Error(`Claude API error: ${res.status}`)
   const data = await res.json()
-  return data.content[0].text
+  return { text: data.content[0].text, usage: data.usage || {} }
+}
+
+function usageFields(usage) {
+  return {
+    inputTokens: usage.input_tokens,
+    outputTokens: usage.output_tokens,
+    estimatedCost: estimateCost(MODEL, usage.input_tokens, usage.output_tokens),
+  }
 }
 
 export async function generateWeeklyReviewSummary({ shipped, didntShip, energyLevel, oneWin, oneToDrop }) {
@@ -36,7 +46,8 @@ Be concise, warm, and honest. No toxic positivity. Write like a trusted friend, 
 
 Write a 2-3 sentence summary of this week that captures the honest reality, names the pattern if there is one, and offers one grounded observation for next week. No bullet points.`
 
-  return callClaude(prompt, system)
+  const { text } = await callClaude(prompt, system)
+  return text
 }
 
 const TONE_GUIDANCE = `Her tone is: cool, considered, non-performative. She documents the actual journey, not an aspirational version. She doesn't hype, she observes. She's building in public but with taste.`
@@ -70,7 +81,7 @@ Return JSON:
 }
 Return 3-5 ideas.`
 
-  const text = await callClaude(prompt, system)
+  const { text } = await callClaude(prompt, system)
   const jsonMatch = text.match(/\{[\s\S]*\}/)
   if (!jsonMatch) throw new Error('No JSON in Claude response')
   return JSON.parse(jsonMatch[0]).ideas || []
@@ -115,8 +126,10 @@ SHOT LIST (numbered, filmable):
 REPURPOSING (1-2 specific ideas):
 Concrete ways this content could be reused or extended — not general suggestions.`
 
-  const text = await callClaude(prompt, system, 1800)
-  return parseFleshOutResponse(text)
+  const { text, usage } = await callClaude(prompt, system, 1800)
+  const sections = parseFleshOutResponse(text)
+  sections._usage = usageFields(usage)
+  return sections
 }
 
 function parseFleshOutResponse(text) {
@@ -169,10 +182,12 @@ Return JSON:
   "recommendation": "1 specific, concrete thing to do differently next batch"
 }`
 
-  const text = await callClaude(prompt, system)
+  const { text, usage } = await callClaude(prompt, system)
   const jsonMatch = text.match(/\{[\s\S]*\}/)
   if (!jsonMatch) throw new Error('No JSON in Claude response')
-  return JSON.parse(jsonMatch[0])
+  const result = JSON.parse(jsonMatch[0])
+  result._usage = usageFields(usage)
+  return result
 }
 
 export async function smartBatchIdeas(ideas) {
@@ -202,7 +217,7 @@ Return JSON:
   ]
 }`
 
-  const text = await callClaude(prompt, system)
+  const { text } = await callClaude(prompt, system)
   const jsonMatch = text.match(/\{[\s\S]*\}/)
   if (!jsonMatch) throw new Error('No JSON in Claude response')
   return JSON.parse(jsonMatch[0])

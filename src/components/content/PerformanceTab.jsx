@@ -31,7 +31,7 @@ export default function PerformanceTab() {
       const analysis = await analysePerformance(postedIdeas)
       setResult(analysis)
       const title = `What's working — ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`
-      await saveAndReturn(user.id, 'content_analysis', title, JSON.stringify(analysis))
+      await saveAndReturn(user.id, 'content_analysis', title, JSON.stringify(analysis), analysis._usage)
     } catch (e) {
       setError(e.message)
     } finally {

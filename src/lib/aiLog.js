@@ -1,7 +1,9 @@
 // All AI calls must save to ai_log BEFORE returning, never display without saving.
 import { supabase } from './supabase'
+import { estimateCost } from './aiPricing'
 
 const CLAUDE_API_KEY = import.meta.env.VITE_CLAUDE_API_KEY
+const MODEL = 'claude-opus-4-8'
 
 async function callClaude(prompt, systemPrompt, maxTokens = 1024) {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -13,7 +15,7 @@ async function callClaude(prompt, systemPrompt, maxTokens = 1024) {
       'anthropic-dangerous-direct-browser-access': 'true',
     },
     body: JSON.stringify({
-      model: 'claude-opus-4-8',
+      model: MODEL,
       max_tokens: maxTokens,
       system: systemPrompt,
       messages: [{ role: 'user', content: prompt }],
@@ -21,14 +23,22 @@ async function callClaude(prompt, systemPrompt, maxTokens = 1024) {
   })
   if (!res.ok) throw new Error(`Claude API error: ${res.status}`)
   const data = await res.json()
-  return data.content[0].text
+  return { text: data.content[0].text, usage: data.usage || {} }
 }
 
 // Save to ai_log and return the saved record
-export async function saveAndReturn(userId, type, title, response) {
+export async function saveAndReturn(userId, type, title, response, usage = {}) {
   const { data } = await supabase
     .from('ai_log')
-    .insert({ user_id: userId, type, title, response })
+    .insert({
+      user_id: userId,
+      type,
+      title,
+      response,
+      input_tokens: usage.inputTokens ?? null,
+      output_tokens: usage.outputTokens ?? null,
+      estimated_cost: usage.estimatedCost ?? null,
+    })
     .select()
     .single()
   return data
@@ -47,9 +57,13 @@ export async function generateWeeklyReviewSummary(userId, { shipped, didntShip, 
 
 Write 2-3 sentences. Capture the honest reality, name the pattern if there is one, offer one grounded observation for next week. No bullet points.`
 
-  const response = await callClaude(prompt, system, 512)
+  const { text: response, usage } = await callClaude(prompt, system, 512)
   const title = `Weekly review — ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`
-  await saveAndReturn(userId, 'weekly_plan', title, response)
+  await saveAndReturn(userId, 'weekly_plan', title, response, {
+    inputTokens: usage.input_tokens,
+    outputTokens: usage.output_tokens,
+    estimatedCost: estimateCost(MODEL, usage.input_tokens, usage.output_tokens),
+  })
   return response
 }
 
@@ -120,9 +134,13 @@ ${(quarterlyWins || []).map(w => `- ${w}`).join('\n') || 'None'}`
 
   const prompt = question
 
-  const response = await callClaude(prompt, system, 1800)
+  const { text: response, usage } = await callClaude(prompt, system, 1800)
   const title = `AI plan — ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}: ${question.slice(0, 40)}`
-  const record = await saveAndReturn(userId, 'weekly_plan', title, response)
+  const record = await saveAndReturn(userId, 'weekly_plan', title, response, {
+    inputTokens: usage.input_tokens,
+    outputTokens: usage.output_tokens,
+    estimatedCost: estimateCost(MODEL, usage.input_tokens, usage.output_tokens),
+  })
   return { response, record }
 }
 
@@ -149,9 +167,13 @@ NET TAKE-HOME AFTER ALL: £${takeHome.toFixed(0)}/mo
 
 Give a direct financial observation in 2-3 sentences.`
 
-  const response = await callClaude(prompt, system, 400)
+  const { text: response, usage } = await callClaude(prompt, system, 400)
   const title = `Finance summary — ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`
-  await saveAndReturn(userId, 'finance_summary', title, response)
+  await saveAndReturn(userId, 'finance_summary', title, response, {
+    inputTokens: usage.input_tokens,
+    outputTokens: usage.output_tokens,
+    estimatedCost: estimateCost(MODEL, usage.input_tokens, usage.output_tokens),
+  })
   return response
 }
 

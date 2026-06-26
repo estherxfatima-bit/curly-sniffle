@@ -259,7 +259,7 @@ export default function WellnessPage() {
   async function addRoutineAsTask(routine, dateStr) {
     if (!dateStr) return
     const taskWeekStart = format(startOfWeek(parseISO(dateStr), { weekStartsOn: 1 }), 'yyyy-MM-dd')
-    await supabase.from('weekly_tasks').insert({
+    const { error } = await supabase.from('weekly_tasks').insert({
       user_id: user.id,
       week_start: taskWeekStart,
       area: 'Health/Wellness',
@@ -269,6 +269,11 @@ export default function WellnessPage() {
       complete: false,
       carried_forward: false,
     })
+    if (error) {
+      console.error('addRoutineAsTask failed:', error)
+      alert('Could not add task: ' + error.message)
+      return
+    }
     setTaskDateForRoutine(prev => ({ ...prev, [routine.id]: undefined }))
   }
 

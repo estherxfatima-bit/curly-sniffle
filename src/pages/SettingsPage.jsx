@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase'
 import { registerServiceWorker, subscribeToPush, unsubscribeFromPush, isSubscribed } from '../lib/pushNotifications'
 import { Bell, BellOff, Sun, Moon, LogOut, Calendar, Unlink, MessageSquare, Clock4, Check, Plus, Trash2 } from 'lucide-react'
 import { DAY_LABELS } from '../lib/constants'
+import AiUsageSection from '../components/settings/AiUsageSection'
 
 function SettingsDecoration() {
   return (
@@ -742,6 +743,8 @@ export default function SettingsPage() {
           {personalContextSaved && <span style={{ fontSize: 11, color: 'var(--success)' }}>Saved</span>}
         </div>
       </div>
+
+      <AiUsageSection user={user} />
 
       {/* Account */}
       <div className="card">
