@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
-import { format, startOfWeek, addDays, startOfMonth, addMonths, subMonths } from 'date-fns'
-import { Plus, X } from 'lucide-react'
+import { format, startOfWeek, addDays, subDays, startOfMonth, addMonths, subMonths, isSameWeek } from 'date-fns'
+import { Plus, X, ChevronLeft, ChevronRight } from 'lucide-react'
 import ArcRing from '../components/ui/ArcRing'
 import HabitModal from '../components/habits/HabitModal'
 import TodayView from '../components/habits/TodayView'
@@ -50,8 +50,10 @@ export default function HabitsPage() {
 
   const today = new Date()
   const todayStr = format(today, 'yyyy-MM-dd')
-  const weekStart = startOfWeek(today, { weekStartsOn: 1 })
-  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
+  const currentWeekStart = startOfWeek(today, { weekStartsOn: 1 })
+  const [weekStartDate, setWeekStartDate] = useState(() => currentWeekStart)
+  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStartDate, i))
+  const isCurrentWeek = isSameWeek(weekStartDate, today, { weekStartsOn: 1 })
 
   const [dismissedBanners, setDismissedBanners] = useState(() => loadDismissed(todayStr))
 
@@ -255,17 +257,31 @@ export default function HabitsPage() {
           onToggleLog={toggleLog}
         />
       ) : view === 'week' ? (
-        <WeekView
-          habits={habits}
-          weekDays={weekDays}
-          todayStr={todayStr}
-          logsByHabit={logsByHabit}
-          sims={sims}
-          onToggleLog={toggleLog}
-          onOpenMonth={() => setView('month')}
-          onEdit={h => { setEditing(h); setShowModal(true) }}
-          onDelete={deleteHabit}
-        />
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <button className="btn-icon btn" onClick={() => setWeekStartDate(prev => subDays(prev, 7))}><ChevronLeft size={16} /></button>
+            <div className="flex items-center gap-3">
+              <h3 style={{ fontSize: '1rem' }}>
+                {format(weekStartDate, 'MMM d')} – {format(addDays(weekStartDate, 6), 'MMM d, yyyy')}
+              </h3>
+              {!isCurrentWeek && (
+                <button className="btn btn-xs btn-ghost" onClick={() => setWeekStartDate(currentWeekStart)}>This week</button>
+              )}
+            </div>
+            <button className="btn-icon btn" onClick={() => setWeekStartDate(prev => addDays(prev, 7))} disabled={isCurrentWeek} style={isCurrentWeek ? { opacity: 0.3, cursor: 'default' } : {}}><ChevronRight size={16} /></button>
+          </div>
+          <WeekView
+            habits={habits}
+            weekDays={weekDays}
+            todayStr={todayStr}
+            logsByHabit={logsByHabit}
+            sims={sims}
+            onToggleLog={toggleLog}
+            onOpenMonth={() => setView('month')}
+            onEdit={h => { setEditing(h); setShowModal(true) }}
+            onDelete={deleteHabit}
+          />
+        </div>
       ) : (
         <MonthView
           habits={habits}

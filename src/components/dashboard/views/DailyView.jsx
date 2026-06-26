@@ -48,7 +48,7 @@ export default function DailyView({
   cardOrder, onReorder, user, today,
   onHydrationAdd,
   financeTotalVariable, financeOverallBudget, onAddExpense,
-  savedDailyQuote, onSaveDailyQuote,
+  savedDailyQuote, onSaveDailyQuote, onToggleHabit,
   editing, onResize, onRemoveCard, onAddCard,
 }) {
   const order = (cardOrder?.length ? cardOrder : DEFAULT_ORDER)
@@ -110,7 +110,11 @@ export default function DailyView({
           <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
             {habits.map(h => (
               <div key={h.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div className={`toggle-dot ${h.done ? 'done' : ''}`} style={{ borderColor: h.done ? 'var(--success)' : 'var(--personal)', cursor: h.done ? 'default' : 'pointer' }}>
+                <div
+                  onClick={e => { e.stopPropagation(); onToggleHabit(h) }}
+                  className={`toggle-dot ${h.done ? 'done' : ''}`}
+                  style={{ borderColor: h.done ? 'var(--success)' : 'var(--personal)', cursor: 'pointer' }}
+                >
                   {h.done && <Check size={10} color="white" strokeWidth={3} />}
                 </div>
                 <span style={{ flex: 1, fontSize: 13, color: h.done ? 'var(--text-3)' : 'var(--text)', textDecoration: h.done ? 'line-through' : 'none' }}>

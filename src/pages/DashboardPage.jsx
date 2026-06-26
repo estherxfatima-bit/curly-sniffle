@@ -247,9 +247,16 @@ export default function DashboardPage() {
 
   // ── actions ────────────────────────────────────────────────────────────────
   function toggleHabit(habit) {
-    supabase.from('habit_logs').insert({ user_id: user.id, habit_id: habit.id, log_date: today })
-    setHabitLogs(prev => [...prev, { habit_id: habit.id, log_date: today }])
-    setAllHabitLogs(prev => [...prev, { habit_id: habit.id, log_date: today }])
+    const isDone = todaySet.has(habit.id)
+    if (isDone) {
+      supabase.from('habit_logs').delete().eq('user_id', user.id).eq('habit_id', habit.id).eq('log_date', today)
+      setHabitLogs(prev => prev.filter(l => !(l.habit_id === habit.id && l.log_date === today)))
+      setAllHabitLogs(prev => prev.filter(l => !(l.habit_id === habit.id && l.log_date === today)))
+    } else {
+      supabase.from('habit_logs').insert({ user_id: user.id, habit_id: habit.id, log_date: today })
+      setHabitLogs(prev => [...prev, { habit_id: habit.id, log_date: today }])
+      setAllHabitLogs(prev => [...prev, { habit_id: habit.id, log_date: today }])
+    }
   }
 
   function toggleTask(task) {
@@ -442,6 +449,7 @@ export default function DashboardPage() {
           onAddExpense={addFinanceVariable}
           savedDailyQuote={savedDailyQuote}
           onSaveDailyQuote={setSavedDailyQuote}
+          onToggleHabit={toggleHabit}
           {...viewProps}
         />
       )}
