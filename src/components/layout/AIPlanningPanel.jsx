@@ -11,10 +11,19 @@ import useLockBodyScroll from '../../hooks/useLockBodyScroll'
 // Pull a trailing ```json ... ``` block with a "suggested_tasks" array out of an AI
 // response, returning the cleaned display text and the parsed task list (if any).
 function parseSuggestedTasks(text) {
-  const match = text.match(/```json\s*([\s\S]*?)```/)
+  // Prefer a properly closed ```json fence, but fall back to an unclosed one
+  // (e.g. the response got cut off by the token limit) by reading to the end of the text.
+  const match = text.match(/```json\s*([\s\S]*?)```/) || text.match(/```json\s*([\s\S]*)/)
   if (!match) return { text, tasks: [] }
+  let jsonStr = match[1].trim()
+  // If the fence was unclosed, the JSON itself may be truncated mid-object — trim back to the
+  // last complete suggested_tasks entry so JSON.parse still succeeds on the salvageable part.
+  if (!text.slice(match.index).includes('```', 7)) {
+    const lastComplete = jsonStr.lastIndexOf('},')
+    if (lastComplete !== -1) jsonStr = jsonStr.slice(0, lastComplete + 1) + ']}'
+  }
   try {
-    const parsed = JSON.parse(match[1])
+    const parsed = JSON.parse(jsonStr)
     if (!Array.isArray(parsed.suggested_tasks)) return { text, tasks: [] }
     return { text: text.slice(0, match.index).trim(), tasks: parsed.suggested_tasks }
   } catch {

@@ -116,7 +116,7 @@ ${(quarterlyWins || []).map(w => `- ${w}`).join('\n') || 'None'}`
 
   const prompt = question
 
-  const response = await callClaude(prompt, system, 800)
+  const response = await callClaude(prompt, system, 1800)
   const title = `AI plan — ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}: ${question.slice(0, 40)}`
   const record = await saveAndReturn(userId, 'weekly_plan', title, response)
   return { response, record }
