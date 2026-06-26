@@ -57,12 +57,13 @@ export default function GoalCard({ goal, color, linkedTasks, metricHistory, pare
 
   return (
     <div style={{
-      borderBottom: '1px solid var(--border)',
-      borderLeft: goal.priority_level === 'urgent' ? `3px solid ${PRIORITY_COLORS.urgent}` : 'none',
-      paddingLeft: goal.priority_level === 'urgent' ? 8 : 0,
-      paddingBottom: 16,
+      background: 'var(--bg-2)',
+      borderRadius: 'var(--radius)',
+      border: '1px solid var(--border)',
+      borderLeft: `3px solid ${goal.priority_level === 'urgent' ? PRIORITY_COLORS.urgent : color}`,
+      padding: 14,
     }}>
-      <div className="flex items-start justify-between gap-2 mb-3">
+      <div className="flex items-start justify-between gap-3 mb-3">
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="flex items-center gap-2">
             <PriorityDot priority={goal.priority_level} onChange={onUpdatePriority} />
@@ -81,17 +82,19 @@ export default function GoalCard({ goal, color, linkedTasks, metricHistory, pare
           </div>
         </div>
         <div className="flex items-center gap-1" style={{ flexShrink: 0 }}>
-          <ArcRing value={pct} max={100} size={44} strokeWidth={4} color={color} label={`${pct}%`} fontSize={9} />
-          <button
-            className="btn-icon btn btn-sm"
-            onClick={() => onTogglePrivate(goal)}
-            title={goal.is_private ? 'Private — hidden from accountability partners. Click to share.' : 'Shared with accepted accountability partners. Click to make private.'}
-            style={{ color: goal.is_private ? 'var(--text-3)' : 'var(--career)' }}
-          >
-            {goal.is_private ? <Lock size={12} /> : <Unlock size={12} />}
-          </button>
-          <button className="btn-icon btn btn-sm" onClick={() => onEdit(goal)} title="Edit goal"><Edit2 size={12} /></button>
-          <button className="btn-icon btn btn-sm" onClick={() => onDelete(goal.id)} title="Delete goal"><Trash2 size={12} /></button>
+          <ArcRing value={pct} max={100} size={64} strokeWidth={6} color={color} label={`${pct}%`} fontSize={13} />
+          <div className="flex flex-col items-center gap-1">
+            <button
+              className="btn-icon btn btn-sm"
+              onClick={() => onTogglePrivate(goal)}
+              title={goal.is_private ? 'Private — hidden from accountability partners. Click to share.' : 'Shared with accepted accountability partners. Click to make private.'}
+              style={{ color: goal.is_private ? 'var(--text-3)' : 'var(--career)' }}
+            >
+              {goal.is_private ? <Lock size={12} /> : <Unlock size={12} />}
+            </button>
+            <button className="btn-icon btn btn-sm" onClick={() => onEdit(goal)} title="Edit goal"><Edit2 size={12} /></button>
+            <button className="btn-icon btn btn-sm" onClick={() => onDelete(goal.id)} title="Delete goal"><Trash2 size={12} /></button>
+          </div>
         </div>
       </div>
 
@@ -164,7 +167,13 @@ export default function GoalCard({ goal, color, linkedTasks, metricHistory, pare
           {linkedTasks.length === 0 ? (
             <p style={{ fontSize: 12, color: 'var(--text-3)', fontStyle: 'italic' }}>No tasks linked yet. Link weekly tasks or daily to-dos via the "linked goal" dropdown.</p>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <>
+              <div style={{ display: 'flex', gap: 3, marginBottom: 10 }}>
+                {linkedTasks.map((t, i) => (
+                  <div key={i} style={{ flex: 1, height: 5, borderRadius: 3, background: t.complete ? color : 'var(--bg-3)' }} />
+                ))}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {linkedTasks.map((t, i) => (
                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   {t.complete ? <Check size={12} color="var(--success)" /> : <Circle size={10} color="var(--text-3)" />}
@@ -172,7 +181,8 @@ export default function GoalCard({ goal, color, linkedTasks, metricHistory, pare
                   <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-3)', textTransform: 'uppercase' }}>{t.area}</span>
                 </div>
               ))}
-            </div>
+              </div>
+            </>
           )}
         </div>
       )}
