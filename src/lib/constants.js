@@ -13,6 +13,31 @@ export const AREA_COLORS = {
 // Day labels used by work-hours / overlap pickers (Settings, time-blocking).
 export const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
+// Curated 12-swatch palette offered when picking a colour for a daily-todo category.
+export const TODO_CATEGORY_COLOR_PALETTE = [
+  '#1a4fff', // blue
+  '#c44060', // rose
+  '#c8820a', // amber
+  '#3d8a62', // green
+  '#0a8a5a', // teal-green
+  '#8a3ddb', // purple
+  '#e0607e', // pink
+  '#0aa8c8', // cyan
+  '#d4500a', // orange
+  '#6b6b6b', // grey
+  '#b8902a', // gold
+  '#3d5a99', // navy
+]
+
+// Default daily-todo categories, seeded into todo_categories on first load if a user has none.
+export const DEFAULT_TODO_CATEGORIES = [
+  { name: 'Work',     colour: '#1a4fff' },
+  { name: 'Personal', colour: '#c44060' },
+  { name: 'Errands',  colour: '#c8820a' },
+  { name: 'Creative', colour: '#c8820a' },
+  { name: 'Health',   colour: '#3d8a62' },
+]
+
 export const GOAL_CATEGORIES = ['Career', 'Creative', 'Financial', 'Personal', 'Wellness']
 
 export const CONTENT_PILLARS = [

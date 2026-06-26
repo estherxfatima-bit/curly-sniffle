@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
 import { useTimer } from '../../hooks/useTimer'
 import { format, subDays, addDays, startOfWeek, getDay, parseISO } from 'date-fns'
-import { parseTimeAllocationToMinutes, priorityRank, priorityFilterOptions, PRIORITY_COLORS } from '../../lib/constants'
+import { parseTimeAllocationToMinutes, priorityRank, priorityFilterOptions, PRIORITY_COLORS, DEFAULT_TODO_CATEGORIES, TODO_CATEGORY_COLOR_PALETTE } from '../../lib/constants'
 import PriorityDot from '../shared/PriorityDot'
 import SubtaskList from '../shared/SubtaskList'
 import { deleteCalendarEvent } from '../../lib/googleCalendar'
@@ -14,7 +14,7 @@ import TimerWidget from './TimerWidget'
 import TimeBlockModal from './TimeBlockModal'
 import { Plus, Trash2, ChevronDown, ChevronRight, Check, Target, Hourglass, AlarmClock, Link2, Timer as TimerIcon, CalendarClock, ChevronLeft, Download, Lightbulb, Lock, Unlock } from 'lucide-react'
 
-const DEFAULT_CATS = ['Work', 'Personal', 'Errands', 'Creative', 'Health']
+const DEFAULT_CATS = DEFAULT_TODO_CATEGORIES.map(c => c.name)
 
 const AREA_TO_CATEGORY = {
   Career: 'Work',
@@ -34,14 +34,7 @@ const IDEA_CAT_TO_TODO_CATEGORY = {
   Other: 'Personal',
 }
 
-const CAT_COLOR = {
-  Work: 'var(--career)',
-  Personal: 'var(--personal)',
-  Errands: 'var(--creative)',
-  Creative: 'var(--creative)',
-  Health: 'var(--wellness)',
-}
-function catColor(c) { return CAT_COLOR[c] || 'var(--career)' }
+const FALLBACK_CAT_COLOR = 'var(--career)'
 
 export default function DailyTodos({ compact = false }) {
   const { user, session } = useAuth()
@@ -56,8 +49,10 @@ export default function DailyTodos({ compact = false }) {
   const [categoryFilter, setCategoryFilter] = useState('')
   const [priorityFilter, setPriorityFilter] = useState('')       // '' | urgent | high | medium | low | none
   const [categories, setCategories] = useState(DEFAULT_CATS)
+  const [categoryColors, setCategoryColors] = useState({})
   const [newCatInput, setNewCatInput] = useState('')
   const [showAddCat,  setShowAddCat]  = useState(false)
+  const [colorPickerCat, setColorPickerCat] = useState(null)
   const [goals, setGoals] = useState([])
   const [showWeeklyPicker, setShowWeeklyPicker] = useState(false)
   const [showGoalPicker, setShowGoalPicker] = useState(false)
@@ -80,7 +75,7 @@ export default function DailyTodos({ compact = false }) {
   const viewDayOfWeek = (getDay(parseISO(viewDate)) + 6) % 7 // 0=Mon..6=Sun
 
   useEffect(() => {
-    if (user) { loadGoals(); loadWorkingHours() }
+    if (user) { loadGoals(); loadWorkingHours(); loadCategoryColors() }
   }, [user])
 
   // Carry over yesterday's incomplete tasks (once, only when viewing today), then load todos for viewDate
@@ -99,6 +94,35 @@ export default function DailyTodos({ compact = false }) {
   async function loadGoals() {
     const { data } = await supabase.from('goals').select('id, primary_goal, category, tasks').eq('user_id', user.id)
     setGoals(data || [])
+  }
+
+  async function loadCategoryColors() {
+    const { data } = await supabase.from('todo_categories').select('name, colour').eq('user_id', user.id)
+    if (data?.length) {
+      setCategoryColors(Object.fromEntries(data.map(r => [r.name, r.colour])))
+      return
+    }
+    // First run: no rows yet — seed the default categories so they have a persisted colour.
+    const { data: seeded } = await supabase.from('todo_categories')
+      .insert(DEFAULT_TODO_CATEGORIES.map(c => ({ user_id: user.id, name: c.name, colour: c.colour })))
+      .select('name, colour')
+    if (seeded?.length) setCategoryColors(Object.fromEntries(seeded.map(r => [r.name, r.colour])))
+  }
+
+  // Lazily create a todo_categories row (with a default colour) the first time a category
+  // that isn't tracked yet is touched — covers free-text categories typed before this feature existed.
+  async function ensureCategoryColor(name) {
+    if (!name || categoryColors[name]) return
+    const colour = TODO_CATEGORY_COLOR_PALETTE[Object.keys(categoryColors).length % TODO_CATEGORY_COLOR_PALETTE.length]
+    setCategoryColors(prev => ({ ...prev, [name]: colour }))
+    await supabase.from('todo_categories').upsert({ user_id: user.id, name, colour }, { onConflict: 'user_id,name' })
+  }
+
+  function catColor(c) { return categoryColors[c] || FALLBACK_CAT_COLOR }
+
+  async function setCategoryColor(name, colour) {
+    setCategoryColors(prev => ({ ...prev, [name]: colour }))
+    await supabase.from('todo_categories').upsert({ user_id: user.id, name, colour }, { onConflict: 'user_id,name' })
   }
 
   async function loadWorkingHours() {
@@ -356,12 +380,21 @@ export default function DailyTodos({ compact = false }) {
 
   function addCategory() {
     const c = newCatInput.trim()
-    if (c && !categories.includes(c)) setCategories(prev => [...prev, c])
+    if (c && !categories.includes(c)) {
+      setCategories(prev => [...prev, c])
+      ensureCategoryColor(c)
+    }
     setNewCatInput('')
     setShowAddCat(false)
   }
 
   const allCategories = [...new Set([...categories, ...todos.map(t => t.category).filter(Boolean)])]
+
+  // Backfill: any category in use (typed before this feature existed) that has no colour
+  // row yet gets one lazily assigned from the palette.
+  useEffect(() => {
+    allCategories.forEach(c => { if (!categoryColors[c]) ensureCategoryColor(c) })
+  }, [allCategories.join('|'), Object.keys(categoryColors).length])
 
   const filtered = todos.filter(t => {
     if (statusFilter === 'active' && t.complete) return false
@@ -486,12 +519,29 @@ export default function DailyTodos({ compact = false }) {
             style={!categoryFilter ? { color: '#fff' } : {}}
           >All</button>
           {allCategories.map(c => (
-            <button key={c} onClick={() => setCategoryFilter(categoryFilter === c ? '' : c)}
-              className={`btn btn-xs ${categoryFilter === c ? '' : 'btn-ghost'}`}
-              style={categoryFilter === c ? { background: catColor(c), color: '#fff', border: 'none' } : {}}
-            >
-              {c}
-            </button>
+            <div key={c} style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <button onClick={() => setCategoryFilter(categoryFilter === c ? '' : c)}
+                className={`btn btn-xs ${categoryFilter === c ? '' : 'btn-ghost'}`}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  ...(categoryFilter === c ? { background: catColor(c), color: '#fff', border: 'none' } : {}),
+                }}
+              >
+                <span
+                  onClick={e => { e.stopPropagation(); setColorPickerCat(colorPickerCat === c ? null : c) }}
+                  title="Change category colour"
+                  style={{ width: 8, height: 8, borderRadius: '50%', background: catColor(c), flexShrink: 0, cursor: 'pointer', boxShadow: categoryFilter === c ? '0 0 0 1px #fff' : 'none' }}
+                />
+                {c}
+              </button>
+              {colorPickerCat === c && (
+                <CategoryColorPicker
+                  current={catColor(c)}
+                  onPick={colour => { setCategoryColor(c, colour); setColorPickerCat(null) }}
+                  onClose={() => setColorPickerCat(null)}
+                />
+              )}
+            </div>
           ))}
           {showAddCat ? (
             <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
@@ -538,6 +588,7 @@ export default function DailyTodos({ compact = false }) {
                 key={todo.id}
                 todo={todo}
                 categories={allCategories}
+                catColor={catColor}
                 goals={goals}
                 isTimerRunning={timerCtx?.timer?.todoId === todo.id}
                 onToggle={() => toggle(todo)}
@@ -586,7 +637,32 @@ export default function DailyTodos({ compact = false }) {
   )
 }
 
-function TodoItem({ todo, categories, goals, isTimerRunning, onToggle, onRemove, onPushTomorrow, onUpdateField, onToggleSubtask, onAddSubtask, onEditSubtask, onRemoveSubtask, onReorderSubtasks, onOpenTimer }) {
+function CategoryColorPicker({ current, onPick, onClose }) {
+  return (
+    <>
+      <div style={{ position: 'fixed', inset: 0, zIndex: 95 }} onClick={onClose} />
+      <div className="card" style={{
+        position: 'absolute', top: '100%', left: 0, marginTop: 4, zIndex: 96,
+        padding: 8, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6,
+      }}>
+        {TODO_CATEGORY_COLOR_PALETTE.map(hex => (
+          <button
+            key={hex}
+            onClick={() => onPick(hex)}
+            title={hex}
+            style={{
+              width: 20, height: 20, borderRadius: '50%', background: hex, cursor: 'pointer',
+              border: hex.toLowerCase() === current.toLowerCase() ? '2px solid var(--text)' : '1px solid var(--border)',
+              padding: 0,
+            }}
+          />
+        ))}
+      </div>
+    </>
+  )
+}
+
+function TodoItem({ todo, categories, catColor, goals, isTimerRunning, onToggle, onRemove, onPushTomorrow, onUpdateField, onToggleSubtask, onAddSubtask, onEditSubtask, onRemoveSubtask, onReorderSubtasks, onOpenTimer }) {
   const [expanded,     setExpanded]     = useState(false)
   const [showOptions,  setShowOptions]  = useState(false)
   const [addingSub,    setAddingSub]    = useState(false)
