@@ -13,6 +13,12 @@ const COLOR_OPTIONS = [
   { name: 'Green',  value: '#4ba87a' },
 ]
 
+const TIME_OF_DAY_OPTIONS = [
+  { value: 'am', label: 'AM' },
+  { value: 'anytime', label: 'Anytime' },
+  { value: 'pm', label: 'PM' },
+]
+
 export default function HabitModal({ habit, onClose, onSave }) {
   const isNew = !habit?.id
   const [form, setForm] = useState({
@@ -22,6 +28,7 @@ export default function HabitModal({ habit, onClose, onSave }) {
     frequency_days: habit?.frequency_days || [],
     frequency_count: habit?.frequency_count || 3,
     color: habit?.color || '',
+    time_of_day: habit?.time_of_day || 'anytime',
   })
   const [saving, setSaving] = useState(false)
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
@@ -43,6 +50,7 @@ export default function HabitModal({ habit, onClose, onSave }) {
       frequency_days: form.frequency_type === 'specific_days' ? form.frequency_days : [],
       frequency_count: form.frequency_type === 'times_per_week' ? Number(form.frequency_count) : null,
       color: form.color || null,
+      time_of_day: form.time_of_day,
     })
     setSaving(false)
   }
@@ -98,6 +106,22 @@ export default function HabitModal({ habit, onClose, onSave }) {
             </select>
           </div>
         )}
+
+        <div className="form-group">
+          <label>When</label>
+          <div className="flex items-center gap-2 wrap">
+            {TIME_OF_DAY_OPTIONS.map(o => (
+              <button
+                key={o.value}
+                type="button"
+                className={`btn btn-xs ${form.time_of_day === o.value ? 'btn-accent' : 'btn-ghost'}`}
+                onClick={() => set('time_of_day', o.value)}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </div>
 
         <div className="form-group">
           <label>Colour</label>

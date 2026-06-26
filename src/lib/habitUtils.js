@@ -27,6 +27,23 @@ export function habitColor(habit) {
   return habit.color || 'var(--personal)'
 }
 
+// Group habits into AM / Anytime / PM buckets for display, preserving the
+// original (incoming) order within each bucket. Purely organisational —
+// does not affect logging. Returns only non-empty groups, in display order:
+// Morning, Anytime, Evening.
+export function groupHabitsByTimeOfDay(habits) {
+  const am = habits.filter(h => h.time_of_day === 'am')
+  const pm = habits.filter(h => h.time_of_day === 'pm')
+  const anytime = habits.filter(h => h.time_of_day !== 'am' && h.time_of_day !== 'pm')
+
+  const groups = [
+    { key: 'am', label: 'Morning', habits: am },
+    { key: 'anytime', label: 'Anytime', habits: anytime },
+    { key: 'pm', label: 'Evening', habits: pm },
+  ]
+  return groups.filter(g => g.habits.length > 0)
+}
+
 export function frequencyLabel(habit) {
   if (habit.frequency_type === 'specific_days') {
     return (habit.frequency_days || []).length ? (habit.frequency_days || []).join(' ') : 'Specific days'

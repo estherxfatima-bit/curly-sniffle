@@ -13,6 +13,7 @@ import QuickAddExpense from '../../finance/QuickAddExpense'
 import DailyQuote from '../DailyQuote'
 import BrainDump from '../../shared/BrainDump'
 import NoteForTomorrow from '../NoteForTomorrow'
+import { groupHabitsByTimeOfDay } from '../../../lib/habitUtils'
 
 export const CARD_LABELS = {
   quote: 'Daily quote',
@@ -107,20 +108,27 @@ export default function DailyView({
             No habits. <Link to="/habits" style={{ color: 'var(--personal)' }}>Add some →</Link>
           </p>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-            {habits.map(h => (
-              <div key={h.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div
-                  onClick={e => { e.stopPropagation(); onToggleHabit(h) }}
-                  className={`toggle-dot ${h.done ? 'done' : ''}`}
-                  style={{ borderColor: h.done ? 'var(--success)' : 'var(--personal)', cursor: 'pointer' }}
-                >
-                  {h.done && <Check size={10} color="white" strokeWidth={3} />}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {groupHabitsByTimeOfDay(habits).map(group => (
+              <div key={group.key}>
+                <p className="mono" style={{ fontSize: 10, color: 'var(--text-3)', marginBottom: 6 }}>{group.label}</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+                  {group.habits.map(h => (
+                    <div key={h.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div
+                        onClick={e => { e.stopPropagation(); onToggleHabit(h) }}
+                        className={`toggle-dot ${h.done ? 'done' : ''}`}
+                        style={{ borderColor: h.done ? 'var(--success)' : 'var(--personal)', cursor: 'pointer' }}
+                      >
+                        {h.done && <Check size={10} color="white" strokeWidth={3} />}
+                      </div>
+                      <span style={{ flex: 1, fontSize: 13, color: h.done ? 'var(--text-3)' : 'var(--text)', textDecoration: h.done ? 'line-through' : 'none' }}>
+                        {h.emoji} {h.name}
+                      </span>
+                      {h.done && h.streak >= 3 && <span style={{ fontSize: 12 }}>🔥 {h.streak}</span>}
+                    </div>
+                  ))}
                 </div>
-                <span style={{ flex: 1, fontSize: 13, color: h.done ? 'var(--text-3)' : 'var(--text)', textDecoration: h.done ? 'line-through' : 'none' }}>
-                  {h.emoji} {h.name}
-                </span>
-                {h.done && h.streak >= 3 && <span style={{ fontSize: 12 }}>🔥 {h.streak}</span>}
               </div>
             ))}
           </div>
