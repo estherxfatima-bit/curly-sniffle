@@ -4,6 +4,7 @@
   ],
   "crons": [
     { "path": "/api/sms/morning-briefing", "schedule": "0 8 * * *" },
-    { "path": "/api/cron/daily-reflection", "schedule": "0 22 * * *" }
+    { "path": "/api/cron/daily-reflection", "schedule": "0 22 * * *" },
+    { "path": "/api/cron/cleanup-ai-log", "schedule": "0 3 * * *" }
   ]
 }

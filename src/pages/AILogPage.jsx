@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
-import { format } from 'date-fns'
-import { Pin, X, ChevronDown, ChevronUp, Search } from 'lucide-react'
+import { format, startOfWeek } from 'date-fns'
+import { Pin, X, ChevronDown, ChevronUp, Search, Plus, Check } from 'lucide-react'
+import { parseSuggestedTasks, insertSuggestedTask } from '../lib/suggestedTasks'
+import PriorityDot from '../components/shared/PriorityDot'
 
 const TYPE_LABELS = {
   weekly_plan:      'Weekly Plan',
@@ -44,20 +46,40 @@ export default function AILogPage() {
   const [typeFilter, setTypeFilter] = useState('')
   const [search, setSearch] = useState('')
   const [expanded, setExpanded] = useState({})
+  const [taskPriorities, setTaskPriorities] = useState({})
+  const [addedTasks, setAddedTasks] = useState({})
 
   useEffect(() => { if (user) loadEntries() }, [user])
 
   async function loadEntries() {
     setLoading(true)
+    // Entries auto-clear after ~30 days server-side, so capping the fetch window here
+    // keeps it aligned with retention and avoids pulling the user's entire history.
+    const cutoff = new Date()
+    cutoff.setDate(cutoff.getDate() - 60)
     const { data } = await supabase
       .from('ai_log')
       .select('*')
       .eq('user_id', user.id)
       .eq('dismissed', false)
+      .or(`pinned.eq.true,created_at.gte.${cutoff.toISOString()}`)
       .order('pinned', { ascending: false })
       .order('created_at', { ascending: false })
+      .limit(200)
     setEntries(data || [])
     setLoading(false)
+  }
+
+  async function addEntryTask(entry, task, index) {
+    const key = `${entry.id}:${index}`
+    const priority_level = taskPriorities[key] ?? task.priority_level ?? null
+    const { error } = await insertSuggestedTask(user.id, task, priority_level)
+    if (error) {
+      console.error('addEntryTask failed:', error)
+      alert('Could not add task: ' + error.message)
+      return
+    }
+    setAddedTasks(prev => ({ ...prev, [key]: true }))
   }
 
   async function togglePin(id, current) {
@@ -118,7 +140,8 @@ export default function AILogPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {filtered.map(entry => {
             const isExpanded = !!expanded[entry.id]
-            const preview = entry.response.split('\n').filter(Boolean).slice(0, 2).join(' ')
+            const { text: cleanResponse, tasks } = parseSuggestedTasks(entry.response)
+            const preview = cleanResponse.split('\n').filter(Boolean).slice(0, 2).join(' ')
             return (
               <div key={entry.id} className={`card ${entry.pinned ? 'card-career' : ''} fade-in`} style={{ position: 'relative' }}>
                 <div className="flex items-start justify-between gap-3 mb-2">
@@ -139,18 +162,49 @@ export default function AILogPage() {
 
                 <h3 style={{ fontSize: '1rem', marginBottom: 8 }}>{entry.title}</h3>
 
-                <p style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.7 }}>
-                  {isExpanded ? entry.response : preview}
-                  {!isExpanded && entry.response.length > preview.length && '…'}
+                <p style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+                  {isExpanded ? cleanResponse : preview}
+                  {!isExpanded && cleanResponse.length > preview.length && '…'}
                 </p>
 
-                {entry.response.length > preview.length && (
+                {cleanResponse.length > preview.length && (
                   <button
                     onClick={() => setExpanded(p => ({ ...p, [entry.id]: !p[entry.id] }))}
                     style={{ background: 'transparent', color: 'var(--career)', fontSize: 12, marginTop: 8, display: 'flex', alignItems: 'center', gap: 4 }}
                   >
                     {isExpanded ? <><ChevronUp size={13} /> Show less</> : <><ChevronDown size={13} /> Show full response</>}
                   </button>
+                )}
+
+                {tasks.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 14 }}>
+                    {tasks.map((task, i) => {
+                      const key = `${entry.id}:${i}`
+                      const isAdded = !!addedTasks[key]
+                      return (
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--bg)', borderRadius: 'var(--radius)', padding: '10px 12px', border: '1px solid var(--border)' }}>
+                          <span className={`badge ${task.type === 'weekly' ? 'badge-career' : 'badge-finance'}`} style={{ fontSize: 9, flexShrink: 0 }}>
+                            {task.type === 'weekly' ? 'Weekly' : 'Daily'}
+                          </span>
+                          <span style={{ fontSize: 12, flex: 1, color: 'var(--text)' }}>
+                            {task.type === 'weekly' ? task.specific_task : task.title}
+                          </span>
+                          <PriorityDot
+                            priority={taskPriorities[key] ?? task.priority_level ?? null}
+                            onChange={v => setTaskPriorities(prev => ({ ...prev, [key]: v }))}
+                          />
+                          <button
+                            className={`btn btn-xs ${isAdded ? 'btn-ghost' : 'btn-career'}`}
+                            style={isAdded ? {} : { color: '#fff' }}
+                            onClick={() => addEntryTask(entry, task, i)}
+                            disabled={isAdded}
+                          >
+                            {isAdded ? (<><Check size={12} /> Added</>) : (<><Plus size={12} /> Add to plan</>)}
+                          </button>
+                        </div>
+                      )
+                    })}
+                  </div>
                 )}
               </div>
             )
