@@ -1,27 +1,35 @@
-// Claude API calls — each function is isolated so they can be built/tested one at a time
+// Claude API calls — each function is isolated so they can be built/tested one at a time.
+// All requests go through /api/claude/messages (server-side proxy) so the Claude API
+// key never reaches the browser bundle.
 import { estimateCost } from './aiPricing'
+import { supabase } from './supabase'
 
-const CLAUDE_API_KEY = import.meta.env.VITE_CLAUDE_API_KEY
 const MODEL = 'claude-opus-4-8'
 
-async function callClaude(prompt, systemPrompt, maxTokens = 1024) {
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
+async function callClaudeProxy(body) {
+  const { data: { session } } = await supabase.auth.getSession()
+  const res = await fetch('/api/claude/messages', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-api-key': CLAUDE_API_KEY,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
+      Authorization: `Bearer ${session?.access_token || ''}`,
     },
-    body: JSON.stringify({
-      model: MODEL,
-      max_tokens: maxTokens,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: prompt }],
-    }),
+    body: JSON.stringify(body),
   })
-  if (!res.ok) throw new Error(`Claude API error: ${res.status}`)
-  const data = await res.json()
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.error || `Claude API error: ${res.status}`)
+  }
+  return res.json()
+}
+
+async function callClaude(prompt, systemPrompt, maxTokens = 1024) {
+  const data = await callClaudeProxy({
+    model: MODEL,
+    max_tokens: maxTokens,
+    system: systemPrompt,
+    messages: [{ role: 'user', content: prompt }],
+  })
   return { text: data.content[0].text, usage: data.usage || {} }
 }
 
@@ -226,37 +234,26 @@ Return JSON:
 export async function extractEventFromImage(base64Image, mimeType = 'image/jpeg') {
   const system = `You extract event details from screenshots or images of invites, posts, or announcements. Be precise. If a field is unclear, return null for it. Respond in valid JSON only.`
 
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': CLAUDE_API_KEY,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    body: JSON.stringify({
-      model: 'claude-opus-4-8',
-      max_tokens: 512,
-      system,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'image',
-              source: { type: 'base64', media_type: mimeType, data: base64Image },
-            },
-            {
-              type: 'text',
-              text: 'Extract the event details from this image. Return JSON: { "summary": "event name", "date": "YYYY-MM-DD or null", "startTime": "HH:MM or null", "endTime": "HH:MM or null", "location": "location string or null", "notes": "any other relevant info or null" }',
-            },
-          ],
-        },
-      ],
-    }),
+  const data = await callClaudeProxy({
+    model: 'claude-opus-4-8',
+    max_tokens: 512,
+    system,
+    messages: [
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'image',
+            source: { type: 'base64', media_type: mimeType, data: base64Image },
+          },
+          {
+            type: 'text',
+            text: 'Extract the event details from this image. Return JSON: { "summary": "event name", "date": "YYYY-MM-DD or null", "startTime": "HH:MM or null", "endTime": "HH:MM or null", "location": "location string or null", "notes": "any other relevant info or null" }',
+          },
+        ],
+      },
+    ],
   })
-  if (!res.ok) throw new Error(`Claude API error: ${res.status}`)
-  const data = await res.json()
   const text = data.content[0].text
   const jsonMatch = text.match(/\{[\s\S]*\}/)
   if (!jsonMatch) throw new Error('No JSON in Claude response')

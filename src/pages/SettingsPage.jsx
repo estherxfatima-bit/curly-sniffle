@@ -30,6 +30,7 @@ export default function SettingsPage() {
   const [pushSupported, setPushSupported] = useState(true)
   const [googleStatus, setGoogleStatus] = useState({ loading: true, connected: false, email: null })
   const [smsStatus, setSmsStatus] = useState({ loading: true, configured: false, smsNumber: null, examples: [] })
+  const [claudeStatus, setClaudeStatus] = useState({ loading: true, configured: false })
   const [workingHours, setWorkingHours] = useState({ start: '09:00', end: '19:00' })
   const [workingHoursLoading, setWorkingHoursLoading] = useState(true)
   const [workingHoursSaved, setWorkingHoursSaved] = useState(false)
@@ -80,6 +81,7 @@ export default function SettingsPage() {
     if (!user) return
     loadGoogleStatus()
     loadSmsStatus()
+    loadClaudeStatus()
     loadWorkingHours()
     loadPersonalContext()
     loadDisplayName()
@@ -256,6 +258,19 @@ export default function SettingsPage() {
       setSmsStatus({ loading: false, ...data })
     } catch {
       setSmsStatus({ loading: false, configured: false, smsNumber: null, examples: [] })
+    }
+  }
+
+  async function loadClaudeStatus() {
+    try {
+      const res = await fetch('/api/claude/status', {
+        headers: { Authorization: `Bearer ${session?.access_token || ''}` },
+      })
+      if (!res.ok) throw new Error('Request failed')
+      const data = await res.json()
+      setClaudeStatus({ loading: false, ...data })
+    } catch {
+      setClaudeStatus({ loading: false, configured: false })
     }
   }
 
@@ -678,8 +693,8 @@ export default function SettingsPage() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div className="flex items-center justify-between">
             <p style={{ fontSize: 13 }}>Claude API key</p>
-            <span className={`badge ${import.meta.env.VITE_CLAUDE_API_KEY ? 'badge-finance' : 'badge-muted'}`}>
-              {import.meta.env.VITE_CLAUDE_API_KEY ? 'Configured' : 'Not set'}
+            <span className={`badge ${claudeStatus.configured ? 'badge-finance' : 'badge-muted'}`}>
+              {claudeStatus.loading ? '…' : claudeStatus.configured ? 'Configured' : 'Not set'}
             </span>
           </div>
           <div className="flex items-center justify-between">

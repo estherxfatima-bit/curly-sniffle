@@ -1,18 +1,18 @@
 // All AI calls must save to ai_log BEFORE returning, never display without saving.
+// Requests go through /api/claude/messages (server-side proxy) so the Claude API
+// key never reaches the browser bundle.
 import { supabase } from './supabase'
 import { estimateCost } from './aiPricing'
 
-const CLAUDE_API_KEY = import.meta.env.VITE_CLAUDE_API_KEY
 const MODEL = 'claude-opus-4-8'
 
 async function callClaude(prompt, systemPrompt, maxTokens = 1024) {
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
+  const { data: { session } } = await supabase.auth.getSession()
+  const res = await fetch('/api/claude/messages', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-api-key': CLAUDE_API_KEY,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
+      Authorization: `Bearer ${session?.access_token || ''}`,
     },
     body: JSON.stringify({
       model: MODEL,
@@ -21,7 +21,10 @@ async function callClaude(prompt, systemPrompt, maxTokens = 1024) {
       messages: [{ role: 'user', content: prompt }],
     }),
   })
-  if (!res.ok) throw new Error(`Claude API error: ${res.status}`)
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.error || `Claude API error: ${res.status}`)
+  }
   const data = await res.json()
   return { text: data.content[0].text, usage: data.usage || {} }
 }

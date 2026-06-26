@@ -15,6 +15,16 @@ The React Compiler is not enabled on this template because of its impact on dev 
 
 If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
 
+## Claude AI integration
+
+All Claude API calls (AI planning, content idea generation, weekly review summaries, SMS Q&A, calendar event extraction from images, etc.) go through server-side endpoints under `/api/claude/*`. The frontend never calls `api.anthropic.com` directly and never bundles an API key.
+
+Set `CLAUDE_API_KEY` (no `VITE_` prefix) in your `.env` (local) and in your Vercel project's environment variables — get a key from the [Anthropic console](https://console.anthropic.com/). Because it has no `VITE_` prefix, Vite will not inline it into the browser bundle; it's only readable from `/api` serverless functions.
+
+The Settings page shows whether the key is configured by calling `/api/claude/status`, which only returns a boolean — it never exposes the key.
+
+> If you're upgrading from an older version of this app that used `VITE_CLAUDE_API_KEY`, remove it from your environment and replace it with `CLAUDE_API_KEY`.
+
 ## Google Calendar integration
 
 Connecting Google Calendar lets the app show your events on the daily/weekly dashboards and the weekly plan page.
