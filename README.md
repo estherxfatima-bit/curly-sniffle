@@ -90,7 +90,10 @@ Run `supabase/phase19_schema.sql` in the Supabase SQL editor to add the required
 ## Twilio SMS integration
 
 Lets you text the app — get a daily morning briefing, log expenses, manage
-to-dos, and ask the AI planning assistant questions, all over SMS.
+to-dos, and ask the AI planning assistant questions, all over SMS. Multiple
+users can text the same Twilio number — each user adds their own mobile
+number in **Settings → Account**, and the app looks up which account an
+incoming message belongs to.
 
 ### 1. Twilio account setup
 
@@ -98,7 +101,7 @@ to-dos, and ask the AI planning assistant questions, all over SMS.
 2. Go to **Account → API keys & tokens** and create a new **Standard API key**. Note the **SID** (starts with `SK`) and **Secret** — this is your `TWILIO_API_KEY` / `TWILIO_API_SECRET` pair.
 3. Your **Account SID** (starts with `AC`) is on the main Console dashboard — this is `TWILIO_ACCOUNT_SID`.
 4. Your Twilio number (E.164 format, e.g. `+15551234567`) is `TWILIO_PHONE_NUMBER`.
-5. `MY_PHONE_NUMBER` is your personal phone number (E.164 format) — the only number the webhook will accept messages from.
+5. Each user adds their own personal phone number (E.164 format) in **Settings → Account** — that's the number the webhook will accept their messages from, and where their morning briefing is sent if they enable it. Run `supabase/phase52_schema.sql` to add the required `phone_number`/`sms_enabled` columns to `profiles`.
 
 ### 2. Configure the webhook in the Twilio console
 
@@ -118,18 +121,17 @@ Add the following to your `.env` (local) and to your Vercel project's environmen
 | `TWILIO_API_KEY` | Twilio API Key SID (starts with `SK`) |
 | `TWILIO_API_SECRET` | Twilio API Key secret |
 | `TWILIO_PHONE_NUMBER` | Your Twilio number, E.164 format (e.g. `+15551234567`) |
-| `MY_PHONE_NUMBER` | Your personal phone number, E.164 format — only messages from this number are processed |
 | `CRON_SECRET` | (optional) Random string; if set, the morning-briefing cron endpoint requires it as a Bearer token (Vercel sends this automatically for cron-triggered requests) |
 
 All of these are server-side only (no `VITE_` prefix) — used only by the serverless functions under `/api/sms`.
 
 ### 4. Morning briefing cron
 
-`vercel.json` schedules `/api/sms/morning-briefing` to run daily at **08:00 UTC** via Vercel Cron. Adjust the `schedule` cron expression if you want a different time/timezone. Cron jobs only run on Vercel's production deployments (Pro plan or above for non-daily schedules; the Hobby plan supports once-daily crons).
+`vercel.json` schedules `/api/sms/morning-briefing` to run daily at **08:00 UTC** via Vercel Cron. Adjust the `schedule` cron expression if you want a different time/timezone. Cron jobs only run on Vercel's production deployments (Pro plan or above for non-daily schedules; the Hobby plan supports once-daily crons). Each run sends every user with a phone number on file and **Enable SMS briefing** turned on (Settings → Account) their own personalised briefing.
 
 ### 5. Texting the app
 
-Once configured, text your Twilio number (`TWILIO_PHONE_NUMBER`) from `MY_PHONE_NUMBER`:
+Once configured, text your Twilio number (`TWILIO_PHONE_NUMBER`) from the mobile number you saved in **Settings → Account**:
 
 - **Log an expense**: `spent £12 on lunch` or `£45 groceries` → adds to Finance, replies with the category and what's left in your monthly budget.
 - **Complete to-dos**: `done 1 2` or `done all` — numbers refer to today's to-do list as sent in the morning briefing.

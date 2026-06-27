@@ -44,8 +44,11 @@ export default async function handler(req, res) {
         url: deepLink,
       })
     }
-    if ((p.reflection_method === 'sms' || p.reflection_method === 'both') && isTwilioConfigured() && process.env.MY_PHONE_NUMBER) {
-      await sendSms(process.env.MY_PHONE_NUMBER, `${REFLECTION_MESSAGE} ${deepLink}`)
+    if ((p.reflection_method === 'sms' || p.reflection_method === 'both') && isTwilioConfigured()) {
+      const { data: profile } = await supabaseAdmin.from('profiles').select('phone_number').eq('id', p.user_id).maybeSingle()
+      if (profile?.phone_number) {
+        await sendSms(profile.phone_number, `${REFLECTION_MESSAGE} ${deepLink}`)
+      }
     }
     await supabaseAdmin.from('user_preferences').update({ reflection_last_sent: today }).eq('user_id', p.user_id)
     sentCount++

@@ -51,6 +51,12 @@ export default function SettingsPage() {
   const [displayNameSaving, setDisplayNameSaving] = useState(false)
   const [displayNameMsg, setDisplayNameMsg] = useState(null)
 
+  // Account: mobile number + SMS briefing opt-in
+  const [phoneNumber, setPhoneNumber] = useState('')
+  const [smsEnabled, setSmsEnabled] = useState(false)
+  const [phoneSaving, setPhoneSaving] = useState(false)
+  const [phoneMsg, setPhoneMsg] = useState(null)
+
   // Account: change email
   const [newEmail, setNewEmail] = useState('')
   const [emailPassword, setEmailPassword] = useState('')
@@ -85,6 +91,7 @@ export default function SettingsPage() {
     loadWorkingHours()
     loadPersonalContext()
     loadDisplayName()
+    loadPhoneNumber()
     loadSharingSettings()
     const params = new URLSearchParams(window.location.search)
     if (params.get('google') === 'error') alert('Failed to connect Google Calendar. Please try again.')
@@ -93,6 +100,34 @@ export default function SettingsPage() {
   async function loadDisplayName() {
     const { data } = await supabase.from('profiles').select('display_name').eq('id', user.id).maybeSingle()
     setDisplayName(data?.display_name || user?.user_metadata?.full_name || '')
+  }
+
+  async function loadPhoneNumber() {
+    const { data } = await supabase.from('profiles').select('phone_number, sms_enabled').eq('id', user.id).maybeSingle()
+    setPhoneNumber(data?.phone_number || '')
+    setSmsEnabled(!!data?.sms_enabled)
+  }
+
+  async function savePhoneNumber() {
+    const number = phoneNumber.trim()
+    setPhoneSaving(true)
+    setPhoneMsg(null)
+    const { error } = await supabase.from('profiles').upsert(
+      { id: user.id, email: user.email, phone_number: number || null, sms_enabled: number ? smsEnabled : false },
+      { onConflict: 'id' }
+    )
+    setPhoneSaving(false)
+    if (!number) setSmsEnabled(false)
+    setPhoneMsg(error ? { type: 'error', text: error.message } : { type: 'success', text: 'Saved' })
+  }
+
+  async function toggleSmsEnabled() {
+    const next = !smsEnabled
+    setSmsEnabled(next)
+    await supabase.from('profiles').upsert(
+      { id: user.id, email: user.email, phone_number: phoneNumber.trim() || null, sms_enabled: next },
+      { onConflict: 'id' }
+    )
   }
 
   async function loadSharingSettings() {
@@ -668,7 +703,7 @@ export default function SettingsPage() {
                 <p style={{ fontSize: 12, color: 'var(--text-3)' }}>
                   {smsStatus.configured
                     ? `Text ${smsStatus.smsNumber} to log expenses, manage to-dos, or ask the AI assistant anything.`
-                    : 'Set the TWILIO_* and MY_PHONE_NUMBER environment variables to enable two-way SMS.'}
+                    : 'Twilio is not configured on this deployment yet — set the TWILIO_* environment variables to enable two-way SMS.'}
                 </p>
               </div>
               <MessageSquare size={18} color={smsStatus.configured ? 'var(--finance)' : 'var(--text-3)'} />
@@ -791,6 +826,47 @@ export default function SettingsPage() {
               <span style={{ fontSize: 11, color: displayNameMsg.type === 'error' ? 'var(--danger)' : 'var(--success)' }}>{displayNameMsg.text}</span>
             )}
           </div>
+        </div>
+
+        <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '18px 0' }} />
+
+        {/* Mobile number + SMS briefing */}
+        <div className="form-group">
+          <label>Mobile number</label>
+          <p style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 6 }}>
+            Used for SMS briefings and reminders.
+          </p>
+          <div className="flex items-center gap-2 wrap mb-2">
+            <input
+              type="tel"
+              value={phoneNumber}
+              onChange={e => setPhoneNumber(e.target.value)}
+              placeholder="+447123456789"
+              style={{ fontSize: 13, maxWidth: 200 }}
+            />
+            <button className="btn btn-career btn-sm" style={{ color: '#fff' }} onClick={savePhoneNumber} disabled={phoneSaving}>
+              {phoneSaving ? 'Saving…' : 'Save'}
+            </button>
+            {phoneMsg && (
+              <span style={{ fontSize: 11, color: phoneMsg.type === 'error' ? 'var(--danger)' : 'var(--success)' }}>{phoneMsg.text}</span>
+            )}
+          </div>
+          {phoneNumber.trim() && (
+            <div className="flex items-center justify-between" style={{ paddingTop: 4 }}>
+              <div>
+                <p style={{ fontSize: 13, fontWeight: 500 }}>Enable SMS briefing</p>
+                <p style={{ fontSize: 11, color: 'var(--text-3)' }}>Get your daily morning briefing texted to this number.</p>
+              </div>
+              <button
+                className={`btn ${smsEnabled ? 'btn-accent' : 'btn-ghost'} flex items-center gap-2`}
+                onClick={toggleSmsEnabled}
+                style={smsEnabled ? { color: '#fff' } : {}}
+              >
+                {smsEnabled ? <Check size={14} /> : null}
+                {smsEnabled ? 'On' : 'Off'}
+              </button>
+            </div>
+          )}
         </div>
 
         <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '18px 0' }} />

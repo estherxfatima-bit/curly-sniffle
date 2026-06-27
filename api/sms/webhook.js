@@ -1,7 +1,7 @@
 // /api/sms/webhook — Twilio incoming SMS webhook
 // Configure this URL in the Twilio console as the "A message comes in" webhook
 // for your Twilio phone number (HTTP POST).
-import { supabaseAdmin, getPrimaryUserId } from '../_lib/db.js'
+import { supabaseAdmin, getUserIdByPhone } from '../_lib/db.js'
 import { escapeXml } from '../_lib/twilio.js'
 import { routeMessage } from '../_lib/smsRouter.js'
 import { answerSmsQuestion } from '../_lib/aiQuestion.js'
@@ -13,14 +13,14 @@ export default async function handler(req, res) {
 
   const { From, Body } = req.body || {}
 
-  // Only ever process messages from the configured personal number.
-  if (!From || From !== process.env.MY_PHONE_NUMBER) {
+  // Only process messages from a number that matches a known user's profile.
+  const userId = From ? await getUserIdByPhone(From) : null
+  if (!userId) {
     res.setHeader('Content-Type', 'text/xml')
     return res.status(200).send('<Response></Response>')
   }
 
   const text = (Body || '').trim()
-  const userId = await getPrimaryUserId()
 
   let reply
   try {

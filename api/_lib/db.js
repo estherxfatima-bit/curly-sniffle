@@ -1,5 +1,4 @@
 // Shared Supabase service-role client for /api/sms routes.
-// This is a single-user app — getPrimaryUserId() returns the one account on file.
 import { createClient } from '@supabase/supabase-js'
 
 export const supabaseAdmin = createClient(
@@ -7,14 +6,26 @@ export const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 )
 
-let cachedUserId = null
-
-export async function getPrimaryUserId() {
-  if (cachedUserId) return cachedUserId
-  const { data, error } = await supabaseAdmin.auth.admin.listUsers()
+// Looks up which user a given E.164 phone number belongs to, for the
+// inbound SMS webhook. Returns null if no profile has this number on file.
+export async function getUserIdByPhone(phone) {
+  if (!phone) return null
+  const { data, error } = await supabaseAdmin
+    .from('profiles')
+    .select('id')
+    .eq('phone_number', phone)
+    .maybeSingle()
   if (error) throw error
-  const userId = data?.users?.[0]?.id
-  if (!userId) throw new Error('No user account found')
-  cachedUserId = userId
-  return userId
+  return data?.id || null
+}
+
+// Returns every profile with an SMS-eligible phone number on file, for the
+// morning-briefing cron. `requireSmsEnabled` filters to users who've opted
+// into the automated briefing (vs. just two-way texting).
+export async function getUsersWithPhoneNumber({ requireSmsEnabled = false } = {}) {
+  let query = supabaseAdmin.from('profiles').select('id, phone_number').not('phone_number', 'is', null)
+  if (requireSmsEnabled) query = query.eq('sms_enabled', true)
+  const { data, error } = await query
+  if (error) throw error
+  return data || []
 }

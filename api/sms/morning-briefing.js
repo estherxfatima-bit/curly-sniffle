@@ -1,6 +1,7 @@
 // /api/sms/morning-briefing — triggered daily at 8am by Vercel Cron (see vercel.json).
-// Sends today's to-dos, habit streaks, momentum, and weekly focus via SMS.
-import { supabaseAdmin, getPrimaryUserId } from '../_lib/db.js'
+// Sends every opted-in user their own personalised to-dos, habit streaks,
+// momentum, and weekly focus via SMS.
+import { supabaseAdmin, getUsersWithPhoneNumber } from '../_lib/db.js'
 import { sendSms, isTwilioConfigured } from '../_lib/twilio.js'
 import { buildMorningBriefing } from '../_lib/morningBriefing.js'
 
@@ -22,17 +23,24 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Twilio is not configured' })
   }
 
-  const userId = await getPrimaryUserId()
-  const briefing = await buildMorningBriefing(userId)
+  const users = await getUsersWithPhoneNumber({ requireSmsEnabled: true })
 
-  await sendSms(process.env.MY_PHONE_NUMBER, briefing)
+  let sentCount = 0
+  for (const u of users) {
+    try {
+      const briefing = await buildMorningBriefing(u.id)
+      await sendSms(u.phone_number, briefing)
+      await supabaseAdmin.from('ai_log').insert({
+        user_id: u.id,
+        type: 'sms',
+        title: 'Morning briefing',
+        response: briefing,
+      })
+      sentCount++
+    } catch (e) {
+      console.error(`Morning briefing failed for user ${u.id}:`, e.message)
+    }
+  }
 
-  await supabaseAdmin.from('ai_log').insert({
-    user_id: userId,
-    type: 'sms',
-    title: 'Morning briefing',
-    response: briefing,
-  })
-
-  return res.status(200).json({ sent: true })
+  return res.status(200).json({ sent: sentCount, checked: users.length })
 }
