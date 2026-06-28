@@ -278,7 +278,8 @@ export default function FinancePage() {
       interest_rate: newDebt.interest_rate ? parseFloat(newDebt.interest_rate) : null,
       minimum_payment: newDebt.minimum_payment ? parseFloat(newDebt.minimum_payment) : null,
     }
-    const { data } = await supabase.from('debts').insert(payload).select().single()
+    const { data, error } = await supabase.from('debts').insert(payload).select().single()
+    if (error) { alert(`Couldn't add debt: ${error.message}`); return }
     setDebts(prev => [...prev, data])
     setNewDebt({ name: '', category: 'Other', current_balance: '', original_balance: '', interest_rate: '', minimum_payment: '' })
   }
@@ -298,7 +299,8 @@ export default function FinancePage() {
       target_amount: newSavingsAccount.target_amount ? parseFloat(newSavingsAccount.target_amount) : null,
       target_date: newSavingsAccount.target_date || null,
     }
-    const { data } = await supabase.from('savings_accounts').insert(payload).select().single()
+    const { data, error } = await supabase.from('savings_accounts').insert(payload).select().single()
+    if (error) { alert(`Couldn't add savings account: ${error.message}`); return }
     setSavingsAccounts(prev => [...prev, data])
     setNewSavingsAccount({ name: '', current_balance: '', target_amount: '', target_date: '' })
   }
@@ -314,7 +316,8 @@ export default function FinancePage() {
       user_id: user.id, name: newInvestment.name, type: newInvestment.type,
       current_value: startVal, starting_value: startVal,
     }
-    const { data } = await supabase.from('investments').insert(payload).select().single()
+    const { data, error } = await supabase.from('investments').insert(payload).select().single()
+    if (error) { alert(`Couldn't add investment: ${error.message}`); return }
     setInvestments(prev => [...prev, data])
     setNewInvestment({ name: '', type: 'Other', current_value: '' })
   }
