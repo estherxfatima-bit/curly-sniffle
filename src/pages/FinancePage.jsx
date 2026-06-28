@@ -4,7 +4,7 @@ import { format, subWeeks, subDays, subMonths, endOfWeek, getDaysInMonth } from 
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
-import { generateFinanceSummary } from '../lib/aiLog'
+import { generateFinanceSummary, generateDebtAllocationRecommendation } from '../lib/aiLog'
 import ArcRing from '../components/ui/ArcRing'
 import BudgetRing from '../components/finance/BudgetRing'
 import QuickAddFab from '../components/finance/QuickAddFab'
@@ -101,6 +101,9 @@ export default function FinancePage() {
   const [allocateDebtId, setAllocateDebtId]           = useState('')
   const [allocateDebtAmount, setAllocateDebtAmount]   = useState('')
   const [allocateDebtNote, setAllocateDebtNote]       = useState('')
+  const [allocateDebtBudgetType, setAllocateDebtBudgetType] = useState('none')
+  const [debtRecommendation, setDebtRecommendation]   = useState('')
+  const [debtRecLoading, setDebtRecLoading]           = useState(false)
   const [allocateSuggestions, setAllocateSuggestions] = useState([])
   const [showAllocateSuggest, setShowAllocateSuggest] = useState(false)
 
@@ -523,8 +526,51 @@ export default function FinancePage() {
   // ── Allocate to debt ──────────────────────────────────────────
   async function confirmDebtAllocation() {
     if (!allocateDebtId || !allocateDebtAmount) return
-    await logRepayment(allocateDebtId, parseFloat(allocateDebtAmount), new Date().toISOString().slice(0, 10), allocateDebtNote || null)
-    setShowAllocateDebt(false); setAllocateDebtId(''); setAllocateDebtAmount(''); setAllocateDebtNote('')
+    const amt = parseFloat(allocateDebtAmount)
+    const today = new Date().toISOString().slice(0, 10)
+    await logRepayment(allocateDebtId, amt, today, allocateDebtNote || null)
+    await tagDebtPaymentAsBudgetExpense(allocateDebtId, amt, today)
+    setShowAllocateDebt(false); setAllocateDebtId(''); setAllocateDebtAmount(''); setAllocateDebtNote(''); setAllocateDebtBudgetType('none')
+  }
+
+  // Tag a debt repayment as a fixed or variable budget expense, so it shows up against the monthly budget.
+  async function tagDebtPaymentAsBudgetExpense(debtId, amount, date) {
+    if (allocateDebtBudgetType === 'none') return
+    const debtName = debts.find(d => d.id === debtId)?.name || 'Debt'
+    if (allocateDebtBudgetType === 'fixed') {
+      const { data } = await supabase.from('fixed_expenses').insert({
+        user_id: user.id, name: `${debtName} repayment`, amount, category: 'Other',
+      }).select().single()
+      if (data) setFixed(prev => [...prev, data])
+    } else if (allocateDebtBudgetType === 'variable') {
+      const { data } = await supabase.from('variable_expenses').insert({
+        user_id: user.id, name: `${debtName} repayment`, amount, category: 'Other', date,
+      }).select().single()
+      if (data) setVariable(prev => [data, ...prev])
+    }
+  }
+
+  async function runDebtRecommendation() {
+    setDebtRecLoading(true)
+    try {
+      const byMonth = {}
+      variable.forEach(v => {
+        const key = v.date.slice(0, 7)
+        byMonth[key] = (byMonth[key] || 0) + v.amount
+      })
+      const recentMonths = Object.entries(byMonth)
+        .sort((a, b) => b[0].localeCompare(a[0]))
+        .slice(1, 4) // exclude current month, take up to 3 prior
+        .map(([key, total]) => ({ label: format(new Date(`${key}-01`), 'MMM yyyy'), total }))
+      const rec = await generateDebtAllocationRecommendation(user.id, {
+        debts, takeHome, totalIncome, totalFixed, totalVariable, recentMonths,
+      })
+      setDebtRecommendation(rec)
+    } catch (e) {
+      setDebtRecommendation('Recommendation unavailable — Claude API key not configured.')
+    } finally {
+      setDebtRecLoading(false)
+    }
   }
   function suggestAllocations() {
     const disposable = periodTakeHome
@@ -1316,10 +1362,26 @@ export default function FinancePage() {
                     <p style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 4 }}>Note (optional)</p>
                     <input placeholder="Note" value={allocateDebtNote} onChange={e => setAllocateDebtNote(e.target.value)} style={{ fontSize: 12, width: 140 }} />
                   </div>
+                  <div>
+                    <p style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 4 }}>Track against budget</p>
+                    <select value={allocateDebtBudgetType} onChange={e => setAllocateDebtBudgetType(e.target.value)} style={{ fontSize: 12 }}>
+                      <option value="none">Don't track</option>
+                      <option value="fixed">As fixed expense</option>
+                      <option value="variable">As variable expense</option>
+                    </select>
+                  </div>
                   <button className="btn btn-sm btn-finance" style={{ color: '#fff' }} onClick={confirmDebtAllocation}>Log repayment</button>
                   <button className="btn btn-sm btn-ghost" onClick={() => { setShowAllocateDebt(false); setShowAllocateSuggest(false) }}>Cancel</button>
                   <button className="btn btn-sm btn-ghost" style={{ marginLeft: 'auto' }} onClick={suggestAllocations}>Auto-suggest split</button>
+                  <button className="btn btn-sm btn-ghost" onClick={runDebtRecommendation} disabled={debtRecLoading}>
+                    {debtRecLoading ? 'Thinking…' : 'Ask Claude how much'}
+                  </button>
                 </div>
+              )}
+              {debtRecommendation && showAllocateDebt && (
+                <p style={{ marginTop: 10, fontSize: 12, lineHeight: 1.6, color: 'var(--text-2)', padding: 10, background: 'var(--bg-2)', borderRadius: 8 }}>
+                  {debtRecommendation}
+                </p>
               )}
               {showAllocateSuggest && (
                 <div style={{ marginTop: 8, padding: 14, background: 'var(--bg-2)', borderRadius: 8 }}>

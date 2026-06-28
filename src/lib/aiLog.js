@@ -180,3 +180,34 @@ Give a direct financial observation in 2-3 sentences.`
   return response
 }
 
+// How much can reasonably go toward debt this month — saves to ai_log
+export async function generateDebtAllocationRecommendation(userId, { debts, takeHome, totalIncome, totalFixed, totalVariable, recentMonths }) {
+  const system = `You are a direct financial advisor. Recommend a specific, reasonable amount the user could put toward debt this month, given their actual disposable income and debts. Prioritise higher-interest debts. Be concrete — give a number and a short reason. Do not recommend an amount that would leave them with no buffer. Max 3 sentences.`
+
+  const debtLines = debts.map(d => `  - ${d.name}: £${d.current_balance.toFixed(0)} balance, ${d.interest_rate ?? '?'}% interest, min payment £${d.minimum_payment ?? '?'}`).join('\n')
+  const monthLines = (recentMonths || []).map(m => `  - ${m.label}: spent £${m.total.toFixed(0)}`).join('\n')
+
+  const prompt = `This month's finances:
+INCOME: £${totalIncome.toFixed(0)}/mo
+FIXED EXPENSES: £${totalFixed.toFixed(0)}/mo
+VARIABLE SPEND so far this month: £${totalVariable.toFixed(0)}
+TAKE-HOME / DISPOSABLE after fixed costs and savings: £${takeHome.toFixed(0)}
+
+DEBTS:
+${debtLines || '  None'}
+
+RECENT MONTHS' VARIABLE SPEND (for context on how reliable this month's disposable income is):
+${monthLines || '  No history yet'}
+
+How much can they reasonably allocate to debt this month, and toward which debt(s) first?`
+
+  const { text: response, usage } = await callClaude(prompt, system, 400)
+  const title = `Debt allocation recommendation — ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`
+  await saveAndReturn(userId, 'debt_recommendation', title, response, {
+    inputTokens: usage.input_tokens,
+    outputTokens: usage.output_tokens,
+    estimatedCost: estimateCost(MODEL, usage.input_tokens, usage.output_tokens),
+  })
+  return response
+}
+
