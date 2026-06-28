@@ -117,10 +117,12 @@ export default function HabitsPage() {
   async function toggleLog(habit, dateStr) {
     const isDone = logsByHabit[habit.id]?.has(dateStr)
     if (isDone) {
-      await supabase.from('habit_logs').delete().eq('user_id', user.id).eq('habit_id', habit.id).eq('log_date', dateStr)
+      const { error } = await supabase.from('habit_logs').delete().eq('user_id', user.id).eq('habit_id', habit.id).eq('log_date', dateStr)
+      if (error) { alert(`Couldn't update habit: ${error.message}`); return }
       setLogsByHabit(prev => { const next = new Set(prev[habit.id]); next.delete(dateStr); return { ...prev, [habit.id]: next } })
     } else {
-      await supabase.from('habit_logs').insert({ user_id: user.id, habit_id: habit.id, log_date: dateStr })
+      const { error } = await supabase.from('habit_logs').insert({ user_id: user.id, habit_id: habit.id, log_date: dateStr })
+      if (error) { alert(`Couldn't update habit: ${error.message}`); return }
       setLogsByHabit(prev => { const next = new Set(prev[habit.id]); next.add(dateStr); return { ...prev, [habit.id]: next } })
     }
   }
