@@ -246,14 +246,16 @@ export default function DashboardPage() {
   }, [momentum, loading])
 
   // ── actions ────────────────────────────────────────────────────────────────
-  function toggleHabit(habit) {
+  async function toggleHabit(habit) {
     const isDone = todaySet.has(habit.id)
     if (isDone) {
-      supabase.from('habit_logs').delete().eq('user_id', user.id).eq('habit_id', habit.id).eq('log_date', today)
+      const { error } = await supabase.from('habit_logs').delete().eq('user_id', user.id).eq('habit_id', habit.id).eq('log_date', today)
+      if (error) { alert(`Couldn't update habit: ${error.message}`); return }
       setHabitLogs(prev => prev.filter(l => !(l.habit_id === habit.id && l.log_date === today)))
       setAllHabitLogs(prev => prev.filter(l => !(l.habit_id === habit.id && l.log_date === today)))
     } else {
-      supabase.from('habit_logs').insert({ user_id: user.id, habit_id: habit.id, log_date: today })
+      const { error } = await supabase.from('habit_logs').insert({ user_id: user.id, habit_id: habit.id, log_date: today })
+      if (error) { alert(`Couldn't update habit: ${error.message}`); return }
       setHabitLogs(prev => [...prev, { habit_id: habit.id, log_date: today }])
       setAllHabitLogs(prev => [...prev, { habit_id: habit.id, log_date: today }])
     }
