@@ -1,5 +1,5 @@
 // Claude API calls — each function is isolated so they can be built/tested one at a time.
-// All requests go through /api/claude/messages (server-side proxy) so the Claude API
+// All requests go through /api/claude (server-side proxy) so the Claude API
 // key never reaches the browser bundle.
 import { estimateCost } from './aiPricing'
 import { supabase } from './supabase'
@@ -8,7 +8,7 @@ const MODEL = 'claude-opus-4-8'
 
 async function callClaudeProxy(body) {
   const { data: { session } } = await supabase.auth.getSession()
-  const res = await fetch('/api/claude/messages', {
+  const res = await fetch('/api/claude', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

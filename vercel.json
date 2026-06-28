@@ -3,10 +3,10 @@
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "crons": [
-    { "path": "/api/sms/morning-briefing", "schedule": "0 8 * * *" },
-    { "path": "/api/cron/daily-reflection", "schedule": "0 22 * * *" },
-    { "path": "/api/cron/cleanup-ai-log", "schedule": "0 3 * * *" },
-    { "path": "/api/cron/weekly-budget-check", "schedule": "0 18 * * 0" },
-    { "path": "/api/cron/debt-reminders", "schedule": "0 9 * * *" }
+    { "path": "/api/cron?job=morning-briefing", "schedule": "0 8 * * *" },
+    { "path": "/api/cron?job=daily-reflection", "schedule": "0 22 * * *" },
+    { "path": "/api/cron?job=cleanup-ai-log", "schedule": "0 3 * * *" },
+    { "path": "/api/cron?job=weekly-budget-check", "schedule": "0 18 * * 0" },
+    { "path": "/api/cron?job=debt-reminders", "schedule": "0 9 * * *" }
   ]
 }

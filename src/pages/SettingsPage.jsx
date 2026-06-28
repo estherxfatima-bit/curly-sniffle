@@ -298,7 +298,7 @@ export default function SettingsPage() {
 
   async function loadClaudeStatus() {
     try {
-      const res = await fetch('/api/claude/status', {
+      const res = await fetch('/api/claude', {
         headers: { Authorization: `Bearer ${session?.access_token || ''}` },
       })
       if (!res.ok) throw new Error('Request failed')

@@ -1,6 +1,9 @@
-// /api/claude/messages — authenticated proxy to the Anthropic Messages API.
+// /api/claude — authenticated proxy to the Anthropic Messages API, plus a
+// status check. Consolidated from /api/claude/messages and /api/claude/status
+// to stay within Vercel's Hobby-plan 12-serverless-function limit.
 // Keeps CLAUDE_API_KEY server-only; the frontend never talks to api.anthropic.com directly.
-// POST { model, max_tokens, system, messages } — forwarded as-is to Anthropic.
+// GET                                                  — { configured: boolean }
+// POST { model, max_tokens, system, messages }          — forwarded as-is to Anthropic
 // Header: Authorization: Bearer <supabase access token>
 import { createClient } from '@supabase/supabase-js'
 
@@ -10,7 +13,7 @@ const supabase = createClient(
 )
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
+  if (req.method !== 'GET' && req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
 
@@ -20,6 +23,10 @@ export default async function handler(req, res) {
 
   const { data: userData, error: userErr } = await supabase.auth.getUser(token)
   if (userErr || !userData?.user) return res.status(401).json({ error: 'Invalid token' })
+
+  if (req.method === 'GET') {
+    return res.status(200).json({ configured: !!process.env.CLAUDE_API_KEY })
+  }
 
   if (!process.env.CLAUDE_API_KEY) {
     return res.status(500).json({ error: 'CLAUDE_API_KEY is not configured on the server' })
@@ -42,7 +49,7 @@ export default async function handler(req, res) {
 
   const data = await anthropicRes.json()
   if (!anthropicRes.ok) {
-    console.error('[api/claude/messages] Anthropic error', data)
+    console.error('[api/claude] Anthropic error', data)
     return res.status(anthropicRes.status).json({ error: data.error?.message || 'Claude API error' })
   }
 

@@ -17,11 +17,11 @@ If you are developing a production application, we recommend using TypeScript wi
 
 ## Claude AI integration
 
-All Claude API calls (AI planning, content idea generation, weekly review summaries, SMS Q&A, calendar event extraction from images, etc.) go through server-side endpoints under `/api/claude/*`. The frontend never calls `api.anthropic.com` directly and never bundles an API key.
+All Claude API calls (AI planning, content idea generation, weekly review summaries, SMS Q&A, calendar event extraction from images, etc.) go through a server-side endpoint at `/api/claude`. The frontend never calls `api.anthropic.com` directly and never bundles an API key.
 
 Set `CLAUDE_API_KEY` (no `VITE_` prefix) in your `.env` (local) and in your Vercel project's environment variables — get a key from the [Anthropic console](https://console.anthropic.com/). Because it has no `VITE_` prefix, Vite will not inline it into the browser bundle; it's only readable from `/api` serverless functions.
 
-The Settings page shows whether the key is configured by calling `/api/claude/status`, which only returns a boolean — it never exposes the key.
+The Settings page shows whether the key is configured by calling `/api/claude` (GET), which only returns a boolean — it never exposes the key.
 
 > If you're upgrading from an older version of this app that used `VITE_CLAUDE_API_KEY`, remove it from your environment and replace it with `CLAUDE_API_KEY`.
 
@@ -131,10 +131,10 @@ All of these are run via Vercel Cron (see `vercel.json`); only opted-in users (a
 
 | Cron | Schedule | What it sends |
 | --- | --- | --- |
-| `/api/sms/morning-briefing` | Daily 08:00 UTC | Today's to-dos, habit streaks, momentum, weekly focus. |
-| `/api/cron/weekly-budget-check` | Sunday 18:00 UTC | This week's spend vs. your monthly budget scaled to a week, flagging any category at/over 80%. Requires an overall monthly budget set in Finance. |
-| `/api/cron/debt-reminders` | Daily 09:00 UTC | "Your [debt] minimum payment is due in 3 days" — only for debts with a **due day of month** set (Finance → edit debt). |
-| `/api/cron/daily-reflection` | Daily 22:00 UTC | Evening reflection nudge, if enabled in Settings. |
+| `/api/cron?job=morning-briefing` | Daily 08:00 UTC | Today's to-dos, habit streaks, momentum, weekly focus. |
+| `/api/cron?job=weekly-budget-check` | Sunday 18:00 UTC | This week's spend vs. your monthly budget scaled to a week, flagging any category at/over 80%. Requires an overall monthly budget set in Finance. |
+| `/api/cron?job=debt-reminders` | Daily 09:00 UTC | "Your [debt] minimum payment is due in 3 days" — only for debts with a **due day of month** set (Finance → edit debt). |
+| `/api/cron?job=daily-reflection` | Daily 22:00 UTC | Evening reflection nudge, if enabled in Settings. |
 
 Run `supabase/phase53_schema.sql` to add the `due_day` / `last_due_reminder_sent` columns used by the debt reminder cron.
 

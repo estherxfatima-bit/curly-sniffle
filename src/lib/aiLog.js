@@ -1,5 +1,5 @@
 // All AI calls must save to ai_log BEFORE returning, never display without saving.
-// Requests go through /api/claude/messages (server-side proxy) so the Claude API
+// Requests go through /api/claude (server-side proxy) so the Claude API
 // key never reaches the browser bundle.
 import { supabase } from './supabase'
 import { estimateCost } from './aiPricing'
@@ -8,7 +8,7 @@ const MODEL = 'claude-opus-4-8'
 
 async function callClaude(prompt, systemPrompt, maxTokens = 1024) {
   const { data: { session } } = await supabase.auth.getSession()
-  const res = await fetch('/api/claude/messages', {
+  const res = await fetch('/api/claude', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
