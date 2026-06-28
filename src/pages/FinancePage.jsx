@@ -86,6 +86,8 @@ export default function FinancePage() {
   const [investmentTxns, setInvestmentTxns]           = useState({}) // { investmentId: [...] }
   const [newRepayment, setNewRepayment]               = useState({ amount: '', date: new Date().toISOString().slice(0, 10), note: '' })
   const [newSavingsTxn, setNewSavingsTxn]             = useState({ type: 'contribution', amount: '', date: new Date().toISOString().slice(0, 10), note: '' })
+  const [allocatingSavingsId, setAllocatingSavingsId] = useState(null)
+  const [allocationSplits, setAllocationSplits]       = useState({})
   const [newInvestmentTxn, setNewInvestmentTxn]       = useState({ type: 'contribution', amount: '', date: new Date().toISOString().slice(0, 10), note: '' })
   const [editingDebt, setEditingDebt]                 = useState(null)
   const [editDebtDraft, setEditDebtDraft]             = useState({})
@@ -382,6 +384,27 @@ export default function FinancePage() {
   }
   async function logSavingsTxn(accountId) {
     if (!newSavingsTxn.amount) return
+    if (newSavingsTxn.type === 'set_balance') {
+      const account = savingsAccounts.find(a => a.id === accountId)
+      const target = parseFloat(newSavingsTxn.amount)
+      const delta = target - (account?.current_balance || 0)
+      if (delta === 0) return
+      if (delta < 0 && !newSavingsTxn.note.trim()) { alert('Add a note explaining why the balance decreased.'); return }
+      const { data: txn } = await supabase.from('savings_transactions').insert({
+        user_id: user.id, account_id: accountId, type: delta > 0 ? 'contribution' : 'withdrawal',
+        amount: Math.abs(delta), date: newSavingsTxn.date,
+        note: newSavingsTxn.note || null, status: 'confirmed',
+      }).select().single()
+      await supabase.from('savings_accounts').update({ current_balance: target, updated_at: new Date().toISOString() }).eq('id', accountId)
+      const updatedAccounts = savingsAccounts.map(a => a.id === accountId ? { ...a, current_balance: target } : a)
+      setSavingsAccounts(updatedAccounts)
+      setSavingsTxns(prev => ({ ...prev, [accountId]: [txn, ...(prev[accountId] || [])] }))
+      if (selectedSavingsAccount?.id === accountId) setSelectedSavingsAccount(prev => ({ ...prev, current_balance: target }))
+      await recordNetWorthSnapshot({ savingsAccounts: updatedAccounts })
+      setNewSavingsTxn({ type: 'contribution', amount: '', date: new Date().toISOString().slice(0, 10), note: '' })
+      return
+    }
+    if (newSavingsTxn.type === 'withdrawal' && !newSavingsTxn.note.trim()) { alert('Add a note explaining why the balance decreased.'); return }
     const { data: txn } = await supabase.from('savings_transactions').insert({
       user_id: user.id, account_id: accountId, type: newSavingsTxn.type,
       amount: parseFloat(newSavingsTxn.amount), date: newSavingsTxn.date,
@@ -389,6 +412,41 @@ export default function FinancePage() {
     }).select().single()
     setSavingsTxns(prev => ({ ...prev, [accountId]: [txn, ...(prev[accountId] || [])] }))
     setNewSavingsTxn({ type: 'contribution', amount: '', date: new Date().toISOString().slice(0, 10), note: '' })
+  }
+
+  // ── Monthly savings allocation split across accounts ──────────
+  function openAllocateSplit(item) {
+    setAllocatingSavingsId(item.id)
+    const even = savingsAccounts.length ? item.amount / savingsAccounts.length : 0
+    setAllocationSplits(Object.fromEntries(savingsAccounts.map(a => [a.id, even ? even.toFixed(2) : ''])))
+  }
+  function closeAllocateSplit() {
+    setAllocatingSavingsId(null)
+    setAllocationSplits({})
+  }
+  async function confirmAllocateSplit(item) {
+    const entries = Object.entries(allocationSplits).filter(([, v]) => parseFloat(v) > 0)
+    const sum = entries.reduce((s, [, v]) => s + parseFloat(v), 0)
+    if (entries.length === 0) return
+    if (Math.abs(sum - item.amount) > 0.01) {
+      alert(`Split must add up to £${item.amount.toFixed(2)} (currently £${sum.toFixed(2)})`)
+      return
+    }
+    let updatedAccounts = savingsAccounts
+    const today = new Date().toISOString().slice(0, 10)
+    for (const [accountId, v] of entries) {
+      const amount = parseFloat(v)
+      await supabase.from('savings_transactions').insert({
+        user_id: user.id, account_id: accountId, type: 'contribution', amount, date: today,
+        note: `Monthly allocation: ${item.name}`, status: 'confirmed',
+      })
+      const newBal = (updatedAccounts.find(a => a.id === accountId)?.current_balance || 0) + amount
+      updatedAccounts = updatedAccounts.map(a => a.id === accountId ? { ...a, current_balance: newBal } : a)
+      await supabase.from('savings_accounts').update({ current_balance: newBal, updated_at: new Date().toISOString() }).eq('id', accountId)
+    }
+    setSavingsAccounts(updatedAccounts)
+    await recordNetWorthSnapshot({ savingsAccounts: updatedAccounts })
+    closeAllocateSplit()
   }
   async function confirmSavingsTxn(txn) {
     await supabase.from('savings_transactions').update({ status: 'confirmed', updated_at: new Date().toISOString() }).eq('id', txn.id)
@@ -831,18 +889,49 @@ export default function FinancePage() {
               </div>
             </div>
           ) : (
-            <div key={i.id} className="flex items-center justify-between gap-2">
-              <div style={{ minWidth: 0, overflow: 'hidden' }}>
-                <p style={{ fontSize: 13 }}>{i.name}</p>
-                <p className="mono" style={{ fontSize: 10, color: 'var(--text-3)' }}>{i.kind} · {i.frequency}</p>
+            <div key={i.id} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div className="flex items-center justify-between gap-2">
+                <div style={{ minWidth: 0, overflow: 'hidden' }}>
+                  <p style={{ fontSize: 13 }}>{i.name}</p>
+                  <p className="mono" style={{ fontSize: 10, color: 'var(--text-3)' }}>{i.kind} · {i.frequency}</p>
+                </div>
+                <div className="flex items-center gap-2" style={{ flexShrink: 0 }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, color: 'var(--text)', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                    £{toMonthly(i.amount, i.frequency).toFixed(0)}/mo
+                  </span>
+                  {i.kind === 'Savings' && savingsAccounts.length > 0 && (
+                    <button className="btn btn-sm btn-ghost" style={{ fontSize: 11 }} onClick={() => allocatingSavingsId === i.id ? closeAllocateSplit() : openAllocateSplit(i)}>
+                      {allocatingSavingsId === i.id ? 'Cancel' : 'Allocate'}
+                    </button>
+                  )}
+                  <button className="btn-icon btn" onClick={() => startEdit('savings', i)}><Pencil size={12} /></button>
+                  <button className="btn-icon btn" onClick={() => deleteSavings(i.id)}><Trash2 size={12} /></button>
+                </div>
               </div>
-              <div className="flex items-center gap-2" style={{ flexShrink: 0 }}>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, color: 'var(--text)', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                  £{toMonthly(i.amount, i.frequency).toFixed(0)}/mo
-                </span>
-                <button className="btn-icon btn" onClick={() => startEdit('savings', i)}><Pencil size={12} /></button>
-                <button className="btn-icon btn" onClick={() => deleteSavings(i.id)}><Trash2 size={12} /></button>
-              </div>
+              {allocatingSavingsId === i.id && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 10, background: 'var(--bg-2)', borderRadius: 8 }}>
+                  <p style={{ fontSize: 11, color: 'var(--text-3)' }}>
+                    Split this month's £{i.amount.toFixed(2)} contribution across your savings pots, then confirm to update balances.
+                  </p>
+                  {savingsAccounts.map(acc => (
+                    <div key={acc.id} className="flex items-center gap-2">
+                      <span style={{ fontSize: 12, flex: 1 }}>{acc.name}</span>
+                      <input
+                        type="text" inputMode="decimal" placeholder="£0.00"
+                        value={allocationSplits[acc.id] ?? ''}
+                        onChange={e => setAllocationSplits(p => ({ ...p, [acc.id]: sanitizeAmountInput(e.target.value) }))}
+                        style={{ fontSize: 12, width: 90 }}
+                      />
+                    </div>
+                  ))}
+                  <div className="flex items-center justify-between" style={{ fontSize: 11, color: 'var(--text-3)' }}>
+                    <span>
+                      Allocated £{Object.values(allocationSplits).reduce((s, v) => s + (parseFloat(v) || 0), 0).toFixed(2)} of £{i.amount.toFixed(2)}
+                    </span>
+                    <button className="btn btn-sm btn-finance" style={{ color: '#fff' }} onClick={() => confirmAllocateSplit(i)}>Confirm split</button>
+                  </div>
+                </div>
+              )}
             </div>
           )
         ))}
@@ -1561,16 +1650,19 @@ export default function FinancePage() {
                 </div>
               )}
 
-              <p style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Add contribution / withdrawal</p>
+              <p style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Add contribution / withdrawal / balance update</p>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
                 <select value={newSavingsTxn.type} onChange={e => setNewSavingsTxn(p => ({ ...p, type: e.target.value }))} style={{ fontSize: 12, flex: '1 1 110px' }}>
-                  <option value="contribution">Contribution</option>
-                  <option value="withdrawal">Withdrawal</option>
+                  <option value="contribution">Contribution (add)</option>
+                  <option value="withdrawal">Withdrawal (subtract)</option>
+                  <option value="set_balance">Set exact balance</option>
                 </select>
-                <input type="text" inputMode="decimal" placeholder="Amount £" value={newSavingsTxn.amount} onChange={e => setNewSavingsTxn(p => ({ ...p, amount: sanitizeAmountInput(e.target.value) }))} style={{ fontSize: 12, flex: '1 1 80px' }} />
+                <input type="text" inputMode="decimal" placeholder={newSavingsTxn.type === 'set_balance' ? 'New balance £' : 'Amount £'} value={newSavingsTxn.amount} onChange={e => setNewSavingsTxn(p => ({ ...p, amount: sanitizeAmountInput(e.target.value) }))} style={{ fontSize: 12, flex: '1 1 80px' }} />
                 <input type="date" value={newSavingsTxn.date} onChange={e => setNewSavingsTxn(p => ({ ...p, date: e.target.value }))} style={{ fontSize: 12, flex: '1 1 110px' }} />
-                <input placeholder="Note (optional)" value={newSavingsTxn.note} onChange={e => setNewSavingsTxn(p => ({ ...p, note: e.target.value }))} style={{ fontSize: 12, flex: '2 1 120px' }} />
-                <button className="btn btn-sm btn-finance" style={{ color: '#fff' }} onClick={() => logSavingsTxn(a.id)}>Log {newSavingsTxn.type === 'withdrawal' ? 'withdrawal' : 'contribution'}</button>
+                <input placeholder={newSavingsTxn.type === 'contribution' ? 'Note (optional)' : 'Note (required if it decreased)'} value={newSavingsTxn.note} onChange={e => setNewSavingsTxn(p => ({ ...p, note: e.target.value }))} style={{ fontSize: 12, flex: '2 1 120px' }} />
+                <button className="btn btn-sm btn-finance" style={{ color: '#fff' }} onClick={() => logSavingsTxn(a.id)}>
+                  {newSavingsTxn.type === 'set_balance' ? 'Update balance' : newSavingsTxn.type === 'withdrawal' ? 'Log withdrawal' : 'Log contribution'}
+                </button>
               </div>
 
               <p style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Transaction history</p>
