@@ -13,7 +13,7 @@ const CATEGORY_KEYWORDS = {
   'Personal Care': ['haircut', 'nails', 'beauty', 'skincare', 'spa', 'massage', 'salon'],
 }
 
-export const HELP_MESSAGE = "Try: 'spent £10 on food', 'done 1 2', 'add buy oat milk', or just ask me anything."
+export const HELP_MESSAGE = "Try: 'spent £10 on food', 'done 1 2', 'add buy oat milk', 'bucket: learn to surf', 'idea: try that new podcast app', or just ask me anything."
 
 // ── Parsers ──────────────────────────────────────────────────────────────
 
@@ -47,6 +47,24 @@ export function parseTodoAdd(text) {
   const todoText = m[1].trim()
   if (!todoText) return null
   return { text: todoText }
+}
+
+// "bucket: learn to surf" / "bucket add learn to surf"
+export function parseBucketAdd(text) {
+  const m = text.trim().match(/^bucket:?\s*(?:add\s+)?(.+)$/i)
+  if (!m) return null
+  const title = m[1].trim()
+  if (!title) return null
+  return { title }
+}
+
+// "idea: try that new podcast app" / "idea add try that new podcast app"
+export function parseIdeaAdd(text) {
+  const m = text.trim().match(/^idea:?\s*(?:add\s+)?(.+)$/i)
+  if (!m) return null
+  const ideaText = m[1].trim()
+  if (!ideaText) return null
+  return { text: ideaText }
 }
 
 // Anything that reads like a question/request — routed to Claude.
@@ -135,6 +153,16 @@ export async function handleTodoAdd(userId, { text }) {
   return `Added to today's to-dos: "${text}"`
 }
 
+export async function handleBucketAdd(userId, { title }) {
+  await supabaseAdmin.from('bucket_list').insert({ user_id: userId, title, category: 'Other' })
+  return `Added to your bucket list: "${title}"`
+}
+
+export async function handleIdeaAdd(userId, { text }) {
+  await supabaseAdmin.from('idea_parking_lot').insert({ user_id: userId, text })
+  return `Parked in your idea dump: "${text}"`
+}
+
 // Routes a message to the right handler. Returns the SMS reply text.
 export async function routeMessage(userId, text, { handleQuestion }) {
   if (!text) return HELP_MESSAGE
@@ -144,6 +172,12 @@ export async function routeMessage(userId, text, { handleQuestion }) {
 
   const complete = parseTodoComplete(text)
   if (complete) return handleTodoComplete(userId, complete)
+
+  const bucket = parseBucketAdd(text)
+  if (bucket) return handleBucketAdd(userId, bucket)
+
+  const idea = parseIdeaAdd(text)
+  if (idea) return handleIdeaAdd(userId, idea)
 
   const add = parseTodoAdd(text)
   if (add) return handleTodoAdd(userId, add)

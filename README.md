@@ -125,9 +125,18 @@ Add the following to your `.env` (local) and to your Vercel project's environmen
 
 All of these are server-side only (no `VITE_` prefix) — used only by the serverless functions under `/api/sms`.
 
-### 4. Morning briefing cron
+### 4. Scheduled reminders (cron)
 
-`vercel.json` schedules `/api/sms/morning-briefing` to run daily at **08:00 UTC** via Vercel Cron. Adjust the `schedule` cron expression if you want a different time/timezone. Cron jobs only run on Vercel's production deployments (Pro plan or above for non-daily schedules; the Hobby plan supports once-daily crons). Each run sends every user with a phone number on file and **Enable SMS briefing** turned on (Settings → Account) their own personalised briefing.
+All of these are run via Vercel Cron (see `vercel.json`); only opted-in users (a phone number saved and **Enable SMS briefing** turned on, Settings → Account) receive texts. Cron jobs only run on Vercel's production deployments (Pro plan or above for non-daily schedules; the Hobby plan supports once-daily crons — each of these still only fires once per calendar day).
+
+| Cron | Schedule | What it sends |
+| --- | --- | --- |
+| `/api/sms/morning-briefing` | Daily 08:00 UTC | Today's to-dos, habit streaks, momentum, weekly focus. |
+| `/api/cron/weekly-budget-check` | Sunday 18:00 UTC | This week's spend vs. your monthly budget scaled to a week, flagging any category at/over 80%. Requires an overall monthly budget set in Finance. |
+| `/api/cron/debt-reminders` | Daily 09:00 UTC | "Your [debt] minimum payment is due in 3 days" — only for debts with a **due day of month** set (Finance → edit debt). |
+| `/api/cron/daily-reflection` | Daily 22:00 UTC | Evening reflection nudge, if enabled in Settings. |
+
+Run `supabase/phase53_schema.sql` to add the `due_day` / `last_due_reminder_sent` columns used by the debt reminder cron.
 
 ### 5. Texting the app
 
@@ -136,6 +145,8 @@ Once configured, text your Twilio number (`TWILIO_PHONE_NUMBER`) from the mobile
 - **Log an expense**: `spent £12 on lunch` or `£45 groceries` → adds to Finance, replies with the category and what's left in your monthly budget.
 - **Complete to-dos**: `done 1 2` or `done all` — numbers refer to today's to-do list as sent in the morning briefing.
 - **Add a to-do**: `add buy oat milk` or `todo: call dentist`.
+- **Add to your bucket list**: `bucket: learn to surf`.
+- **Park an idea**: `idea: try that new podcast app`.
 - **Ask anything**: `what's my focus today?`, `how's my spending this week?` — routed to Claude with your goals, tasks, habits, mood, and finances as context.
 - Anything else gets a short help message with example commands.
 

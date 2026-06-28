@@ -363,6 +363,7 @@ export default function FinancePage() {
       target_payoff_date: editDebtDraft.target_payoff_date || null,
       target_monthly_payment: editDebtDraft.target_monthly_payment ? parseFloat(editDebtDraft.target_monthly_payment) : null,
       warning_threshold: editDebtDraft.warning_threshold ? parseFloat(editDebtDraft.warning_threshold) : null,
+      due_day: editDebtDraft.due_day ? Math.min(31, Math.max(1, parseInt(editDebtDraft.due_day, 10))) : null,
       updated_at: new Date().toISOString(),
     }
     await supabase.from('debts').update(payload).eq('id', editingDebt)
@@ -1442,6 +1443,13 @@ export default function FinancePage() {
                     <input type="text" inputMode="decimal" placeholder="Target £/month" value={editDebtDraft.target_monthly_payment ?? ''} onChange={e => setEditDebtDraft(p => ({ ...p, target_monthly_payment: sanitizeAmountInput(e.target.value) }))} style={{ fontSize: 12, flex: 1 }} />
                   </div>
                   <input type="text" inputMode="decimal" placeholder="Warning threshold £ (alert if balance exceeds)" value={editDebtDraft.warning_threshold ?? ''} onChange={e => setEditDebtDraft(p => ({ ...p, warning_threshold: sanitizeAmountInput(e.target.value) }))} style={{ fontSize: 12 }} />
+                  <input
+                    type="number" min="1" max="31"
+                    placeholder="Min payment due day of month (opt, for SMS reminders)"
+                    value={editDebtDraft.due_day ?? ''}
+                    onChange={e => setEditDebtDraft(p => ({ ...p, due_day: e.target.value }))}
+                    style={{ fontSize: 12 }}
+                  />
                   <button className="btn btn-sm btn-finance" style={{ color: '#fff' }} onClick={saveEditDebt}><CheckIcon size={12} /> Save changes</button>
                 </div>
               ) : (
@@ -1466,6 +1474,11 @@ export default function FinancePage() {
                     </p>
                   ) : (
                     <p style={{ fontSize: 12, color: 'var(--text-3)' }}>Log repayments or set a target to see a projection.</p>
+                  )}
+                  {d.due_day != null && (
+                    <p style={{ fontSize: 11, marginTop: 6, color: 'var(--text-3)' }}>
+                      Minimum payment due day {d.due_day} of each month — SMS reminder 3 days before, if enabled in Settings.
+                    </p>
                   )}
                   {d.warning_threshold != null && (
                     <p style={{ fontSize: 11, marginTop: 6, color: overThreshold ? 'var(--danger)' : 'var(--success)' }}>
