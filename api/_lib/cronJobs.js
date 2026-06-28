@@ -108,7 +108,7 @@ export async function runDebtReminders() {
 
   const { data: debts } = await supabaseAdmin
     .from('debts')
-    .select('id, user_id, name, minimum_payment, due_day, last_due_reminder_sent')
+    .select('id, user_id, name, minimum_payment, due_day, due_reminder_lead_days, last_due_reminder_sent')
     .not('due_day', 'is', null)
 
   const today = new Date()
@@ -117,18 +117,19 @@ export async function runDebtReminders() {
   let sentCount = 0
   for (const debt of debts || []) {
     try {
+      const leadDays = debt.due_reminder_lead_days ?? REMINDER_LEAD_DAYS
       const dueDate = nextDueDate(today, debt.due_day)
       const dueDateStr = dueDate.toISOString().slice(0, 10)
       const daysUntil = Math.round((dueDate - today) / (1000 * 60 * 60 * 24))
 
-      if (daysUntil !== REMINDER_LEAD_DAYS) continue
+      if (daysUntil !== leadDays) continue
       if (debt.last_due_reminder_sent === dueDateStr) continue // already reminded for this due cycle
 
       const { data: profile } = await supabaseAdmin.from('profiles').select('phone_number, sms_enabled').eq('id', debt.user_id).maybeSingle()
       if (!profile?.phone_number || !profile?.sms_enabled) continue
 
       const amountText = debt.minimum_payment ? ` (£${Number(debt.minimum_payment).toFixed(0)})` : ''
-      const message = `Your ${debt.name} minimum payment${amountText} is due in ${REMINDER_LEAD_DAYS} days.`
+      const message = `Your ${debt.name} minimum payment${amountText} is due in ${leadDays} day${leadDays === 1 ? '' : 's'}.`
       await sendSms(profile.phone_number, message)
 
       await supabaseAdmin.from('debts').update({ last_due_reminder_sent: dueDateStr }).eq('id', debt.id)

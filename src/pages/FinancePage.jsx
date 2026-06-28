@@ -72,7 +72,7 @@ export default function FinancePage() {
   const [debts, setDebts]                   = useState([])
   const [savingsAccounts, setSavingsAccounts] = useState([])
   const [investments, setInvestments]       = useState([])
-  const [newDebt, setNewDebt]               = useState({ name: '', category: 'Other', current_balance: '', original_balance: '', interest_rate: '', minimum_payment: '' })
+  const [newDebt, setNewDebt]               = useState({ name: '', category: 'Other', current_balance: '', original_balance: '', interest_rate: '', minimum_payment: '', due_day: '' })
   const [newSavingsAccount, setNewSavingsAccount] = useState({ name: '', current_balance: '', target_amount: '', target_date: '' })
   const [newInvestment, setNewInvestment]   = useState({ name: '', type: 'Other', current_value: '' })
 
@@ -282,11 +282,12 @@ export default function FinancePage() {
       original_balance: newDebt.original_balance ? parseFloat(newDebt.original_balance) : bal,
       interest_rate: newDebt.interest_rate ? parseFloat(newDebt.interest_rate) : null,
       minimum_payment: newDebt.minimum_payment ? parseFloat(newDebt.minimum_payment) : null,
+      due_day: newDebt.due_day ? Math.min(31, Math.max(1, parseInt(newDebt.due_day, 10))) : null,
     }
     const { data, error } = await supabase.from('debts').insert(payload).select().single()
     if (error) { alert(`Couldn't add debt: ${error.message}`); return }
     setDebts(prev => [...prev, data])
-    setNewDebt({ name: '', category: 'Other', current_balance: '', original_balance: '', interest_rate: '', minimum_payment: '' })
+    setNewDebt({ name: '', category: 'Other', current_balance: '', original_balance: '', interest_rate: '', minimum_payment: '', due_day: '' })
   }
   async function deleteDebt(id) {
     await supabase.from('debts').delete().eq('id', id)
@@ -372,6 +373,8 @@ export default function FinancePage() {
       target_monthly_payment: editDebtDraft.target_monthly_payment ? parseFloat(editDebtDraft.target_monthly_payment) : null,
       warning_threshold: editDebtDraft.warning_threshold ? parseFloat(editDebtDraft.warning_threshold) : null,
       due_day: editDebtDraft.due_day ? Math.min(31, Math.max(1, parseInt(editDebtDraft.due_day, 10))) : null,
+      due_reminder_lead_days: editDebtDraft.due_reminder_lead_days !== '' && editDebtDraft.due_reminder_lead_days != null
+        ? Math.min(30, Math.max(0, parseInt(editDebtDraft.due_reminder_lead_days, 10))) : 3,
       updated_at: new Date().toISOString(),
     }
     await supabase.from('debts').update(payload).eq('id', editingDebt)
@@ -1454,6 +1457,7 @@ export default function FinancePage() {
                       <input type="text" inputMode="decimal" placeholder="Original £ (opt)" value={newDebt.original_balance} onChange={e => setNewDebt(p => ({ ...p, original_balance: sanitizeAmountInput(e.target.value) }))} style={{ fontSize: 11, flex: '1 1 100px', minWidth: 80 }} />
                       <input type="text" inputMode="decimal" placeholder="Rate % (opt)" value={newDebt.interest_rate} onChange={e => setNewDebt(p => ({ ...p, interest_rate: sanitizeAmountInput(e.target.value) }))} style={{ fontSize: 11, flex: '1 1 70px', minWidth: 60 }} />
                       <input type="text" inputMode="decimal" placeholder="Min pay £ (opt)" value={newDebt.minimum_payment} onChange={e => setNewDebt(p => ({ ...p, minimum_payment: sanitizeAmountInput(e.target.value) }))} style={{ fontSize: 11, flex: '1 1 90px', minWidth: 70 }} />
+                      <input type="number" min="1" max="31" placeholder="Due day (opt)" value={newDebt.due_day} onChange={e => setNewDebt(p => ({ ...p, due_day: e.target.value }))} style={{ fontSize: 11, flex: '1 1 80px', minWidth: 70 }} />
                     </div>
                     <button className="btn btn-sm btn-finance" style={{ color: '#fff' }} onClick={addDebt}><Plus size={12} /> Add debt</button>
                   </div>
@@ -1597,13 +1601,22 @@ export default function FinancePage() {
                     <input type="text" inputMode="decimal" placeholder="Target £/month" value={editDebtDraft.target_monthly_payment ?? ''} onChange={e => setEditDebtDraft(p => ({ ...p, target_monthly_payment: sanitizeAmountInput(e.target.value) }))} style={{ fontSize: 12, flex: 1 }} />
                   </div>
                   <input type="text" inputMode="decimal" placeholder="Warning threshold £ (alert if balance exceeds)" value={editDebtDraft.warning_threshold ?? ''} onChange={e => setEditDebtDraft(p => ({ ...p, warning_threshold: sanitizeAmountInput(e.target.value) }))} style={{ fontSize: 12 }} />
-                  <input
-                    type="number" min="1" max="31"
-                    placeholder="Min payment due day of month (opt, for SMS reminders)"
-                    value={editDebtDraft.due_day ?? ''}
-                    onChange={e => setEditDebtDraft(p => ({ ...p, due_day: e.target.value }))}
-                    style={{ fontSize: 12 }}
-                  />
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <input
+                      type="number" min="1" max="31"
+                      placeholder="Due day of month (opt)"
+                      value={editDebtDraft.due_day ?? ''}
+                      onChange={e => setEditDebtDraft(p => ({ ...p, due_day: e.target.value }))}
+                      style={{ fontSize: 12, flex: 1 }}
+                    />
+                    <input
+                      type="number" min="0" max="30"
+                      placeholder="Remind X days before (default 3)"
+                      value={editDebtDraft.due_reminder_lead_days ?? ''}
+                      onChange={e => setEditDebtDraft(p => ({ ...p, due_reminder_lead_days: e.target.value }))}
+                      style={{ fontSize: 12, flex: 1 }}
+                    />
+                  </div>
                   <button className="btn btn-sm btn-finance" style={{ color: '#fff' }} onClick={saveEditDebt}><CheckIcon size={12} /> Save changes</button>
                 </div>
               ) : (
@@ -1631,7 +1644,7 @@ export default function FinancePage() {
                   )}
                   {d.due_day != null && (
                     <p style={{ fontSize: 11, marginTop: 6, color: 'var(--text-3)' }}>
-                      Minimum payment due day {d.due_day} of each month — SMS reminder 3 days before, if enabled in Settings.
+                      Minimum payment due day {d.due_day} of each month — SMS reminder {d.due_reminder_lead_days ?? 3} day{(d.due_reminder_lead_days ?? 3) === 1 ? '' : 's'} before, if enabled in Settings.
                     </p>
                   )}
                   {d.warning_threshold != null && (
