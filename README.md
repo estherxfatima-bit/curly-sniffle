@@ -151,3 +151,14 @@ Once configured, text your Twilio number (`TWILIO_PHONE_NUMBER`) from the mobile
 - Anything else gets a short help message with example commands.
 
 Every SMS exchange is saved to the **AI Log** (`type: 'sms'`), and the current status/example commands are shown in **Settings**.
+
+### 6. Calendar via SMS (add/remove events)
+
+Add or cancel Google Calendar events by text — requires Google Calendar to be connected (see the Google Calendar section above).
+
+- **Add an event**: `calendar: dentist thursday 3pm`, `cal: dentist 3 jul 3pm-4pm`, `schedule: team standup 9am`. The date/time is parsed from free text (via `chrono-node`); if no time is found the event is created all-day.
+- **Cancel an event**: `cancel: dentist`, `remove calendar: dentist thursday`, `delete event: dentist` — matches by title against events in the next 60 days. If several events match, you'll get a numbered list to pick from.
+
+**Nothing is written to your calendar straight away.** Every add/cancel request gets parsed and replied back in plain English — e.g. `Add "dentist" — Thu 3 Jul at 3:00pm? Reply YES to confirm, NO to cancel.` The event is only created or deleted once you reply **YES** (or pick a number, if there were multiple matches); replying **NO** cancels it, and an unconfirmed request expires after 10 minutes. This two-step flow exists so a misread date/time can't silently turn into a wrong calendar event.
+
+Run `supabase/phase54_schema.sql` to add the `sms_pending_actions` table used to track unconfirmed requests.

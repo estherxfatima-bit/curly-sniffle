@@ -1,6 +1,10 @@
 // Parses incoming SMS text and routes it to the right handler.
 import { format } from 'date-fns'
 import { supabaseAdmin } from './db.js'
+import {
+  parseCalendarAdd, parseCalendarRemove, getPendingAction, handlePendingResponse,
+  handleCalendarAdd, handleCalendarRemove,
+} from './calendarSms.js'
 
 export const VARIABLE_CATS = ['Food', 'Travel', 'Outings', 'Shopping', 'Business', 'Personal Care', 'Other']
 
@@ -13,7 +17,7 @@ const CATEGORY_KEYWORDS = {
   'Personal Care': ['haircut', 'nails', 'beauty', 'skincare', 'spa', 'massage', 'salon'],
 }
 
-export const HELP_MESSAGE = "Try: 'spent £10 on food', 'done 1 2', 'add buy oat milk', 'bucket: learn to surf', 'idea: try that new podcast app', or just ask me anything."
+export const HELP_MESSAGE = "Try: 'spent £10 on food', 'done 1 2', 'add buy oat milk', 'bucket: learn to surf', 'idea: try that new podcast app', 'calendar: dentist thursday 3pm', 'cancel: dentist', or just ask me anything."
 
 // ── Parsers ──────────────────────────────────────────────────────────────
 
@@ -166,6 +170,18 @@ export async function handleIdeaAdd(userId, { text }) {
 // Routes a message to the right handler. Returns the SMS reply text.
 export async function routeMessage(userId, text, { handleQuestion }) {
   if (!text) return HELP_MESSAGE
+
+  const pending = await getPendingAction(userId)
+  if (pending) {
+    const reply = await handlePendingResponse(userId, text, pending)
+    if (reply !== null) return reply
+  }
+
+  const calendarAdd = parseCalendarAdd(text)
+  if (calendarAdd) return handleCalendarAdd(userId, calendarAdd)
+
+  const calendarRemove = parseCalendarRemove(text)
+  if (calendarRemove) return handleCalendarRemove(userId, calendarRemove)
 
   const expense = parseExpense(text)
   if (expense) return handleExpense(userId, expense)

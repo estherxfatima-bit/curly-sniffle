@@ -7,67 +7,12 @@
 // Header: Authorization: Bearer <supabase access token>
 
 import { createClient } from '@supabase/supabase-js'
+import { getAccessToken, listCalendars } from '../_lib/googleCalendar.js'
 
 const supabase = createClient(
   process.env.VITE_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY // service role needed for server-side access
 )
-
-// Returns a valid access token for the user, refreshing it if needed.
-// Returns { error: '...' } if the user isn't connected or refresh fails.
-async function getAccessToken(userId) {
-  const { data: tokenRow } = await supabase.from('google_tokens').select('*').eq('user_id', userId).maybeSingle()
-  if (!tokenRow) return { error: 'not_connected' }
-
-  if (new Date(tokenRow.expires_at).getTime() < Date.now() + 60 * 1000) {
-    if (!tokenRow.refresh_token) return { error: 'reconnect' }
-    const refreshRes = await fetch('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        client_id: process.env.GOOGLE_CLIENT_ID,
-        client_secret: process.env.GOOGLE_CLIENT_SECRET,
-        refresh_token: tokenRow.refresh_token,
-        grant_type: 'refresh_token',
-      }),
-    })
-    const refreshed = await refreshRes.json()
-    if (!refreshRes.ok) return { error: 'reconnect' }
-    const accessToken = refreshed.access_token
-    const expiresAt = new Date(Date.now() + (refreshed.expires_in || 3600) * 1000).toISOString()
-    await supabase.from('google_tokens').update({
-      access_token: accessToken,
-      expires_at: expiresAt,
-      updated_at: new Date().toISOString(),
-    }).eq('user_id', userId)
-    return { accessToken }
-  }
-
-  return { accessToken: tokenRow.access_token }
-}
-
-// Returns the list of calendars the user has subscribed to (including secondary
-// calendars synced from other providers, e.g. iCloud calendars subscribed in Google
-// Calendar), restricted to ones the user has selected to show in their UI.
-// Returns full calendar metadata: id, summary, backgroundColor, foregroundColor
-async function listCalendars(accessToken) {
-  const res = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=freeBusyReader', {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  })
-  const data = await res.json()
-  if (!res.ok) {
-    console.error('[api/calendar/events] failed to list calendars', data)
-    return [{ id: 'primary', summary: 'Calendar', backgroundColor: '#4285f4', foregroundColor: '#ffffff' }]
-  }
-  const calendars = (data.items || []).filter(c => c.selected !== false)
-  if (calendars.length === 0) return [{ id: 'primary', summary: 'Calendar', backgroundColor: '#4285f4', foregroundColor: '#ffffff' }]
-  return calendars.map(c => ({
-    id: c.id,
-    summary: c.summaryOverride || c.summary || c.id,
-    backgroundColor: c.backgroundColor || '#4285f4',
-    foregroundColor: c.foregroundColor || '#ffffff',
-  }))
-}
 
 export default async function handler(req, res) {
   const authHeader = req.headers.authorization || ''
