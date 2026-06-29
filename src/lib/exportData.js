@@ -3,17 +3,19 @@ import { supabase } from './supabase'
 // Each entry: the table to read, and the date column used to scope it to
 // the selected timeframe. `null` means "always export everything" (goals
 // and content batches aren't really period-bound).
-const EXPORT_TABLES = [
-  { key: 'goals',           table: 'goals',            dateCol: null },
-  { key: 'weekly_tasks',    table: 'weekly_tasks',      dateCol: 'week_start' },
-  { key: 'daily_todos',     table: 'daily_todos',       dateCol: 'date' },
-  { key: 'habit_logs',      table: 'habit_logs',        dateCol: 'log_date' },
-  { key: 'fixed_expenses',  table: 'fixed_expenses',    dateCol: null },
-  { key: 'variable_expenses', table: 'variable_expenses', dateCol: 'date' },
-  { key: 'content_batches', table: 'content_batches',   dateCol: null },
-  { key: 'mood_logs',       table: 'mood_logs',         dateCol: 'log_date' },
-  { key: 'workout_logs',    table: 'workout_logs',      dateCol: 'log_date' },
+export const EXPORT_TABLES = [
+  { key: 'goals',           table: 'goals',            dateCol: null,        label: 'Goals' },
+  { key: 'weekly_tasks',    table: 'weekly_tasks',      dateCol: 'week_start', label: 'Weekly tasks' },
+  { key: 'daily_todos',     table: 'daily_todos',       dateCol: 'date',      label: 'Daily to-dos' },
+  { key: 'habit_logs',      table: 'habit_logs',        dateCol: 'log_date',  label: 'Habit logs' },
+  { key: 'fixed_expenses',  table: 'fixed_expenses',    dateCol: null,        label: 'Fixed expenses' },
+  { key: 'variable_expenses', table: 'variable_expenses', dateCol: 'date',    label: 'Variable expenses' },
+  { key: 'content_batches', table: 'content_batches',   dateCol: null,       label: 'Content ideas' },
+  { key: 'mood_logs',       table: 'mood_logs',         dateCol: 'log_date',  label: 'Mood logs' },
+  { key: 'workout_logs',    table: 'workout_logs',      dateCol: 'log_date',  label: 'Workout logs' },
 ]
+
+export const DEFAULT_EXPORT_KEYS = EXPORT_TABLES.map(t => t.key)
 
 export const EXPORT_RANGE_OPTIONS = [
   { label: 'Last 1 month',  months: 1 },
@@ -30,10 +32,11 @@ function cutoffDateStr(months) {
   return d.toISOString().slice(0, 10)
 }
 
-export async function fetchExportData(userId, months) {
+export async function fetchExportData(userId, months, selectedKeys = DEFAULT_EXPORT_KEYS) {
   const cutoff = cutoffDateStr(months)
   const results = {}
   for (const { key, table, dateCol } of EXPORT_TABLES) {
+    if (!selectedKeys.includes(key)) continue
     let query = supabase.from(table).select('*').eq('user_id', userId)
     if (dateCol && cutoff) query = query.gte(dateCol, cutoff)
     const { data, error } = await query
@@ -61,6 +64,7 @@ function tableToCSV(rows) {
 export function toCombinedCSV(data) {
   const sections = []
   for (const { key } of EXPORT_TABLES) {
+    if (!(key in data)) continue
     const rows = data[key] || []
     sections.push(`## ${key} (${rows.length} rows)\n${rows.length ? tableToCSV(rows) : '(no rows)'}`)
   }
@@ -79,8 +83,8 @@ export function downloadFile(filename, content, mimeType) {
   URL.revokeObjectURL(url)
 }
 
-export async function exportMyData(userId, months) {
-  const data = await fetchExportData(userId, months)
+export async function exportMyData(userId, months, selectedKeys = DEFAULT_EXPORT_KEYS) {
+  const data = await fetchExportData(userId, months, selectedKeys)
   const stamp = new Date().toISOString().slice(0, 10)
   downloadFile(`my-data-export-${stamp}.json`, JSON.stringify(data, null, 2), 'application/json')
   downloadFile(`my-data-export-${stamp}.csv`, toCombinedCSV(data), 'text/csv')

@@ -6,7 +6,7 @@ import { registerServiceWorker, subscribeToPush, unsubscribeFromPush, isSubscrib
 import { Bell, BellOff, Sun, Moon, LogOut, Calendar, Unlink, MessageSquare, Clock4, Check, Plus, Trash2, Download } from 'lucide-react'
 import { DAY_LABELS } from '../lib/constants'
 import AiUsageSection from '../components/settings/AiUsageSection'
-import { EXPORT_RANGE_OPTIONS, exportMyData } from '../lib/exportData'
+import { EXPORT_RANGE_OPTIONS, EXPORT_TABLES, DEFAULT_EXPORT_KEYS, exportMyData } from '../lib/exportData'
 
 function SettingsDecoration() {
   return (
@@ -80,8 +80,13 @@ export default function SettingsPage() {
 
   // Data export
   const [exportRangeMonths, setExportRangeMonths] = useState(6)
+  const [exportKeys, setExportKeys] = useState(DEFAULT_EXPORT_KEYS)
   const [exporting, setExporting] = useState(false)
   const [exportMsg, setExportMsg] = useState(null)
+
+  function toggleExportKey(key) {
+    setExportKeys(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key])
+  }
 
   useEffect(() => {
     registerServiceWorker()
@@ -389,10 +394,11 @@ export default function SettingsPage() {
   }
 
   async function handleExportData() {
+    if (!exportKeys.length) { setExportMsg({ type: 'error', text: 'Choose at least one type of data to export.' }); return }
     setExporting(true)
     setExportMsg(null)
     try {
-      await exportMyData(user.id, exportRangeMonths)
+      await exportMyData(user.id, exportRangeMonths, exportKeys)
       setExportMsg({ type: 'success', text: 'Download started.' })
     } catch (e) {
       setExportMsg({ type: 'error', text: e.message })
@@ -819,8 +825,27 @@ export default function SettingsPage() {
       <div className="card mb-4">
         <h3 style={{ fontSize: '0.9rem', marginBottom: 8 }}>Export my data</h3>
         <p style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 12 }}>
-          Download your goals, weekly tasks, daily to-dos, habit logs, expenses, content ideas, mood logs and workout logs as JSON and CSV files.
+          Choose exactly what to download as JSON and CSV files.
         </p>
+
+        <p style={{ fontSize: 13, fontWeight: 500, marginBottom: 6 }}>What to include</p>
+        <div className="flex items-center gap-2 wrap mb-3">
+          {EXPORT_TABLES.map(({ key, label }) => (
+            <button
+              key={key}
+              className={`btn btn-xs ${exportKeys.includes(key) ? 'btn-accent' : 'btn-ghost'}`}
+              onClick={() => toggleExportKey(key)}
+              style={exportKeys.includes(key) ? { color: '#fff' } : {}}
+            >
+              {exportKeys.includes(key) ? <Check size={11} /> : null} {label}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-2 mb-2">
+          <button className="btn btn-xs btn-ghost" onClick={() => setExportKeys(DEFAULT_EXPORT_KEYS)}>Select all</button>
+          <button className="btn btn-xs btn-ghost" onClick={() => setExportKeys([])}>Select none</button>
+        </div>
+
         <div className="flex items-center gap-2 wrap">
           <select value={exportRangeMonths ?? 'all'} onChange={e => setExportRangeMonths(e.target.value === 'all' ? null : Number(e.target.value))} style={{ fontSize: 12, padding: '4px 8px' }}>
             {EXPORT_RANGE_OPTIONS.map(o => (
