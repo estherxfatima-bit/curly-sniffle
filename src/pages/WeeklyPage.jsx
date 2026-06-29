@@ -2,6 +2,7 @@ import { useState, useEffect, Fragment } from 'react'
 import { Link } from 'react-router-dom'
 import { format, startOfWeek, endOfWeek, addWeeks, subWeeks } from 'date-fns'
 import { supabase } from '../lib/supabase'
+import { withNetworkRetry, friendlyErrorMessage } from '../lib/network'
 import { useAuth } from '../hooks/useAuth'
 import { TASK_AREAS, AREA_COLORS, priorityRank, priorityFilterOptions, PRIORITY_COLORS, DAY_LABELS } from '../lib/constants'
 import PriorityDot from '../components/shared/PriorityDot'
@@ -237,11 +238,11 @@ export default function WeeklyPage() {
 
   async function addTask() {
     if (!newTask.specific_task.trim()) return
-    const { data, error } = await supabase.from('weekly_tasks').insert({
+    const { data, error } = await withNetworkRetry(() => supabase.from('weekly_tasks').insert({
       user_id: user.id, week_start: weekStartStr, ...newTask,
       goal_id: newTask.goal_id || null, complete: false, carried_forward: false,
-    }).select().single()
-    if (error) { alert(`Couldn't save task: ${error.message}`); return }
+    }).select().single())
+    if (error) { alert(`Couldn't save task: ${friendlyErrorMessage(error)}`); return }
     setTasks(prev => [...prev, data])
     setNewTask({ area: 'Career', action: '', frequency: 'Weekly', specific_task: '', goal_id: '', recurring: false })
     setShowAddRow(false)
@@ -249,13 +250,13 @@ export default function WeeklyPage() {
 
   async function pullFromGoalTask(goal, task, milestoneId) {
     const area = goal.category === 'Wellness' ? 'Health/Wellness' : goal.category
-    const { data, error } = await supabase.from('weekly_tasks').insert({
+    const { data, error } = await withNetworkRetry(() => supabase.from('weekly_tasks').insert({
       user_id: user.id, week_start: weekStartStr,
       area, action: goal.primary_goal?.slice(0, 60) || '', frequency: 'One-off',
       specific_task: task.text, goal_id: goal.id, milestone_id: milestoneId || null,
       complete: false, carried_forward: false,
-    }).select().single()
-    if (error) { alert(`Couldn't pull task: ${error.message}`); return }
+    }).select().single())
+    if (error) { alert(`Couldn't pull task: ${friendlyErrorMessage(error)}`); return }
     setTasks(prev => [...prev, data])
     setShowGoalPicker(false)
   }

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
+import { withNetworkRetry, friendlyErrorMessage } from '../../lib/network'
 import { useAuth } from '../../hooks/useAuth'
 import { useTimer } from '../../hooks/useTimer'
 import { format, subDays, addDays, startOfWeek, getDay, parseISO } from 'date-fns'
@@ -265,12 +266,13 @@ export default function DailyTodos({ compact = false, date = null }) {
   async function addTodo() {
     const text = input.trim()
     if (!text) return
-    const { data } = await supabase.from('daily_todos').insert({
+    const { data, error } = await withNetworkRetry(() => supabase.from('daily_todos').insert({
       user_id: user.id, text, date: viewDate,
       category: categoryFilter || 'Personal',
       complete: false,
-    }).select().single()
-    if (data) setTodos(prev => [...prev, data])
+    }).select().single())
+    if (error) { alert(`Couldn't save task: ${friendlyErrorMessage(error)}`); return }
+    setTodos(prev => [...prev, data])
     setInput('')
     inputRef.current?.focus()
   }
@@ -388,7 +390,7 @@ export default function DailyTodos({ compact = false, date = null }) {
   }
 
   async function pullFromGoalTask(goal, task, milestoneId) {
-    const { data, error } = await supabase.from('daily_todos').insert({
+    const { data, error } = await withNetworkRetry(() => supabase.from('daily_todos').insert({
       user_id: user.id,
       text: task.text,
       date: viewDate,
@@ -396,8 +398,8 @@ export default function DailyTodos({ compact = false, date = null }) {
       complete: false,
       goal_id: goal.id,
       milestone_id: milestoneId || null,
-    }).select().single()
-    if (error) { alert(`Couldn't pull task: ${error.message}`); return }
+    }).select().single())
+    if (error) { alert(`Couldn't pull task: ${friendlyErrorMessage(error)}`); return }
     setTodos(prev => [...prev, data])
     setShowGoalPicker(false)
   }
