@@ -94,11 +94,29 @@ function MiniNav({ label, onPrev, onNext, onToday, isCurrent }) {
   )
 }
 
-function linkedTasksFor(goalId, weeklyTasks, dailyTodos) {
-  return [
-    ...weeklyTasks.filter(t => t.goal_id === goalId).map(t => ({ text: t.specific_task, complete: t.complete, area: t.area })),
-    ...dailyTodos.filter(t => t.goal_id === goalId).map(t => ({ text: t.text, complete: t.complete, area: t.category })),
-  ]
+function computeProgress(goal, goals, milestones) {
+  if (goal.tracking_type === 'metric') {
+    const target = Number(goal.metric_target ?? 0)
+    const current = Number(goal.metric_current ?? 0)
+    const pct = target > 0 ? Math.round((current / target) * 100) : 0
+    return { pct, done: 0, total: 0 }
+  }
+  if (goal.tracking_type === 'theme') {
+    const subGoals = goals.filter(g => g.parent_goal_id === goal.id)
+    const done = subGoals.filter(g => computeProgress(g, goals, milestones).pct >= 100).length
+    return { pct: 0, done, total: subGoals.length }
+  }
+  const ms = milestones.filter(m => m.goal_id === goal.id)
+  const done = ms.filter(m => m.complete).length
+  const pct = ms.length ? Math.round((done / ms.length) * 100) : 0
+  return { pct, done, total: ms.length }
+}
+
+function milestonesFor(goalId, milestones, milestoneTasks) {
+  return milestones.filter(m => m.goal_id === goalId).map(m => ({
+    ...m,
+    tasks: milestoneTasks.filter(t => t.milestone_id === m.id),
+  }))
 }
 
 function CompareColumn({
@@ -109,7 +127,7 @@ function CompareColumn({
 }) {
   if (!data) return <div className="card" style={{ flex: 1 }}><p className="text-dim" style={{ fontSize: 12 }}>Loading…</p></div>
 
-  const { goals, metrics, weekTasks, habits, habitLogs, moodLogs, todos, allWeeklyTasks, allDailyTodos } = data
+  const { goals, weekTasks, habits, habitLogs, moodLogs, todos, milestones, milestoneTasks } = data
   const periodGoals = goals.filter(g => g.quarter === goalQuarter && g.year === goalYear)
   const weekDone = weekTasks.filter(t => t.complete).length
   const weekPct = weekTasks.length ? Math.round((weekDone / weekTasks.length) * 100) : 0
@@ -210,8 +228,9 @@ function CompareColumn({
                   <GoalCard
                     goal={g}
                     color={color}
-                    linkedTasks={linkedTasksFor(g.id, allWeeklyTasks, allDailyTodos)}
-                    metricHistory={metrics.filter(m => m.goal_id === g.id)}
+                    progress={computeProgress(g, goals, milestones)}
+                    milestones={milestonesFor(g.id, milestones, milestoneTasks)}
+                    subGoals={g.tracking_type === 'theme' ? goals.filter(sg => sg.parent_goal_id === g.id).map(sg => ({ ...sg, pct: computeProgress(sg, goals, milestones).pct })) : []}
                     parentGoal={goals.find(p => p.id === g.parent_goal_id)}
                     readOnly
                   />
@@ -290,27 +309,25 @@ export default function ComparePage() {
   }
 
   async function loadForUser(uid) {
-    const [goalsRes, metricsRes, weekTasksRes, habitsRes, habitLogsRes, moodRes, todosRes, allWeeklyTasksRes, allDailyTodosRes] = await Promise.all([
+    const [goalsRes, weekTasksRes, habitsRes, habitLogsRes, moodRes, todosRes, milestonesRes, milestoneTasksRes] = await Promise.all([
       supabase.from('goals').select('*').eq('user_id', uid),
-      supabase.from('goal_metrics').select('*').eq('user_id', uid).order('recorded_at'),
       supabase.from('weekly_tasks').select('*').eq('user_id', uid).eq('week_start', weekStartStr),
       supabase.from('habits').select('*').eq('user_id', uid),
       supabase.from('habit_logs').select('*').eq('user_id', uid),
       supabase.from('mood_logs').select('*').eq('user_id', uid).gte('date', weekStartStr),
       supabase.from('daily_todos').select('*').eq('user_id', uid).eq('date', todoDateStr).eq('archived', false).order('sort_order'),
-      supabase.from('weekly_tasks').select('id, goal_id, area, specific_task, complete').eq('user_id', uid).not('goal_id', 'is', null),
-      supabase.from('daily_todos').select('id, goal_id, category, text, complete').eq('user_id', uid).not('goal_id', 'is', null),
+      supabase.from('milestones').select('*').eq('user_id', uid),
+      supabase.from('milestone_tasks').select('*').eq('user_id', uid),
     ])
     return {
       goals: goalsRes.data || [],
-      metrics: metricsRes.data || [],
       weekTasks: weekTasksRes.data || [],
       habits: habitsRes.data || [],
       habitLogs: habitLogsRes.data || [],
       moodLogs: moodRes.data || [],
       todos: todosRes.data || [],
-      allWeeklyTasks: allWeeklyTasksRes.data || [],
-      allDailyTodos: allDailyTodosRes.data || [],
+      milestones: milestonesRes.data || [],
+      milestoneTasks: milestoneTasksRes.data || [],
     }
   }
 

@@ -40,6 +40,17 @@ export const DEFAULT_TODO_CATEGORIES = [
 
 export const GOAL_CATEGORIES = ['Career', 'Creative', 'Financial', 'Personal', 'Wellness']
 
+// Quarterly goals track progress as a manual metric or via milestones.
+// Yearly goals track progress as a manual metric or as a theme (a count of
+// linked quarterly goals completed) — linked-task tracking no longer exists.
+export const QUARTERLY_TRACKING_TYPES = ['milestone', 'metric']
+export const YEARLY_TRACKING_TYPES = ['theme', 'metric']
+export const TRACKING_TYPE_LABELS = {
+  milestone: 'Milestones',
+  metric: 'Manual metric',
+  theme: 'Theme',
+}
+
 export const CONTENT_PILLARS = [
   'Work & Becoming',
   'Taste & Expression',
