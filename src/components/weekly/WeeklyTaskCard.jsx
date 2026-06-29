@@ -60,6 +60,16 @@ export default function WeeklyTaskCard({ task, areaColor, goals, expanded, onTog
         {task.carried_forward && <span className="badge badge-warning" style={{ fontSize: 9 }}>carried</span>}
         {task.day_of_week != null && <span className="badge" style={{ fontSize: 9, background: 'var(--career-tint)', color: 'var(--career)' }}>{DAY_SHORT_LABELS[task.day_of_week]}</span>}
         {task.complete ? <span className="badge badge-success" style={{ fontSize: 9 }}>Done</span> : <span className="badge badge-muted" style={{ fontSize: 9 }}>Open</span>}
+        {(task.subtasks || []).length > 0 && (
+          <button
+            className="badge"
+            onClick={() => onToggleExpand(task.id)}
+            title="Subtasks — click to expand"
+            style={{ fontSize: 9, fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--career)', background: 'var(--career-tint)', border: 'none', cursor: 'pointer' }}
+          >
+            {task.subtasks.filter(s => s.complete).length}/{task.subtasks.length} subtasks
+          </button>
+        )}
         {goal && <span style={{ fontSize: 9, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>{goal.primary_goal?.slice(0, 20)}</span>}
         <div style={{ flex: 1 }} />
         <button

@@ -745,10 +745,17 @@ function TodoItem({ todo, categories, catColor, goals, isTimerRunning, onToggle,
     }}>
       {/* Main row */}
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 9 }}>
-        {/* Expand chevron */}
+        {/* Expand chevron + subtask count */}
         {subtasks.length > 0 ? (
-          <button className="btn-icon" style={{ padding: 2, flexShrink: 0, color: 'var(--text-3)', marginTop: 1 }} onClick={() => setExpanded(v => !v)} title={expanded ? 'Collapse subtasks' : 'Expand subtasks'}>
+          <button className="btn-icon" style={{ padding: '2px 4px', flexShrink: 0, color: 'var(--text-3)', marginTop: 1, display: 'flex', alignItems: 'center', gap: 2 }} onClick={() => setExpanded(v => !v)} title={expanded ? 'Collapse subtasks' : 'Expand subtasks'}>
             {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+            <span style={{
+              fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 600, lineHeight: 1,
+              color: 'var(--career)', background: 'var(--bg-2)', border: '1px solid var(--border)',
+              borderRadius: 8, padding: '1px 5px',
+            }}>
+              {subtasks.filter(s => s.complete).length}/{subtasks.length}
+            </span>
           </button>
         ) : <div style={{ width: 18, flexShrink: 0 }} />}
 

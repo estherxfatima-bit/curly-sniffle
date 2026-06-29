@@ -63,7 +63,7 @@ export default function FinancePage() {
   const [savings, setSavings]   = useState([])
   const [budgets, setBudgets]   = useState([])
   const [moneyOwed, setMoneyOwed] = useState([])
-  const [newMoneyOwed, setNewMoneyOwed] = useState({ person: '', amount: '', note: '', date: new Date().toISOString().slice(0, 10) })
+  const [newMoneyOwed, setNewMoneyOwed] = useState({ person: '', amount: '', note: '', date: format(new Date(), 'yyyy-MM-dd') })
   const [loading, setLoading]   = useState(true)
   const [aiLoading, setAiLoading] = useState(false)
   const [aiSummary, setAiSummary] = useState('')
@@ -84,11 +84,11 @@ export default function FinancePage() {
   const [debtRepayments, setDebtRepayments]           = useState({}) // { debtId: [...] }
   const [savingsTxns, setSavingsTxns]                 = useState({}) // { accountId: [...] }
   const [investmentTxns, setInvestmentTxns]           = useState({}) // { investmentId: [...] }
-  const [newRepayment, setNewRepayment]               = useState({ amount: '', date: new Date().toISOString().slice(0, 10), note: '' })
-  const [newSavingsTxn, setNewSavingsTxn]             = useState({ type: 'contribution', amount: '', date: new Date().toISOString().slice(0, 10), note: '' })
+  const [newRepayment, setNewRepayment]               = useState({ amount: '', date: format(new Date(), 'yyyy-MM-dd'), note: '' })
+  const [newSavingsTxn, setNewSavingsTxn]             = useState({ type: 'contribution', amount: '', date: format(new Date(), 'yyyy-MM-dd'), note: '' })
   const [allocatingSavingsId, setAllocatingSavingsId] = useState(null)
   const [allocationSplits, setAllocationSplits]       = useState({})
-  const [newInvestmentTxn, setNewInvestmentTxn]       = useState({ type: 'contribution', amount: '', date: new Date().toISOString().slice(0, 10), note: '' })
+  const [newInvestmentTxn, setNewInvestmentTxn]       = useState({ type: 'contribution', amount: '', date: format(new Date(), 'yyyy-MM-dd'), note: '' })
   const [editingDebt, setEditingDebt]                 = useState(null)
   const [editDebtDraft, setEditDebtDraft]             = useState({})
   const [editingSavingsAcc, setEditingSavingsAcc]     = useState(null)
@@ -110,7 +110,7 @@ export default function FinancePage() {
   // New item forms
   const [newIncome, setNewIncome]     = useState({ name: '', amount: '', frequency: 'monthly', is_self_employed: false })
   const [newFixed, setNewFixed]       = useState({ name: '', amount: '', category: 'Other' })
-  const [newVariable, setNewVariable] = useState({ name: '', amount: '', category: 'Other', date: new Date().toISOString().slice(0, 10) })
+  const [newVariable, setNewVariable] = useState({ name: '', amount: '', category: 'Other', date: format(new Date(), 'yyyy-MM-dd') })
   const [newSavings, setNewSavings]   = useState({ name: '', amount: '', frequency: 'monthly', kind: 'Savings' })
 
   // Inline row editing (income/fixed/variable/savings)
@@ -137,7 +137,7 @@ export default function FinancePage() {
   const [refDate, setRefDate] = useState(new Date())
 
   const thisMonth = new Date().toISOString().slice(0, 7)
-  const todayStr = new Date().toISOString().slice(0, 10)
+  const todayStr = format(new Date(), 'yyyy-MM-dd')
   const refMonthYear = format(refDate, 'yyyy-MM')
 
   useEffect(() => { if (user) load() }, [user])
@@ -206,13 +206,13 @@ export default function FinancePage() {
       category: newVariable.category, date: newVariable.date,
     }).select().single()
     setVariable(prev => [data, ...prev])
-    setNewVariable({ name: '', amount: '', category: 'Other', date: new Date().toISOString().slice(0, 10) })
+    setNewVariable({ name: '', amount: '', category: 'Other', date: format(new Date(), 'yyyy-MM-dd') })
   }
 
   // Quick-add from FAB — single tap on a category pill (after entering an amount)
   async function addVariableQuick({ amount, category, name }) {
     const { data } = await supabase.from('variable_expenses').insert({
-      user_id: user.id, name, amount, category, date: new Date().toISOString().slice(0, 10),
+      user_id: user.id, name, amount, category, date: format(new Date(), 'yyyy-MM-dd'),
     }).select().single()
     setVariable(prev => [data, ...prev])
   }
@@ -220,7 +220,7 @@ export default function FinancePage() {
   // Log a £0 "no spend" entry for today so the spending reminder doesn't nag and the day is on record.
   async function logNoSpendToday() {
     const { data } = await supabase.from('variable_expenses').insert({
-      user_id: user.id, name: 'No spend day', amount: 0, category: 'Other', date: new Date().toISOString().slice(0, 10),
+      user_id: user.id, name: 'No spend day', amount: 0, category: 'Other', date: format(new Date(), 'yyyy-MM-dd'),
     }).select().single()
     setVariable(prev => [data, ...prev])
   }
@@ -260,7 +260,7 @@ export default function FinancePage() {
       note: newMoneyOwed.note || null, date: newMoneyOwed.date,
     }).select().single()
     setMoneyOwed(prev => [data, ...prev])
-    setNewMoneyOwed({ person: '', amount: '', note: '', date: new Date().toISOString().slice(0, 10) })
+    setNewMoneyOwed({ person: '', amount: '', note: '', date: format(new Date(), 'yyyy-MM-dd') })
   }
   async function toggleMoneyOwedSettled(id, settled) {
     const { data } = await supabase.from('money_owed')
@@ -338,7 +338,7 @@ export default function FinancePage() {
     const totalInv = (overrides.investments ?? investments).reduce((s, i) => s + (i.current_value || 0), 0)
     const totalDbt = (overrides.debts ?? debts).reduce((s, d) => s + (d.current_balance || 0), 0)
     await supabase.from('net_worth_entries').insert({
-      user_id: user.id, date: new Date().toISOString().slice(0, 10),
+      user_id: user.id, date: format(new Date(), 'yyyy-MM-dd'),
       total_savings: totalSav, total_investments: totalInv,
       total_debt: totalDbt, net_worth: totalSav + totalInv - totalDbt,
     })
@@ -407,7 +407,7 @@ export default function FinancePage() {
       setSavingsTxns(prev => ({ ...prev, [accountId]: [txn, ...(prev[accountId] || [])] }))
       if (selectedSavingsAccount?.id === accountId) setSelectedSavingsAccount(prev => ({ ...prev, current_balance: target }))
       await recordNetWorthSnapshot({ savingsAccounts: updatedAccounts })
-      setNewSavingsTxn({ type: 'contribution', amount: '', date: new Date().toISOString().slice(0, 10), note: '' })
+      setNewSavingsTxn({ type: 'contribution', amount: '', date: format(new Date(), 'yyyy-MM-dd'), note: '' })
       return
     }
     if (newSavingsTxn.type === 'withdrawal' && !newSavingsTxn.note.trim()) { alert('Add a note explaining why the balance decreased.'); return }
@@ -417,7 +417,7 @@ export default function FinancePage() {
       note: newSavingsTxn.note || null, status: 'pending',
     }).select().single()
     setSavingsTxns(prev => ({ ...prev, [accountId]: [txn, ...(prev[accountId] || [])] }))
-    setNewSavingsTxn({ type: 'contribution', amount: '', date: new Date().toISOString().slice(0, 10), note: '' })
+    setNewSavingsTxn({ type: 'contribution', amount: '', date: format(new Date(), 'yyyy-MM-dd'), note: '' })
   }
 
   // ── Monthly savings allocation split across accounts ──────────
@@ -439,7 +439,7 @@ export default function FinancePage() {
       return
     }
     let updatedAccounts = savingsAccounts
-    const today = new Date().toISOString().slice(0, 10)
+    const today = format(new Date(), 'yyyy-MM-dd')
     for (const [accountId, v] of entries) {
       const amount = parseFloat(v)
       await supabase.from('savings_transactions').insert({
@@ -499,7 +499,7 @@ export default function FinancePage() {
       note: newInvestmentTxn.note || null, status: 'pending',
     }).select().single()
     setInvestmentTxns(prev => ({ ...prev, [investmentId]: [txn, ...(prev[investmentId] || [])] }))
-    setNewInvestmentTxn({ type: 'contribution', amount: '', date: new Date().toISOString().slice(0, 10), note: '' })
+    setNewInvestmentTxn({ type: 'contribution', amount: '', date: format(new Date(), 'yyyy-MM-dd'), note: '' })
   }
   async function confirmInvestmentTxn(txn) {
     await supabase.from('investment_transactions').update({ status: 'confirmed', updated_at: new Date().toISOString() }).eq('id', txn.id)
@@ -530,7 +530,7 @@ export default function FinancePage() {
   async function confirmDebtAllocation() {
     if (!allocateDebtId || !allocateDebtAmount) return
     const amt = parseFloat(allocateDebtAmount)
-    const today = new Date().toISOString().slice(0, 10)
+    const today = format(new Date(), 'yyyy-MM-dd')
     await logRepayment(allocateDebtId, amt, today, allocateDebtNote || null)
     await tagDebtPaymentAsBudgetExpense(allocateDebtId, amt, today)
     setShowAllocateDebt(false); setAllocateDebtId(''); setAllocateDebtAmount(''); setAllocateDebtNote(''); setAllocateDebtBudgetType('none')
@@ -593,7 +593,7 @@ export default function FinancePage() {
     for (const s of allocateSuggestions) {
       const amt = parseFloat(s.amount)
       if (!amt || amt <= 0) continue
-      await logRepayment(s.debtId, amt, new Date().toISOString().slice(0, 10), 'Auto-allocated')
+      await logRepayment(s.debtId, amt, format(new Date(), 'yyyy-MM-dd'), 'Auto-allocated')
     }
     setShowAllocateSuggest(false); setAllocateSuggestions([])
   }
@@ -1667,7 +1667,7 @@ export default function FinancePage() {
                   onClick={async () => {
                     if (!newRepayment.amount) return
                     await logRepayment(d.id, parseFloat(newRepayment.amount), newRepayment.date, newRepayment.note)
-                    setNewRepayment({ amount: '', date: new Date().toISOString().slice(0, 10), note: '' })
+                    setNewRepayment({ amount: '', date: format(new Date(), 'yyyy-MM-dd'), note: '' })
                   }}
                 >Log repayment</button>
               </div>
