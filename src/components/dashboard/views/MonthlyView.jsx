@@ -21,7 +21,7 @@ export const DEFAULT_ORDER = [
 
 export default function MonthlyView({
   habits, monthHabitLogs, goals, weekTasks,
-  income, fixed, variable,
+  income, fixed, variable, savings,
   contentBatches,
   onOpenPanel, cardOrder, onReorder,
   editing, onResize, onRemoveCard, onAddCard,
@@ -53,7 +53,8 @@ export default function MonthlyView({
   const selfEmp       = (income   || []).filter(i => i.is_self_employed).reduce((s, i) => s + toMonthly(i.amount, i.frequency), 0)
   const taxPot        = selfEmp * 0.25
   const totalVariable = (variable || []).reduce((s, i) => s + i.amount, 0)
-  const takeHome      = totalIncome - taxPot - totalFixed - totalVariable
+  const totalSavings  = (savings  || []).reduce((s, i) => s + toMonthly(i.amount, i.frequency), 0)
+  const takeHome      = totalIncome - taxPot - totalFixed - totalSavings - totalVariable
 
   // Goal rings
   const goalRings = goals.filter(g => g.quarter).map(goal => {

@@ -84,6 +84,7 @@ export default function DashboardPage() {
   const [income,          setIncome]          = useState([])
   const [fixed,           setFixed]           = useState([])
   const [variable,        setVariable]        = useState([])
+  const [savings,         setSavings]         = useState([])
   const [contentBatches,  setContentBatches]  = useState([])
 
   // Quarterly view extra
@@ -156,17 +157,19 @@ export default function DashboardPage() {
   }
 
   async function loadMonthly() {
-    const [mhRes, incRes, fixRes, varRes, batchRes] = await Promise.all([
+    const [mhRes, incRes, fixRes, varRes, savRes, batchRes] = await Promise.all([
       supabase.from('habit_logs').select('habit_id,log_date').eq('user_id', user.id).gte('log_date', monthStart),
       supabase.from('income_sources').select('*').eq('user_id', user.id),
       supabase.from('fixed_expenses').select('*').eq('user_id', user.id),
       supabase.from('variable_expenses').select('amount,category,date').eq('user_id', user.id).gte('date', monthStart),
+      supabase.from('savings_allocations').select('amount,frequency').eq('user_id', user.id),
       supabase.from('content_batches').select('id,name,ideas').eq('user_id', user.id).limit(6),
     ])
     setMonthHabitLogs(mhRes.data || [])
     setIncome(incRes.data || [])
     setFixed(fixRes.data || [])
     setVariable(varRes.data || [])
+    setSavings(savRes.data || [])
     setContentBatches(batchRes.data || [])
   }
 
@@ -488,6 +491,7 @@ export default function DashboardPage() {
           income={income}
           fixed={fixed}
           variable={variable}
+          savings={savings}
           contentBatches={contentBatches}
           onOpenPanel={setPanel}
           cardOrder={normalizeOrder(cardOrders.monthly, 'monthly')}
