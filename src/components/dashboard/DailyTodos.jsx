@@ -36,7 +36,7 @@ const IDEA_CAT_TO_TODO_CATEGORY = {
 
 const FALLBACK_CAT_COLOR = 'var(--career)'
 
-export default function DailyTodos({ compact = false }) {
+export default function DailyTodos({ compact = false, date = null }) {
   const { user, session } = useAuth()
   const today     = format(new Date(), 'yyyy-MM-dd')
   const yesterday = format(subDays(new Date(), 1), 'yyyy-MM-dd')
@@ -65,7 +65,7 @@ export default function DailyTodos({ compact = false }) {
   const [showTimeBlock, setShowTimeBlock] = useState(false)
   const [workingHours, setWorkingHours] = useState({ start: '09:00', end: '19:00' })
   const [autoCompleteLinked, setAutoCompleteLinked] = useState(true)
-  const [viewDate, setViewDate] = useState(today)
+  const [viewDate, setViewDate] = useState(date || today)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const inputRef = useRef(null)
   const timerCtx = useTimer()
@@ -79,6 +79,12 @@ export default function DailyTodos({ compact = false }) {
   useEffect(() => {
     if (user) { loadGoals(); loadWorkingHours(); loadCategoryColors() }
   }, [user])
+
+  // Follow the dashboard's day navigation (period-nav arrows) when this widget is
+  // controlled by a parent that tracks its own reference date.
+  useEffect(() => {
+    if (date) setViewDate(date)
+  }, [date])
 
   // Carry over yesterday's incomplete tasks (once, only when viewing today), then load todos for viewDate
   useEffect(() => {

@@ -91,7 +91,7 @@ export default function DailyView({
 
     todos: (
       <div className="card">
-        <DailyTodos />
+        <DailyTodos date={today} />
       </div>
     ),
 
