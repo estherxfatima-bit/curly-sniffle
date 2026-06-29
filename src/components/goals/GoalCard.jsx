@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { format } from 'date-fns'
-import { Edit2, Trash2, RefreshCw, Check, Circle, Lock, Unlock } from 'lucide-react'
+import { Edit2, Trash2, RefreshCw, Check, Circle, Lock, Unlock, Flag, Plus, X } from 'lucide-react'
 import ArcRing from '../ui/ArcRing'
 import PriorityDot from '../shared/PriorityDot'
 import { PRIORITY_COLORS } from '../../lib/constants'
@@ -13,9 +13,17 @@ const STATUS_BADGE = {
   'Complete':    'badge-success',
 }
 
-export default function GoalCard({ goal, color, linkedTasks, metricHistory, parentGoal, onEdit, onDelete, onAddMetric, onUpdatePriority, onTogglePrivate, readOnly = false }) {
+export default function GoalCard({
+  goal, color, linkedTasks, milestones = [], metricHistory, parentGoal,
+  onEdit, onDelete, onAddMetric, onUpdatePriority, onTogglePrivate,
+  onAddMilestone, onToggleMilestone, onDeleteMilestone, onToggleLinkedTask, onAssignTaskMilestone,
+  readOnly = false,
+}) {
   const [updating, setUpdating] = useState(false)
   const [newValue, setNewValue] = useState('')
+  const [addingMilestone, setAddingMilestone] = useState(false)
+  const [milestoneTitle, setMilestoneTitle] = useState('')
+  const [milestoneDate, setMilestoneDate] = useState('')
 
   const isMetric = goal.tracking_type === 'metric'
 
@@ -32,6 +40,16 @@ export default function GoalCard({ goal, color, linkedTasks, metricHistory, pare
     else if (pct >= 50) status = 'On track'
     else status = 'In progress'
     if (metricHistory.length) lastUpdated = metricHistory[metricHistory.length - 1].recorded_at
+  } else if (milestones.length > 0) {
+    // Milestones give a more accurate read on progress than "% of linked tasks
+    // done" — a goal can have lots of small tasks and few real checkpoints.
+    const total = milestones.length
+    const done = milestones.filter(m => m.complete).length
+    pct = Math.round((done / total) * 100)
+    if (done === 0) status = 'Not started'
+    else if (pct >= 100) status = 'Complete'
+    else if (pct >= 50) status = 'On track'
+    else status = 'In progress'
   } else {
     const total = linkedTasks.length
     const done = linkedTasks.filter(t => t.complete).length
@@ -40,6 +58,14 @@ export default function GoalCard({ goal, color, linkedTasks, metricHistory, pare
     else if (pct >= 100) status = 'Complete'
     else if (pct >= 50) status = 'On track'
     else status = 'In progress'
+  }
+
+  function submitMilestone() {
+    if (!milestoneTitle.trim()) return
+    onAddMilestone(milestoneTitle, milestoneDate)
+    setMilestoneTitle('')
+    setMilestoneDate('')
+    setAddingMilestone(false)
   }
 
   async function submitUpdate() {
@@ -121,6 +147,61 @@ export default function GoalCard({ goal, color, linkedTasks, metricHistory, pare
         </div>
       )}
 
+      {!isMetric && (
+        <div className="mb-3">
+          <div className="flex items-center justify-between mb-2">
+            <p className="mono">Milestones ({milestones.filter(m => m.complete).length}/{milestones.length})</p>
+            {!readOnly && !addingMilestone && (
+              <button className="btn btn-xs btn-ghost" onClick={() => setAddingMilestone(true)}>
+                <Plus size={11} /> Add
+              </button>
+            )}
+          </div>
+          {addingMilestone && (
+            <div className="flex items-center gap-2 mb-2 wrap">
+              <input
+                autoFocus
+                value={milestoneTitle}
+                onChange={e => setMilestoneTitle(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') submitMilestone(); if (e.key === 'Escape') setAddingMilestone(false) }}
+                placeholder="Milestone title"
+                style={{ fontSize: 12, padding: '4px 8px', flex: 1, minWidth: 120 }}
+              />
+              <input
+                type="date"
+                value={milestoneDate}
+                onChange={e => setMilestoneDate(e.target.value)}
+                style={{ fontSize: 12, padding: '4px 8px' }}
+              />
+              <button className="btn btn-xs btn-career" style={{ color: '#fff' }} onClick={submitMilestone}>Save</button>
+              <button className="btn-icon btn btn-xs" onClick={() => { setAddingMilestone(false); setMilestoneTitle(''); setMilestoneDate('') }}><X size={11} /></button>
+            </div>
+          )}
+          {milestones.length === 0 ? (
+            <p style={{ fontSize: 12, color: 'var(--text-3)', fontStyle: 'italic' }}>No milestones yet — add checkpoints to track this goal more accurately than task count alone.</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {milestones.map(m => (
+                <div key={m.id} className="flex items-center gap-2">
+                  <button
+                    onClick={() => !readOnly && onToggleMilestone(m)}
+                    style={{ background: 'none', border: 'none', padding: 0, cursor: readOnly ? 'default' : 'pointer', display: 'flex' }}
+                    title={m.complete ? 'Mark incomplete' : 'Mark complete'}
+                  >
+                    {m.complete ? <Check size={12} color="var(--success)" /> : <Flag size={11} color="var(--text-3)" />}
+                  </button>
+                  <span style={{ fontSize: 12, flex: 1, color: m.complete ? 'var(--text-3)' : 'var(--text-2)', textDecoration: m.complete ? 'line-through' : 'none' }}>{m.title}</span>
+                  {m.target_date && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-3)' }}>{format(new Date(m.target_date), 'd MMM')}</span>}
+                  {!readOnly && (
+                    <button className="btn-icon btn btn-xs" onClick={() => onDeleteMilestone(m.id)} title="Delete milestone"><Trash2 size={10} /></button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {isMetric ? (
         <div>
           <div className="flex items-center justify-between mb-2">
@@ -177,9 +258,29 @@ export default function GoalCard({ goal, color, linkedTasks, metricHistory, pare
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {linkedTasks.map((t, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  {t.complete ? <Check size={12} color="var(--success)" /> : <Circle size={10} color="var(--text-3)" />}
+                <div key={t.id || i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <button
+                    onClick={() => !readOnly && onToggleLinkedTask && onToggleLinkedTask(t)}
+                    style={{ background: 'none', border: 'none', padding: 0, cursor: (readOnly || !onToggleLinkedTask) ? 'default' : 'pointer', display: 'flex' }}
+                    title={t.complete ? 'Mark not done' : 'Mark done'}
+                  >
+                    {t.complete ? <Check size={12} color="var(--success)" /> : <Circle size={10} color="var(--text-3)" />}
+                  </button>
                   <span style={{ fontSize: 12, flex: 1, color: t.complete ? 'var(--text-3)' : 'var(--text-2)', textDecoration: t.complete ? 'line-through' : 'none' }}>{t.text}</span>
+                  {t.complete && t.completed_on && (
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-3)' }}>{format(new Date(t.completed_on), 'd MMM')}</span>
+                  )}
+                  {!readOnly && onAssignTaskMilestone && milestones.length > 0 && (
+                    <select
+                      value={t.milestone_id || ''}
+                      onChange={e => onAssignTaskMilestone(t, e.target.value)}
+                      style={{ fontSize: 9, padding: '2px 4px', maxWidth: 90 }}
+                      title="Link to milestone"
+                    >
+                      <option value="">No milestone</option>
+                      {milestones.map(m => <option key={m.id} value={m.id}>{m.title.slice(0, 20)}</option>)}
+                    </select>
+                  )}
                   <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-3)', textTransform: 'uppercase' }}>{t.area}</span>
                 </div>
               ))}

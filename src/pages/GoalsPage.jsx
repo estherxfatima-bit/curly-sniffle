@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { format } from 'date-fns'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { GOAL_CATEGORIES, QUARTERS, getCurrentQuarter, priorityRank, priorityFilterOptions, PRIORITY_COLORS } from '../lib/constants'
@@ -40,6 +41,7 @@ export default function GoalsPage() {
   const [weeklyTasks, setWeeklyTasks] = useState([])
   const [dailyTodos, setDailyTodos] = useState([])
   const [metrics, setMetrics] = useState([])
+  const [milestones, setMilestones] = useState([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [editing, setEditing] = useState(null)
@@ -56,16 +58,18 @@ export default function GoalsPage() {
 
   async function loadAll() {
     setLoading(true)
-    const [goalsRes, weeklyRes, dailyRes, metricsRes] = await Promise.all([
+    const [goalsRes, weeklyRes, dailyRes, metricsRes, milestonesRes] = await Promise.all([
       supabase.from('goals').select('*').eq('user_id', user.id).order('year', { ascending: false }).order('quarter').order('category'),
-      supabase.from('weekly_tasks').select('id, goal_id, area, specific_task, complete').eq('user_id', user.id).not('goal_id', 'is', null),
-      supabase.from('daily_todos').select('id, goal_id, category, text, complete').eq('user_id', user.id).not('goal_id', 'is', null),
+      supabase.from('weekly_tasks').select('id, goal_id, area, specific_task, complete, milestone_id, completed_on').eq('user_id', user.id).not('goal_id', 'is', null),
+      supabase.from('daily_todos').select('id, goal_id, category, text, complete, milestone_id, completed_on').eq('user_id', user.id).not('goal_id', 'is', null),
       supabase.from('goal_metrics').select('*').eq('user_id', user.id).order('recorded_at'),
+      supabase.from('milestones').select('*').eq('user_id', user.id).order('sort_order'),
     ])
     setGoals(goalsRes.data || [])
     setWeeklyTasks(weeklyRes.data || [])
     setDailyTodos(dailyRes.data || [])
     setMetrics(metricsRes.data || [])
+    setMilestones(milestonesRes.data || [])
     setLoading(false)
   }
 
@@ -106,6 +110,59 @@ export default function GoalsPage() {
     setGoals(prev => prev.map(g => g.id === id ? { ...g, [field]: value } : g))
   }
 
+  async function addMilestone(goalId, title, targetDate) {
+    if (!title.trim()) return
+    const sortOrder = milestones.filter(m => m.goal_id === goalId).length
+    const { data, error } = await supabase.from('milestones').insert({
+      user_id: user.id, goal_id: goalId, title: title.trim(), target_date: targetDate || null, sort_order: sortOrder,
+    }).select().single()
+    if (error) { alert(`Couldn't add milestone: ${error.message}`); return }
+    setMilestones(prev => [...prev, data])
+  }
+
+  async function toggleMilestone(milestone) {
+    const { error } = await supabase.from('milestones').update({ complete: !milestone.complete }).eq('id', milestone.id)
+    if (error) { alert(`Couldn't update milestone: ${error.message}`); return }
+    setMilestones(prev => prev.map(m => m.id === milestone.id ? { ...m, complete: !milestone.complete } : m))
+  }
+
+  async function deleteMilestone(id) {
+    if (!confirm('Delete this milestone? Tasks linked to it will be unlinked, not deleted.')) return
+    const { error } = await supabase.from('milestones').delete().eq('id', id)
+    if (error) { alert(`Couldn't delete milestone: ${error.message}`); return }
+    setMilestones(prev => prev.filter(m => m.id !== id))
+    setWeeklyTasks(prev => prev.map(t => t.milestone_id === id ? { ...t, milestone_id: null } : t))
+    setDailyTodos(prev => prev.map(t => t.milestone_id === id ? { ...t, milestone_id: null } : t))
+  }
+
+  async function assignTaskMilestone(item, milestoneId) {
+    const table = item.source === 'weekly' ? 'weekly_tasks' : 'daily_todos'
+    const { error } = await supabase.from(table).update({ milestone_id: milestoneId || null }).eq('id', item.id)
+    if (error) { alert(`Couldn't link task to milestone: ${error.message}`); return }
+    const updater = prev => prev.map(t => t.id === item.id ? { ...t, milestone_id: milestoneId || null } : t)
+    if (item.source === 'weekly') setWeeklyTasks(updater)
+    else setDailyTodos(updater)
+  }
+
+  // Toggle a goal-linked task's completion directly from the Goals page. When marking
+  // complete, ask which day it actually happened — completing something late shouldn't
+  // get attributed to today if it was actually finished on an earlier day.
+  async function toggleLinkedTask(item) {
+    const newVal = !item.complete
+    let completedOn = null
+    if (newVal) {
+      const input = window.prompt('Date this was actually completed (YYYY-MM-DD)?', format(new Date(), 'yyyy-MM-dd'))
+      if (input === null) return
+      completedOn = input.trim() || format(new Date(), 'yyyy-MM-dd')
+    }
+    const table = item.source === 'weekly' ? 'weekly_tasks' : 'daily_todos'
+    const { error } = await supabase.from(table).update({ complete: newVal, completed_on: completedOn }).eq('id', item.id)
+    if (error) { alert(`Couldn't update task: ${error.message}`); return }
+    const updater = prev => prev.map(t => t.id === item.id ? { ...t, complete: newVal, completed_on: completedOn } : t)
+    if (item.source === 'weekly') setWeeklyTasks(updater)
+    else setDailyTodos(updater)
+  }
+
   // Goals matching the priority filter, sorted by priority within each category.
   const byPriority = (a, b) => priorityRank(a.priority_level) - priorityRank(b.priority_level)
   function visibleSorted(list) {
@@ -120,9 +177,13 @@ export default function GoalsPage() {
 
   function linkedTasksFor(goalId) {
     return [
-      ...weeklyTasks.filter(t => t.goal_id === goalId).map(t => ({ text: t.specific_task, complete: t.complete, area: t.area })),
-      ...dailyTodos.filter(t => t.goal_id === goalId).map(t => ({ text: t.text, complete: t.complete, area: t.category })),
+      ...weeklyTasks.filter(t => t.goal_id === goalId).map(t => ({ id: t.id, source: 'weekly', text: t.specific_task, complete: t.complete, area: t.area, milestone_id: t.milestone_id, completed_on: t.completed_on })),
+      ...dailyTodos.filter(t => t.goal_id === goalId).map(t => ({ id: t.id, source: 'daily', text: t.text, complete: t.complete, area: t.category, milestone_id: t.milestone_id, completed_on: t.completed_on })),
     ]
+  }
+
+  function milestonesFor(goalId) {
+    return milestones.filter(m => m.goal_id === goalId)
   }
 
   // Group goals: year -> quarter -> category
@@ -217,12 +278,18 @@ export default function GoalsPage() {
                                             goal={goal}
                                             color={color}
                                             linkedTasks={linkedTasksFor(goal.id)}
+                                            milestones={milestonesFor(goal.id)}
                                             metricHistory={metrics.filter(m => m.goal_id === goal.id)}
                                             onEdit={g => { setEditing(g); setCreateCtx(null); setShowModal(true) }}
                                             onDelete={deleteGoal}
                                             onAddMetric={addMetric}
                                             onUpdatePriority={v => updateGoalField(goal.id, 'priority_level', v)}
                                             onTogglePrivate={g => updateGoalField(g.id, 'is_private', !g.is_private)}
+                                            onAddMilestone={(title, date) => addMilestone(goal.id, title, date)}
+                                            onToggleMilestone={toggleMilestone}
+                                            onDeleteMilestone={deleteMilestone}
+                                            onToggleLinkedTask={toggleLinkedTask}
+                                            onAssignTaskMilestone={assignTaskMilestone}
                                           />
                                           <div style={{ marginTop: 10 }}>
                                             <p className="mono mb-1">Broken down into</p>
