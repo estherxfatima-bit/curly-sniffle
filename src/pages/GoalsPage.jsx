@@ -175,6 +175,14 @@ export default function GoalsPage() {
     }))
   }
 
+  // A milestone counts fully (1) once manually checked off; otherwise it earns
+  // partial credit from its own tasks' completion ratio.
+  function milestoneCredit(m) {
+    if (m.complete) return 1
+    const tasks = milestoneTasks.filter(t => t.milestone_id === m.id)
+    return tasks.length ? tasks.filter(t => t.complete).length / tasks.length : 0
+  }
+
   // Computes { pct, done, total } for any goal given its tracking type.
   function computeProgress(goal) {
     if (goal.tracking_type === 'metric') {
@@ -191,7 +199,7 @@ export default function GoalsPage() {
     // milestone
     const ms = milestones.filter(m => m.goal_id === goal.id)
     const done = ms.filter(m => m.complete).length
-    const pct = ms.length ? Math.round((done / ms.length) * 100) : 0
+    const pct = ms.length ? Math.round((ms.reduce((s, m) => s + milestoneCredit(m), 0) / ms.length) * 100) : 0
     return { pct, done, total: ms.length }
   }
 

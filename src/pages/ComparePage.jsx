@@ -94,7 +94,13 @@ function MiniNav({ label, onPrev, onNext, onToday, isCurrent }) {
   )
 }
 
-function computeProgress(goal, goals, milestones) {
+function milestoneCredit(m, milestoneTasks) {
+  if (m.complete) return 1
+  const tasks = milestoneTasks.filter(t => t.milestone_id === m.id)
+  return tasks.length ? tasks.filter(t => t.complete).length / tasks.length : 0
+}
+
+function computeProgress(goal, goals, milestones, milestoneTasks) {
   if (goal.tracking_type === 'metric') {
     const target = Number(goal.metric_target ?? 0)
     const current = Number(goal.metric_current ?? 0)
@@ -103,12 +109,12 @@ function computeProgress(goal, goals, milestones) {
   }
   if (goal.tracking_type === 'theme') {
     const subGoals = goals.filter(g => g.parent_goal_id === goal.id)
-    const done = subGoals.filter(g => computeProgress(g, goals, milestones).pct >= 100).length
+    const done = subGoals.filter(g => computeProgress(g, goals, milestones, milestoneTasks).pct >= 100).length
     return { pct: 0, done, total: subGoals.length }
   }
   const ms = milestones.filter(m => m.goal_id === goal.id)
   const done = ms.filter(m => m.complete).length
-  const pct = ms.length ? Math.round((done / ms.length) * 100) : 0
+  const pct = ms.length ? Math.round((ms.reduce((s, m) => s + milestoneCredit(m, milestoneTasks), 0) / ms.length) * 100) : 0
   return { pct, done, total: ms.length }
 }
 
@@ -228,9 +234,9 @@ function CompareColumn({
                   <GoalCard
                     goal={g}
                     color={color}
-                    progress={computeProgress(g, goals, milestones)}
+                    progress={computeProgress(g, goals, milestones, milestoneTasks)}
                     milestones={milestonesFor(g.id, milestones, milestoneTasks)}
-                    subGoals={g.tracking_type === 'theme' ? goals.filter(sg => sg.parent_goal_id === g.id).map(sg => ({ ...sg, pct: computeProgress(sg, goals, milestones).pct })) : []}
+                    subGoals={g.tracking_type === 'theme' ? goals.filter(sg => sg.parent_goal_id === g.id).map(sg => ({ ...sg, pct: computeProgress(sg, goals, milestones, milestoneTasks).pct })) : []}
                     parentGoal={goals.find(p => p.id === g.parent_goal_id)}
                     readOnly
                   />
