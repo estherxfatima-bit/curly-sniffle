@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { format } from 'date-fns'
-import { Edit2, Trash2, RefreshCw, Check, Circle, Lock, Unlock, Flag, Plus, X } from 'lucide-react'
+import { Edit2, Trash2, RefreshCw, Check, Circle, Lock, Unlock, Flag } from 'lucide-react'
 import ArcRing from '../ui/ArcRing'
 import PriorityDot from '../shared/PriorityDot'
 import { PRIORITY_COLORS } from '../../lib/constants'
@@ -16,15 +16,11 @@ const STATUS_BADGE = {
 export default function GoalCard({
   goal, color, linkedTasks, milestones = [], metricHistory, parentGoal,
   onEdit, onDelete, onAddMetric, onUpdatePriority, onTogglePrivate,
-  onAddMilestone, onToggleMilestone, onDeleteMilestone, onToggleLinkedTask, onAssignTaskMilestone,
+  onToggleMilestone, onToggleLinkedTask, onAssignTaskMilestone, onReassignLinkedTask,
   readOnly = false,
 }) {
   const [updating, setUpdating] = useState(false)
   const [newValue, setNewValue] = useState('')
-  const [addingMilestone, setAddingMilestone] = useState(false)
-  const [milestoneTitle, setMilestoneTitle] = useState('')
-  const [milestoneDate, setMilestoneDate] = useState('')
-
   const isMetric = goal.tracking_type === 'metric'
 
   let pct = 0, current = null, status = 'Not started', lastUpdated = goal.updated_at || goal.created_at
@@ -52,20 +48,12 @@ export default function GoalCard({
     else status = 'In progress'
   } else {
     const total = linkedTasks.length
-    const done = linkedTasks.filter(t => t.complete).length
+    const done = linkedTasks.filter(t => t.complete || t.completed_on).length
     pct = total ? Math.round((done / total) * 100) : 0
     if (total === 0) status = 'Not started'
     else if (pct >= 100) status = 'Complete'
     else if (pct >= 50) status = 'On track'
     else status = 'In progress'
-  }
-
-  function submitMilestone() {
-    if (!milestoneTitle.trim()) return
-    onAddMilestone(milestoneTitle, milestoneDate)
-    setMilestoneTitle('')
-    setMilestoneDate('')
-    setAddingMilestone(false)
   }
 
   async function submitUpdate() {
@@ -147,58 +135,31 @@ export default function GoalCard({
         </div>
       )}
 
-      {!isMetric && (
+      {!isMetric && milestones.length > 0 && (
         <div className="mb-3">
           <div className="flex items-center justify-between mb-2">
             <p className="mono">Milestones ({milestones.filter(m => m.complete).length}/{milestones.length})</p>
-            {!readOnly && !addingMilestone && (
-              <button className="btn btn-xs btn-ghost" onClick={() => setAddingMilestone(true)}>
-                <Plus size={11} /> Add
+            {!readOnly && (
+              <button className="btn btn-xs btn-ghost" onClick={() => onEdit(goal)} title="Manage milestones">
+                Manage
               </button>
             )}
           </div>
-          {addingMilestone && (
-            <div className="flex items-center gap-2 mb-2 wrap">
-              <input
-                autoFocus
-                value={milestoneTitle}
-                onChange={e => setMilestoneTitle(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') submitMilestone(); if (e.key === 'Escape') setAddingMilestone(false) }}
-                placeholder="Milestone title"
-                style={{ fontSize: 12, padding: '4px 8px', flex: 1, minWidth: 120 }}
-              />
-              <input
-                type="date"
-                value={milestoneDate}
-                onChange={e => setMilestoneDate(e.target.value)}
-                style={{ fontSize: 12, padding: '4px 8px' }}
-              />
-              <button className="btn btn-xs btn-career" style={{ color: '#fff' }} onClick={submitMilestone}>Save</button>
-              <button className="btn-icon btn btn-xs" onClick={() => { setAddingMilestone(false); setMilestoneTitle(''); setMilestoneDate('') }}><X size={11} /></button>
-            </div>
-          )}
-          {milestones.length === 0 ? (
-            <p style={{ fontSize: 12, color: 'var(--text-3)', fontStyle: 'italic' }}>No milestones yet — add checkpoints to track this goal more accurately than task count alone.</p>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {milestones.map(m => (
-                <div key={m.id} className="flex items-center gap-2">
-                  <button
-                    onClick={() => !readOnly && onToggleMilestone(m)}
-                    style={{ background: 'none', border: 'none', padding: 0, cursor: readOnly ? 'default' : 'pointer', display: 'flex' }}
-                    title={m.complete ? 'Mark incomplete' : 'Mark complete'}
-                  >
-                    {m.complete ? <Check size={12} color="var(--success)" /> : <Flag size={11} color="var(--text-3)" />}
-                  </button>
-                  <span style={{ fontSize: 12, flex: 1, color: m.complete ? 'var(--text-3)' : 'var(--text-2)', textDecoration: m.complete ? 'line-through' : 'none' }}>{m.title}</span>
-                  {m.target_date && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-3)' }}>{format(new Date(m.target_date), 'd MMM')}</span>}
-                  {!readOnly && (
-                    <button className="btn-icon btn btn-xs" onClick={() => onDeleteMilestone(m.id)} title="Delete milestone"><Trash2 size={10} /></button>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {milestones.map(m => (
+              <div key={m.id} className="flex items-center gap-2">
+                <button
+                  onClick={() => !readOnly && onToggleMilestone(m)}
+                  style={{ background: 'none', border: 'none', padding: 0, cursor: readOnly ? 'default' : 'pointer', display: 'flex' }}
+                  title={m.complete ? 'Mark incomplete' : 'Mark complete'}
+                >
+                  {m.complete ? <Check size={12} color="var(--success)" /> : <Flag size={11} color="var(--text-3)" />}
+                </button>
+                <span style={{ fontSize: 12, flex: 1, color: m.complete ? 'var(--text-3)' : 'var(--text-2)', textDecoration: m.complete ? 'line-through' : 'none' }}>{m.title}</span>
+                {m.target_date && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-3)' }}>{format(new Date(m.target_date), 'd MMM')}</span>}
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -246,29 +207,36 @@ export default function GoalCard({
         </div>
       ) : (
         <div>
-          <p className="mono mb-2">Linked tasks ({linkedTasks.filter(t => t.complete).length}/{linkedTasks.length})</p>
+          <p className="mono mb-2">Linked tasks ({linkedTasks.filter(t => t.complete || t.completed_on).length}/{linkedTasks.length})</p>
           {linkedTasks.length === 0 ? (
             <p style={{ fontSize: 12, color: 'var(--text-3)', fontStyle: 'italic' }}>No tasks linked yet. Link weekly tasks or daily to-dos via the "linked goal" dropdown.</p>
           ) : (
             <>
               <div style={{ display: 'flex', gap: 3, marginBottom: 10 }}>
                 {linkedTasks.map((t, i) => (
-                  <div key={i} style={{ flex: 1, height: 5, borderRadius: 3, background: t.complete ? color : 'var(--bg-3)' }} />
+                  <div key={i} style={{ flex: 1, height: 5, borderRadius: 3, background: (t.complete || t.completed_on) ? color : 'var(--bg-3)' }} />
                 ))}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {linkedTasks.map((t, i) => (
+              {linkedTasks.map((t, i) => {
+                const done = t.complete || !!t.completed_on
+                return (
                 <div key={t.id || i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <button
                     onClick={() => !readOnly && onToggleLinkedTask && onToggleLinkedTask(t)}
                     style={{ background: 'none', border: 'none', padding: 0, cursor: (readOnly || !onToggleLinkedTask) ? 'default' : 'pointer', display: 'flex' }}
-                    title={t.complete ? 'Mark not done' : 'Mark done'}
+                    title={done ? 'Mark not done' : 'Mark done'}
                   >
-                    {t.complete ? <Check size={12} color="var(--success)" /> : <Circle size={10} color="var(--text-3)" />}
+                    {done ? <Check size={12} color="var(--success)" /> : <Circle size={10} color="var(--text-3)" />}
                   </button>
-                  <span style={{ fontSize: 12, flex: 1, color: t.complete ? 'var(--text-3)' : 'var(--text-2)', textDecoration: t.complete ? 'line-through' : 'none' }}>{t.text}</span>
-                  {t.complete && t.completed_on && (
+                  <span style={{ fontSize: 12, flex: 1, color: done ? 'var(--text-3)' : 'var(--text-2)', textDecoration: done ? 'line-through' : 'none' }}>{t.text}</span>
+                  {done && t.completed_on && (
                     <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-3)' }}>{format(new Date(t.completed_on), 'd MMM')}</span>
+                  )}
+                  {!readOnly && !done && onReassignLinkedTask && (
+                    <button className="btn btn-xs btn-ghost" style={{ fontSize: 9, padding: '2px 6px' }} onClick={() => onReassignLinkedTask(t)} title="Reassign to a new day">
+                      Reassign
+                    </button>
                   )}
                   {!readOnly && onAssignTaskMilestone && milestones.length > 0 && (
                     <select
@@ -283,7 +251,7 @@ export default function GoalCard({
                   )}
                   <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-3)', textTransform: 'uppercase' }}>{t.area}</span>
                 </div>
-              ))}
+              )})}
               </div>
             </>
           )}

@@ -58,6 +58,7 @@ export default function WeeklyPage() {
   const [currentWeek, setCurrentWeek] = useState(new Date())
   const [tasks, setTasks] = useState([])
   const [goals, setGoals] = useState([])
+  const [milestones, setMilestones] = useState([])
   const [metrics, setMetrics] = useState([])
   const [loading, setLoading] = useState(true)
   const [showAddRow, setShowAddRow] = useState(false)
@@ -235,6 +236,8 @@ export default function WeeklyPage() {
     setGoals(goalsData || [])
     const { data: metricsData } = await supabase.from('goal_metrics').select('*').eq('user_id', user.id).order('recorded_at')
     setMetrics(metricsData || [])
+    const { data: milestonesData } = await supabase.from('milestones').select('*').eq('user_id', user.id).order('sort_order')
+    setMilestones(milestonesData || [])
   }
 
   async function addTask() {
@@ -249,12 +252,12 @@ export default function WeeklyPage() {
     setShowAddRow(false)
   }
 
-  async function pullFromGoalTask(goal, task) {
+  async function pullFromGoalTask(goal, task, milestoneId) {
     const area = goal.category === 'Wellness' ? 'Health/Wellness' : goal.category
     const { data } = await supabase.from('weekly_tasks').insert({
       user_id: user.id, week_start: weekStartStr,
       area, action: goal.primary_goal?.slice(0, 60) || '', frequency: 'One-off',
-      specific_task: task.text, goal_id: goal.id,
+      specific_task: task.text, goal_id: goal.id, milestone_id: milestoneId || null,
       complete: false, carried_forward: false,
     }).select().single()
     if (data) setTasks(prev => [...prev, data])
@@ -679,7 +682,7 @@ export default function WeeklyPage() {
 
       {showReview && <WeeklyReviewModal weekStart={weekStartStr} incompleteTasks={tasks.filter(t => !t.complete)} onClose={() => setShowReview(false)} onComplete={carryForwardIncomplete} />}
       {showPastReviews && <PastReviews onClose={() => setShowPastReviews(false)} />}
-      {showGoalPicker && <GoalTaskPicker goals={goals} onSelect={pullFromGoalTask} onClose={() => setShowGoalPicker(false)} />}
+      {showGoalPicker && <GoalTaskPicker goals={goals} milestones={milestones} onSelect={pullFromGoalTask} onClose={() => setShowGoalPicker(false)} />}
     </div>
   )
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { format } from 'date-fns'
+import { format, startOfWeek } from 'date-fns'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { GOAL_CATEGORIES, QUARTERS, getCurrentQuarter, priorityRank, priorityFilterOptions, PRIORITY_COLORS } from '../lib/constants'
@@ -60,8 +60,8 @@ export default function GoalsPage() {
     setLoading(true)
     const [goalsRes, weeklyRes, dailyRes, metricsRes, milestonesRes] = await Promise.all([
       supabase.from('goals').select('*').eq('user_id', user.id).order('year', { ascending: false }).order('quarter').order('category'),
-      supabase.from('weekly_tasks').select('id, goal_id, area, specific_task, complete, milestone_id, completed_on').eq('user_id', user.id).not('goal_id', 'is', null),
-      supabase.from('daily_todos').select('id, goal_id, category, text, complete, milestone_id, completed_on').eq('user_id', user.id).not('goal_id', 'is', null),
+      supabase.from('weekly_tasks').select('id, goal_id, area, specific_task, complete, milestone_id, completed_on, week_start').eq('user_id', user.id).not('goal_id', 'is', null),
+      supabase.from('daily_todos').select('id, goal_id, category, text, complete, milestone_id, completed_on, date').eq('user_id', user.id).not('goal_id', 'is', null),
       supabase.from('goal_metrics').select('*').eq('user_id', user.id).order('recorded_at'),
       supabase.from('milestones').select('*').eq('user_id', user.id).order('sort_order'),
     ])
@@ -144,23 +144,52 @@ export default function GoalsPage() {
     else setDailyTodos(updater)
   }
 
-  // Toggle a goal-linked task's completion directly from the Goals page. When marking
-  // complete, ask which day it actually happened — completing something late shouldn't
-  // get attributed to today if it was actually finished on an earlier day.
+  // Toggle a goal-linked task's completion directly from the Goals page. If the task
+  // is still from today/this week, this just toggles the real to-do list item, same as
+  // ticking it off there. If it's from a day that's already passed, ticking it off here
+  // only records a completion date for goal-progress purposes — it does NOT mark the
+  // task complete on the original weekly plan / daily to-do list, since that would
+  // misrepresent what actually got done that day.
   async function toggleLinkedTask(item) {
-    const newVal = !item.complete
-    let completedOn = null
-    if (newVal) {
-      const input = window.prompt('Date this was actually completed (YYYY-MM-DD)?', format(new Date(), 'yyyy-MM-dd'))
-      if (input === null) return
-      completedOn = input.trim() || format(new Date(), 'yyyy-MM-dd')
-    }
     const table = item.source === 'weekly' ? 'weekly_tasks' : 'daily_todos'
-    const { error } = await supabase.from(table).update({ complete: newVal, completed_on: completedOn }).eq('id', item.id)
+
+    if (isFromToday(item)) {
+      const newVal = !item.complete
+      const completedOn = newVal ? format(new Date(), 'yyyy-MM-dd') : null
+      const { error } = await supabase.from(table).update({ complete: newVal, completed_on: completedOn }).eq('id', item.id)
+      if (error) { alert(`Couldn't update task: ${error.message}`); return }
+      const updater = prev => prev.map(t => t.id === item.id ? { ...t, complete: newVal, completed_on: completedOn } : t)
+      if (item.source === 'weekly') setWeeklyTasks(updater)
+      else setDailyTodos(updater)
+      return
+    }
+
+    // Past day, not done — toggle the goal-credit-only completion, leaving the real
+    // to-do list item's `complete` flag untouched.
+    const newCompletedOn = item.completed_on ? null : format(new Date(), 'yyyy-MM-dd')
+    const { error } = await supabase.from(table).update({ completed_on: newCompletedOn }).eq('id', item.id)
     if (error) { alert(`Couldn't update task: ${error.message}`); return }
-    const updater = prev => prev.map(t => t.id === item.id ? { ...t, complete: newVal, completed_on: completedOn } : t)
+    const updater = prev => prev.map(t => t.id === item.id ? { ...t, completed_on: newCompletedOn } : t)
     if (item.source === 'weekly') setWeeklyTasks(updater)
     else setDailyTodos(updater)
+  }
+
+  // Move a goal-linked task that's overdue to a new day/week, instead of marking it
+  // done for a day it wasn't actually worked on.
+  async function reassignLinkedTask(item) {
+    const input = window.prompt('Reassign to which date? (YYYY-MM-DD)', format(new Date(), 'yyyy-MM-dd'))
+    if (!input?.trim()) return
+    const newDate = input.trim()
+    if (item.source === 'daily') {
+      const { error } = await supabase.from('daily_todos').update({ date: newDate }).eq('id', item.id)
+      if (error) { alert(`Couldn't reassign task: ${error.message}`); return }
+      setDailyTodos(prev => prev.map(t => t.id === item.id ? { ...t, date: newDate } : t))
+    } else {
+      const newWeekStart = format(startOfWeek(new Date(newDate), { weekStartsOn: 1 }), 'yyyy-MM-dd')
+      const { error } = await supabase.from('weekly_tasks').update({ week_start: newWeekStart }).eq('id', item.id)
+      if (error) { alert(`Couldn't reassign task: ${error.message}`); return }
+      setWeeklyTasks(prev => prev.map(t => t.id === item.id ? { ...t, week_start: newWeekStart } : t))
+    }
   }
 
   // Goals matching the priority filter, sorted by priority within each category.
@@ -177,9 +206,16 @@ export default function GoalsPage() {
 
   function linkedTasksFor(goalId) {
     return [
-      ...weeklyTasks.filter(t => t.goal_id === goalId).map(t => ({ id: t.id, source: 'weekly', text: t.specific_task, complete: t.complete, area: t.area, milestone_id: t.milestone_id, completed_on: t.completed_on })),
-      ...dailyTodos.filter(t => t.goal_id === goalId).map(t => ({ id: t.id, source: 'daily', text: t.text, complete: t.complete, area: t.category, milestone_id: t.milestone_id, completed_on: t.completed_on })),
+      ...weeklyTasks.filter(t => t.goal_id === goalId).map(t => ({ id: t.id, source: 'weekly', text: t.specific_task, complete: t.complete, area: t.area, milestone_id: t.milestone_id, completed_on: t.completed_on, week_start: t.week_start })),
+      ...dailyTodos.filter(t => t.goal_id === goalId).map(t => ({ id: t.id, source: 'daily', text: t.text, complete: t.complete, area: t.category, milestone_id: t.milestone_id, completed_on: t.completed_on, date: t.date })),
     ]
+  }
+
+  function isFromToday(item) {
+    const today = format(new Date(), 'yyyy-MM-dd')
+    if (item.source === 'daily') return item.date === today
+    const thisWeekStart = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
+    return item.week_start === thisWeekStart
   }
 
   function milestonesFor(goalId) {
@@ -285,11 +321,10 @@ export default function GoalsPage() {
                                             onAddMetric={addMetric}
                                             onUpdatePriority={v => updateGoalField(goal.id, 'priority_level', v)}
                                             onTogglePrivate={g => updateGoalField(g.id, 'is_private', !g.is_private)}
-                                            onAddMilestone={(title, date) => addMilestone(goal.id, title, date)}
                                             onToggleMilestone={toggleMilestone}
-                                            onDeleteMilestone={deleteMilestone}
                                             onToggleLinkedTask={toggleLinkedTask}
                                             onAssignTaskMilestone={assignTaskMilestone}
+                                            onReassignLinkedTask={reassignLinkedTask}
                                           />
                                           <div style={{ marginTop: 10 }}>
                                             <p className="mono mb-1">Broken down into</p>
@@ -401,6 +436,10 @@ export default function GoalsPage() {
           goal={editing}
           defaults={createCtx}
           goals={goals}
+          milestones={editing ? milestonesFor(editing.id) : []}
+          onAddMilestone={(title, date) => addMilestone(editing.id, title, date)}
+          onToggleMilestone={toggleMilestone}
+          onDeleteMilestone={deleteMilestone}
           onClose={() => setShowModal(false)}
           onSave={goal => {
             setGoals(prev => { const idx = prev.findIndex(g => g.id === goal.id); if (idx >= 0) { const n = [...prev]; n[idx] = goal; return n } return [...prev, goal] })

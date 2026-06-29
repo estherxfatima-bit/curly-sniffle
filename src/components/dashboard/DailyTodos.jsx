@@ -55,6 +55,7 @@ export default function DailyTodos({ compact = false, date = null }) {
   const [showAddCat,  setShowAddCat]  = useState(false)
   const [colorPickerCat, setColorPickerCat] = useState(null)
   const [goals, setGoals] = useState([])
+  const [milestones, setMilestones] = useState([])
   const [showWeeklyPicker, setShowWeeklyPicker] = useState(false)
   const [showGoalPicker, setShowGoalPicker] = useState(false)
   const [showBrainDumpPicker, setShowBrainDumpPicker] = useState(false)
@@ -102,6 +103,8 @@ export default function DailyTodos({ compact = false, date = null }) {
   async function loadGoals() {
     const { data } = await supabase.from('goals').select('id, primary_goal, category, tasks').eq('user_id', user.id)
     setGoals(data || [])
+    const { data: milestonesData } = await supabase.from('milestones').select('*').eq('user_id', user.id).order('sort_order')
+    setMilestones(milestonesData || [])
   }
 
   async function loadCategoryColors() {
@@ -381,7 +384,7 @@ export default function DailyTodos({ compact = false, date = null }) {
     setShowBrainDumpPicker(false)
   }
 
-  async function pullFromGoalTask(goal, task) {
+  async function pullFromGoalTask(goal, task, milestoneId) {
     const { data } = await supabase.from('daily_todos').insert({
       user_id: user.id,
       text: task.text,
@@ -389,6 +392,7 @@ export default function DailyTodos({ compact = false, date = null }) {
       category: AREA_TO_CATEGORY[goal.category === 'Wellness' ? 'Health/Wellness' : goal.category] || 'Personal',
       complete: false,
       goal_id: goal.id,
+      milestone_id: milestoneId || null,
     }).select().single()
     if (data) setTodos(prev => [...prev, data])
 
@@ -649,7 +653,7 @@ export default function DailyTodos({ compact = false, date = null }) {
       )}
 
       {showGoalPicker && (
-        <GoalTaskPicker goals={goals} onSelect={pullFromGoalTask} onClose={() => setShowGoalPicker(false)} />
+        <GoalTaskPicker goals={goals} milestones={milestones} onSelect={pullFromGoalTask} onClose={() => setShowGoalPicker(false)} />
       )}
 
       {showBrainDumpPicker && (

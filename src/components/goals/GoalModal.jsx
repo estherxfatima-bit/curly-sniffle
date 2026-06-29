@@ -4,12 +4,24 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
 import { GOAL_CATEGORIES, GOAL_TIMEFRAMES, getCurrentQuarter, PRIORITY_LEVELS, PRIORITY_LABELS } from '../../lib/constants'
 import useLockBodyScroll from '../../hooks/useLockBodyScroll'
-import { X, Plus, Trash2 } from 'lucide-react'
+import { X, Plus, Trash2, Flag, Check } from 'lucide-react'
 
-export default function GoalModal({ goal, defaults, goals, onClose, onSave }) {
+export default function GoalModal({
+  goal, defaults, goals, onClose, onSave,
+  milestones = [], onAddMilestone, onToggleMilestone, onDeleteMilestone,
+}) {
   useLockBodyScroll()
   const { user } = useAuth()
   const isNew = !goal?.id
+  const [milestoneTitle, setMilestoneTitle] = useState('')
+  const [milestoneDate, setMilestoneDate] = useState('')
+
+  function submitMilestone() {
+    if (!milestoneTitle.trim()) return
+    onAddMilestone(milestoneTitle, milestoneDate)
+    setMilestoneTitle('')
+    setMilestoneDate('')
+  }
   const [form, setForm] = useState({
     category: goal?.category || defaults?.category || GOAL_CATEGORIES[0],
     primary_goal: goal?.primary_goal || '',
@@ -150,6 +162,55 @@ export default function GoalModal({ goal, defaults, goals, onClose, onSave }) {
             />
             <button className="btn btn-xs btn-career" style={{ color: '#fff' }} onClick={addBucketTask}><Plus size={12} /></button>
           </div>
+        </div>
+
+        <div className="form-group">
+          <label>Milestones</label>
+          {isNew ? (
+            <p style={{ fontSize: 11, color: 'var(--text-3)', fontStyle: 'italic' }}>
+              Save this goal first, then reopen it to add milestones — they track progress more accurately than task count alone.
+            </p>
+          ) : (
+            <>
+              <p style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 6 }}>
+                Checkpoints toward this goal. When a goal has milestones, progress is calculated from them instead of linked tasks.
+              </p>
+              {milestones.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
+                  {milestones.map(m => (
+                    <div key={m.id} className="flex items-center gap-2">
+                      <button
+                        onClick={() => onToggleMilestone(m)}
+                        style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex' }}
+                        title={m.complete ? 'Mark incomplete' : 'Mark complete'}
+                      >
+                        {m.complete ? <Check size={12} color="var(--success)" /> : <Flag size={11} color="var(--text-3)" />}
+                      </button>
+                      <span style={{ flex: 1, fontSize: 12, color: m.complete ? 'var(--text-3)' : 'var(--text-2)', textDecoration: m.complete ? 'line-through' : 'none' }}>{m.title}</span>
+                      {m.target_date && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-3)' }}>{m.target_date}</span>}
+                      <button className="btn-icon btn btn-sm" onClick={() => onDeleteMilestone(m.id)}><Trash2 size={12} /></button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="flex items-center gap-2 wrap">
+                <input
+                  value={milestoneTitle}
+                  onChange={e => setMilestoneTitle(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); submitMilestone() } }}
+                  placeholder="Add a milestone…"
+                  style={{ flex: 1, fontSize: 12, padding: '4px 8px', minWidth: 120 }}
+                />
+                <input
+                  type="date"
+                  value={milestoneDate}
+                  onChange={e => setMilestoneDate(e.target.value)}
+                  style={{ fontSize: 12, padding: '4px 8px' }}
+                />
+                <button className="btn btn-xs btn-career" style={{ color: '#fff' }} onClick={submitMilestone}><Plus size={12} /></button>
+              </div>
+            </>
+          )}
         </div>
 
         <div className="form-group">
