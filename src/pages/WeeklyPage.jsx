@@ -26,19 +26,14 @@ function areaColor(area) {
   return AREA_COLORS[area] || AREA_COLORS.Other
 }
 
-function goalProgress(goal, metrics, allTasks) {
+function goalProgress(goal, milestones) {
   if (goal.tracking_type === 'metric') {
-    const start = Number(goal.metric_start ?? 0)
     const target = Number(goal.metric_target ?? 0)
-    const hist = metrics.filter(m => m.goal_id === goal.id)
-    const current = hist.length ? Number(hist[hist.length - 1].value) : start
-    const span = target - start
-    return span !== 0 ? Math.round(Math.min(Math.max((current - start) / span, 0), 1) * 100) : 0
+    const current = Number(goal.metric_current ?? 0)
+    return target > 0 ? Math.round((current / target) * 100) : 0
   }
-  const linked = allTasks.filter(t => t.goal_id === goal.id)
-  const total = linked.length
-  const done = linked.filter(t => t.complete).length
-  return total ? Math.round((done / total) * 100) : 0
+  const ms = milestones.filter(m => m.goal_id === goal.id)
+  return ms.length ? Math.round((ms.filter(m => m.complete).length / ms.length) * 100) : 0
 }
 
 function WeekDecoration() {
@@ -59,7 +54,7 @@ export default function WeeklyPage() {
   const [tasks, setTasks] = useState([])
   const [goals, setGoals] = useState([])
   const [milestones, setMilestones] = useState([])
-  const [metrics, setMetrics] = useState([])
+  const [milestoneTasks, setMilestoneTasks] = useState([])
   const [loading, setLoading] = useState(true)
   const [showAddRow, setShowAddRow] = useState(false)
   const [showGoalPicker, setShowGoalPicker] = useState(false)
@@ -234,10 +229,10 @@ export default function WeeklyPage() {
   async function loadGoals() {
     const { data: goalsData } = await supabase.from('goals').select('*').eq('user_id', user.id)
     setGoals(goalsData || [])
-    const { data: metricsData } = await supabase.from('goal_metrics').select('*').eq('user_id', user.id).order('recorded_at')
-    setMetrics(metricsData || [])
     const { data: milestonesData } = await supabase.from('milestones').select('*').eq('user_id', user.id).order('sort_order')
     setMilestones(milestonesData || [])
+    const { data: milestoneTasksData } = await supabase.from('milestone_tasks').select('*').eq('user_id', user.id).order('sort_order')
+    setMilestoneTasks(milestoneTasksData || [])
   }
 
   async function addTask() {
@@ -254,17 +249,14 @@ export default function WeeklyPage() {
 
   async function pullFromGoalTask(goal, task, milestoneId) {
     const area = goal.category === 'Wellness' ? 'Health/Wellness' : goal.category
-    const { data } = await supabase.from('weekly_tasks').insert({
+    const { data, error } = await supabase.from('weekly_tasks').insert({
       user_id: user.id, week_start: weekStartStr,
       area, action: goal.primary_goal?.slice(0, 60) || '', frequency: 'One-off',
       specific_task: task.text, goal_id: goal.id, milestone_id: milestoneId || null,
       complete: false, carried_forward: false,
     }).select().single()
-    if (data) setTasks(prev => [...prev, data])
-
-    const remaining = goal.tasks.filter(t => t.id !== task.id)
-    await supabase.from('goals').update({ tasks: remaining }).eq('id', goal.id)
-    setGoals(prev => prev.map(g => g.id === goal.id ? { ...g, tasks: remaining } : g))
+    if (error) { alert(`Couldn't pull task: ${error.message}`); return }
+    setTasks(prev => [...prev, data])
     setShowGoalPicker(false)
   }
 
@@ -365,7 +357,7 @@ export default function WeeklyPage() {
     })).filter(g => g.tasks.length)
   } else {
     groups = goals.map(g => ({
-      key: g.id, label: g.primary_goal, goal: g, pct: goalProgress(g, metrics, tasks), tasks: visibleTasks.filter(t => t.goal_id === g.id).sort(byPriority),
+      key: g.id, label: g.primary_goal, goal: g, pct: goalProgress(g, milestones), tasks: visibleTasks.filter(t => t.goal_id === g.id).sort(byPriority),
     })).filter(g => g.tasks.length)
     const ungrouped = visibleTasks.filter(t => !t.goal_id).sort(byPriority)
     if (ungrouped.length) groups.push({ key: 'ungrouped', label: 'Ungrouped', tasks: ungrouped })
@@ -682,7 +674,7 @@ export default function WeeklyPage() {
 
       {showReview && <WeeklyReviewModal weekStart={weekStartStr} incompleteTasks={tasks.filter(t => !t.complete)} onClose={() => setShowReview(false)} onComplete={carryForwardIncomplete} />}
       {showPastReviews && <PastReviews onClose={() => setShowPastReviews(false)} />}
-      {showGoalPicker && <GoalTaskPicker goals={goals} milestones={milestones} onSelect={pullFromGoalTask} onClose={() => setShowGoalPicker(false)} />}
+      {showGoalPicker && <GoalTaskPicker goals={goals} milestones={milestones} milestoneTasks={milestoneTasks} onSelect={pullFromGoalTask} onClose={() => setShowGoalPicker(false)} />}
     </div>
   )
 }

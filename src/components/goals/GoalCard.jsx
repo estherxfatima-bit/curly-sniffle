@@ -237,7 +237,7 @@ export default function GoalCard({
             )
           )}
           {goal.key_actions && (
-            <p style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 10 }}>{goal.key_actions}</p>
+            <p style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 10, fontStyle: 'italic' }}>{goal.key_actions}</p>
           )}
         </div>
       )}

@@ -56,6 +56,7 @@ export default function DailyTodos({ compact = false, date = null }) {
   const [colorPickerCat, setColorPickerCat] = useState(null)
   const [goals, setGoals] = useState([])
   const [milestones, setMilestones] = useState([])
+  const [milestoneTasks, setMilestoneTasks] = useState([])
   const [showWeeklyPicker, setShowWeeklyPicker] = useState(false)
   const [showGoalPicker, setShowGoalPicker] = useState(false)
   const [showBrainDumpPicker, setShowBrainDumpPicker] = useState(false)
@@ -101,10 +102,12 @@ export default function DailyTodos({ compact = false, date = null }) {
   }, [user, viewDate])
 
   async function loadGoals() {
-    const { data } = await supabase.from('goals').select('id, primary_goal, category, tasks').eq('user_id', user.id)
+    const { data } = await supabase.from('goals').select('id, primary_goal, category').eq('user_id', user.id)
     setGoals(data || [])
     const { data: milestonesData } = await supabase.from('milestones').select('*').eq('user_id', user.id).order('sort_order')
     setMilestones(milestonesData || [])
+    const { data: milestoneTasksData } = await supabase.from('milestone_tasks').select('*').eq('user_id', user.id).order('sort_order')
+    setMilestoneTasks(milestoneTasksData || [])
   }
 
   async function loadCategoryColors() {
@@ -385,7 +388,7 @@ export default function DailyTodos({ compact = false, date = null }) {
   }
 
   async function pullFromGoalTask(goal, task, milestoneId) {
-    const { data } = await supabase.from('daily_todos').insert({
+    const { data, error } = await supabase.from('daily_todos').insert({
       user_id: user.id,
       text: task.text,
       date: viewDate,
@@ -394,11 +397,8 @@ export default function DailyTodos({ compact = false, date = null }) {
       goal_id: goal.id,
       milestone_id: milestoneId || null,
     }).select().single()
-    if (data) setTodos(prev => [...prev, data])
-
-    const remaining = goal.tasks.filter(t => t.id !== task.id)
-    await supabase.from('goals').update({ tasks: remaining }).eq('id', goal.id)
-    setGoals(prev => prev.map(g => g.id === goal.id ? { ...g, tasks: remaining } : g))
+    if (error) { alert(`Couldn't pull task: ${error.message}`); return }
+    setTodos(prev => [...prev, data])
     setShowGoalPicker(false)
   }
 
@@ -653,7 +653,7 @@ export default function DailyTodos({ compact = false, date = null }) {
       )}
 
       {showGoalPicker && (
-        <GoalTaskPicker goals={goals} milestones={milestones} onSelect={pullFromGoalTask} onClose={() => setShowGoalPicker(false)} />
+        <GoalTaskPicker goals={goals} milestones={milestones} milestoneTasks={milestoneTasks} onSelect={pullFromGoalTask} onClose={() => setShowGoalPicker(false)} />
       )}
 
       {showBrainDumpPicker && (
