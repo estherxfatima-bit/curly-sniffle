@@ -3,9 +3,10 @@ import { useAuth } from '../hooks/useAuth'
 import { useTheme } from '../hooks/useTheme'
 import { supabase } from '../lib/supabase'
 import { registerServiceWorker, subscribeToPush, unsubscribeFromPush, isSubscribed } from '../lib/pushNotifications'
-import { Bell, BellOff, Sun, Moon, LogOut, Calendar, Unlink, MessageSquare, Clock4, Check, Plus, Trash2 } from 'lucide-react'
+import { Bell, BellOff, Sun, Moon, LogOut, Calendar, Unlink, MessageSquare, Clock4, Check, Plus, Trash2, Download } from 'lucide-react'
 import { DAY_LABELS } from '../lib/constants'
 import AiUsageSection from '../components/settings/AiUsageSection'
+import { EXPORT_RANGE_OPTIONS, exportMyData } from '../lib/exportData'
 
 function SettingsDecoration() {
   return (
@@ -76,6 +77,11 @@ export default function SettingsPage() {
 
   // Sharing with partners
   const [sharingSettings, setSharingSettings] = useState({ share_finance: false, share_wellness: false, share_books: false })
+
+  // Data export
+  const [exportRangeMonths, setExportRangeMonths] = useState(6)
+  const [exporting, setExporting] = useState(false)
+  const [exportMsg, setExportMsg] = useState(null)
 
   useEffect(() => {
     registerServiceWorker()
@@ -380,6 +386,19 @@ export default function SettingsPage() {
     })
     setResetSending(false)
     setResetMsg(error ? { type: 'error', text: error.message } : { type: 'success', text: 'Reset email sent — check your inbox.' })
+  }
+
+  async function handleExportData() {
+    setExporting(true)
+    setExportMsg(null)
+    try {
+      await exportMyData(user.id, exportRangeMonths)
+      setExportMsg({ type: 'success', text: 'Download started.' })
+    } catch (e) {
+      setExportMsg({ type: 'error', text: e.message })
+    } finally {
+      setExporting(false)
+    }
   }
 
   async function togglePush() {
@@ -795,6 +814,31 @@ export default function SettingsPage() {
       </div>
 
       <AiUsageSection user={user} />
+
+      {/* Data export */}
+      <div className="card mb-4">
+        <h3 style={{ fontSize: '0.9rem', marginBottom: 8 }}>Export my data</h3>
+        <p style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 12 }}>
+          Download your goals, weekly tasks, daily to-dos, habit logs, expenses, content ideas, mood logs and workout logs as JSON and CSV files.
+        </p>
+        <div className="flex items-center gap-2 wrap">
+          <select value={exportRangeMonths ?? 'all'} onChange={e => setExportRangeMonths(e.target.value === 'all' ? null : Number(e.target.value))} style={{ fontSize: 12, padding: '4px 8px' }}>
+            {EXPORT_RANGE_OPTIONS.map(o => (
+              <option key={o.label} value={o.months ?? 'all'}>{o.label}</option>
+            ))}
+          </select>
+          <button className="btn btn-career flex items-center gap-2" style={{ color: '#fff' }} onClick={handleExportData} disabled={exporting}>
+            <Download size={14} />
+            {exporting ? 'Preparing…' : 'Export my data'}
+          </button>
+          {exportMsg && (
+            <span style={{ fontSize: 11, color: exportMsg.type === 'error' ? 'var(--danger)' : 'var(--success)' }}>{exportMsg.text}</span>
+          )}
+        </div>
+        <p style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 8 }}>
+          Goals, content batches and fixed expenses are always exported in full regardless of the timeframe chosen.
+        </p>
+      </div>
 
       {/* Account */}
       <div className="card">
