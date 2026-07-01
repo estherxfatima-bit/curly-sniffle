@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { format, startOfWeek, endOfWeek, startOfMonth, addDays, addWeeks, addMonths } from 'date-fns'
+import { format, startOfWeek, endOfWeek, startOfMonth, addDays, addWeeks, addMonths, parseISO } from 'date-fns'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
 import { getQuarterFromDate, getQuarterYear } from '../lib/constants'
@@ -445,6 +445,7 @@ export default function DashboardPage() {
           hydration={hydration}
           user={user}
           today={today}
+          onDateChange={d => setRefDate(parseISO(d))}
           onOpenPanel={setPanel}
           cardOrder={normalizeOrder(cardOrders.daily, 'daily')}
           onReorder={order => saveCardOrder('daily', order)}

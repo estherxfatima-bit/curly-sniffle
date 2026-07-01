@@ -46,7 +46,7 @@ const HYDRATION_GOAL = 2500
 
 export default function DailyView({
   habits, weekTasks, hydration, onOpenPanel,
-  cardOrder, onReorder, user, today,
+  cardOrder, onReorder, user, today, onDateChange,
   onHydrationAdd,
   financeTotalVariable, financeOverallBudget, onAddExpense,
   savedDailyQuote, onSaveDailyQuote, onToggleHabit,
@@ -56,7 +56,8 @@ export default function DailyView({
 
   function openPanel(type, data) { onOpenPanel({ type, data }) }
 
-  const priorityTask = weekTasks.find(t => t.priority && !t.complete) || weekTasks.find(t => !t.complete) || null
+  // Only show a starred incomplete task — no random fallback that confuses users
+  const priorityTask = weekTasks.find(t => t.priority && !t.complete) || null
 
   const CARDS = {
     quote: (
@@ -83,7 +84,7 @@ export default function DailyView({
           </div>
         ) : (
           <p style={{ fontSize: 13, color: 'var(--text-3)', fontStyle: 'italic' }}>
-            All tasks done. <Link to="/weekly" style={{ color: 'var(--career)' }}>Add more →</Link>
+            No starred task yet. <Link to="/weekly" style={{ color: 'var(--career)' }}>Star one →</Link>
           </p>
         )}
       </div>
@@ -91,7 +92,7 @@ export default function DailyView({
 
     todos: (
       <div className="card">
-        <DailyTodos date={today} />
+        <DailyTodos date={today} onDateChange={onDateChange} />
       </div>
     ),
 

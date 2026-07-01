@@ -39,7 +39,7 @@ const IDEA_CAT_TO_TODO_CATEGORY = {
 
 const FALLBACK_CAT_COLOR = 'var(--career)'
 
-export default function DailyTodos({ compact = false, date = null }) {
+export default function DailyTodos({ compact = false, date = null, onDateChange = null }) {
   const { user, session } = useAuth()
   const today     = format(new Date(), 'yyyy-MM-dd')
   const yesterday = format(subDays(new Date(), 1), 'yyyy-MM-dd')
@@ -526,13 +526,19 @@ export default function DailyTodos({ compact = false, date = null }) {
         </div>
         <div className="flex items-center gap-2 wrap" onClick={e => e.stopPropagation()}>
           <div className="flex items-center gap-1">
-            <button className="btn-icon" onClick={() => setViewDate(d => format(subDays(parseISO(d), 1), 'yyyy-MM-dd'))} title="Previous day">
+            <button className="btn-icon" onClick={() => {
+              const d = format(subDays(parseISO(viewDate), 1), 'yyyy-MM-dd')
+              setViewDate(d); onDateChange?.(d)
+            }} title="Previous day">
               <ChevronLeft size={14} />
             </button>
             {!isToday && (
-              <button className="btn btn-ghost btn-xs" onClick={() => setViewDate(today)}>Today</button>
+              <button className="btn btn-ghost btn-xs" onClick={() => { setViewDate(today); onDateChange?.(today) }}>Today</button>
             )}
-            <button className="btn-icon" onClick={() => setViewDate(d => format(addDays(parseISO(d), 1), 'yyyy-MM-dd'))} title="Next day">
+            <button className="btn-icon" onClick={() => {
+              const d = format(addDays(parseISO(viewDate), 1), 'yyyy-MM-dd')
+              setViewDate(d); onDateChange?.(d)
+            }} title="Next day">
               <ChevronRight size={14} />
             </button>
           </div>

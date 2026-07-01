@@ -9,9 +9,9 @@ import GoalCard from '../components/goals/GoalCard'
 import { getCurrentQuarter, AREA_COLORS, QUARTERS } from '../lib/constants'
 import { simulateHabit } from '../lib/habitUtils'
 
-const today = format(new Date(), 'yyyy-MM-dd')
 const currentQuarter = getCurrentQuarter()
 const currentYear = new Date().getFullYear()
+function todayStr() { return format(new Date(), 'yyyy-MM-dd') }
 
 function momentumScore(habits, habitLogs, weekTasks, moodLogs) {
   const logSet = new Map()
@@ -22,7 +22,7 @@ function momentumScore(habits, habitLogs, weekTasks, moodLogs) {
   const totalHabits = habits.length
   const doneHabits = habits.filter(h => {
     const s = logSet.get(h.id) || new Set()
-    const { pending } = simulateHabit(h, s, today)
+    const { pending } = simulateHabit(h, s, todayStr())
     return !pending
   }).length
   const habitScore = totalHabits ? (doneHabits / totalHabits) * 40 : 0
@@ -260,7 +260,7 @@ function CompareColumn({
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {habits.map(h => {
               const logSet = logSetMap.get(h.id) || new Set()
-              const { streak } = simulateHabit(h, logSet, today)
+              const { streak } = simulateHabit(h, logSet, todayStr())
               return (
                 <div key={h.id}>
                   <div className="flex items-center gap-2">
@@ -386,7 +386,7 @@ export default function ComparePage() {
   const weekStartStr = format(startOfWeek(weekRef, { weekStartsOn: 1 }), 'yyyy-MM-dd')
   const todoDateStr = format(todoDate, 'yyyy-MM-dd')
   const isCurrentWeek = weekStartStr === format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
-  const isCurrentTodoDate = todoDateStr === today
+  const isCurrentTodoDate = todoDateStr === todayStr()
   const isCurrentGoalPeriod = goalQuarter === currentQuarter && goalYear === currentYear
 
   function shiftWeek(dir) { setWeekRef(d => addWeeks(d, dir)) }
