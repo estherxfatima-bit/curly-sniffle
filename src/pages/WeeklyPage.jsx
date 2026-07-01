@@ -337,6 +337,12 @@ export default function WeeklyPage() {
   const incompleteCount = tasks.filter(t => !t.complete).length
   const doneCount = tasks.filter(t => t.complete).length
 
+  // Show a nudge Thu/Fri of the current week when any task is missing a note
+  const todayDow = new Date().getDay() // 0=Sun,4=Thu,5=Fri
+  const isCurrentWeek = weekStartStr === format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
+  const showMissingNotesNudge = isCurrentWeek && (todayDow === 4 || todayDow === 5) && tasks.some(t => !t.notes?.trim())
+  const missingNotesCount = tasks.filter(t => !t.notes?.trim()).length
+
   const visibleTasks = tasks.filter(t => {
     if (priorityFilter === 'none') return !t.priority_level
     if (priorityFilter) return t.priority_level === priorityFilter
@@ -365,6 +371,27 @@ export default function WeeklyPage() {
       <div className="card mb-5">
         <WeeklyQuote userId={user.id} weekStart={weekStartStr} savedQuote={savedQuote} onSave={setSavedQuote} />
       </div>
+
+      {/* Missing-notes nudge — shown Thu/Fri of current week */}
+      {showMissingNotesNudge && (
+        <div style={{
+          background: 'linear-gradient(135deg, var(--career-tint) 0%, var(--bg) 100%)',
+          border: '1px solid var(--career)',
+          borderRadius: 'var(--radius-lg)',
+          padding: '14px 20px',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+          marginBottom: 20,
+        }}>
+          <div>
+            <p style={{ color: 'var(--career)', fontWeight: 600, fontSize: 14 }}>
+              Week ending soon — {missingNotesCount} task{missingNotesCount !== 1 ? 's' : ''} missing notes
+            </p>
+            <p style={{ color: 'var(--text-3)', fontSize: 12, marginTop: 3 }}>
+              Tap any task below to expand and add what happened — partners and Claude use this context.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Header */}
       <div className="page-header header-career mb-6">

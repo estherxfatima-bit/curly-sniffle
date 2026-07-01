@@ -305,7 +305,7 @@ function SimplePersonCard({ name, isSelf, data, onNudge }) {
     logSetMap.get(l.habit_id).add(l.log_date)
   })
   const topStreakHabits = habits
-    .map(h => ({ ...h, streak: simulateHabit(h, logSetMap.get(h.id) || new Set(), today).streak }))
+    .map(h => ({ ...h, streak: simulateHabit(h, logSetMap.get(h.id) || new Set(), todayStr()).streak }))
     .sort((a, b) => b.streak - a.streak)
     .slice(0, 3)
   const finance = financeHealthLabel(expenseCount || 0)
