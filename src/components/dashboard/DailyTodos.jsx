@@ -11,9 +11,11 @@ import { deleteCalendarEvent } from '../../lib/googleCalendar'
 import WeeklyPlanPicker from './WeeklyPlanPicker'
 import GoalTaskPicker from './GoalTaskPicker'
 import BrainDumpPicker from './BrainDumpPicker'
+import TaskCarryoverModal from './TaskCarryoverModal'
+import BacklogPicker from './BacklogPicker'
 import TimerWidget from './TimerWidget'
 import TimeBlockModal from './TimeBlockModal'
-import { Plus, Trash2, ChevronDown, ChevronRight, Check, Target, Hourglass, AlarmClock, Link2, Timer as TimerIcon, CalendarClock, ChevronLeft, Download, Lightbulb, Lock, Unlock, FastForward, Rewind } from 'lucide-react'
+import { Plus, Trash2, ChevronDown, ChevronRight, Check, Target, Hourglass, AlarmClock, Link2, Timer as TimerIcon, CalendarClock, ChevronLeft, Download, Lightbulb, Lock, Unlock, FastForward, Rewind, Archive } from 'lucide-react'
 
 const DEFAULT_CATS = DEFAULT_TODO_CATEGORIES.map(c => c.name)
 
@@ -61,7 +63,10 @@ export default function DailyTodos({ compact = false, date = null }) {
   const [showWeeklyPicker, setShowWeeklyPicker] = useState(false)
   const [showGoalPicker, setShowGoalPicker] = useState(false)
   const [showBrainDumpPicker, setShowBrainDumpPicker] = useState(false)
+  const [showBacklogPicker, setShowBacklogPicker] = useState(false)
   const [showPullMenu, setShowPullMenu] = useState(false)
+  const [pendingCarryover, setPendingCarryover] = useState(null) // tasks waiting for user decision
+  const [backlog, setBacklog] = useState([])
   const [weeklyTasks, setWeeklyTasks] = useState([])
   const [ideas, setIdeas] = useState([])
   const [timerTodo, setTimerTodo] = useState(null)
@@ -175,8 +180,7 @@ export default function DailyTodos({ compact = false, date = null }) {
   }
 
   async function carryOverYesterday() {
-    // Find the most recent day before today that has incomplete, unarchived todos
-    // (handles being away for multiple days, not just yesterday)
+    // Find incomplete, unarchived todos from any prior day
     const { data: pending } = await supabase
       .from('daily_todos')
       .select('*')
@@ -188,52 +192,103 @@ export default function DailyTodos({ compact = false, date = null }) {
 
     if (!pending?.length) return
 
-    // Guard: don't carry over if today already has rows from this source date
+    // Guard: skip any source dates already processed (already carried or already in backlog)
     const sourceDates = [...new Set(pending.map(t => t.date))]
-    const { data: alreadyCarried } = await supabase
-      .from('daily_todos')
-      .select('carried_from')
-      .eq('user_id', user.id)
-      .eq('date', today)
-      .in('carried_from', sourceDates)
+    const [carriedRes, backlogRes] = await Promise.all([
+      supabase.from('daily_todos').select('carried_from').eq('user_id', user.id).eq('date', today).in('carried_from', sourceDates),
+      supabase.from('task_backlog').select('source_date').eq('user_id', user.id).in('source_date', sourceDates),
+    ])
+    const alreadyProcessedDates = new Set([
+      ...((carriedRes.data || []).map(r => r.carried_from)),
+      ...((backlogRes.data || []).map(r => r.source_date)),
+    ])
+    const toPrompt = pending.filter(t => !alreadyProcessedDates.has(t.date))
+    if (!toPrompt.length) return
 
-    const alreadyCarriedDates = new Set((alreadyCarried || []).map(r => r.carried_from))
-    const toCarry = pending.filter(t => !alreadyCarriedDates.has(t.date))
-    if (!toCarry.length) return
+    // Show the modal — user decides what happens to each task
+    setPendingCarryover(toPrompt)
+  }
 
-    // Insert first — only archive source rows if insert succeeds
-    const { error } = await supabase.from('daily_todos').insert(
-      toCarry.map(t => ({
-        user_id:            user.id,
-        text:               t.text,
-        date:               today,
-        complete:           false,
-        category:           t.category || 'Personal',
-        time_allocation:    t.time_allocation,
-        subtasks:           t.subtasks,
-        carried_from:       t.date,
-        duration_minutes:   t.duration_minutes,
-        priority_level:     t.priority_level,
-        is_private:         t.is_private ?? false,
-        goal_id:            t.goal_id,
-        sort_order:         t.sort_order,
-        scheduled_time:     t.scheduled_time,
-        weekly_task_ref_id: t.weekly_task_ref_id,
-      }))
-    )
+  async function applyCarryoverDecisions(decisions) {
+    setPendingCarryover(null)
 
-    if (error) {
-      console.error('Carryover insert failed — NOT archiving source todos:', error)
-      return
+    const toCarry  = decisions.filter(t => t.decision === 'carry')
+    const toBacklog = decisions.filter(t => t.decision === 'backlog')
+    const toSkip   = decisions.filter(t => t.decision === 'skip')
+    const allSrcIds = decisions.map(t => t.id)
+    const allSrcDates = [...new Set(decisions.map(t => t.date))]
+
+    // Insert "carry" tasks into today
+    if (toCarry.length) {
+      const { data: inserted, error } = await supabase.from('daily_todos').insert(
+        toCarry.map(t => ({
+          user_id:            user.id,
+          text:               t.text,
+          date:               today,
+          complete:           false,
+          category:           t.category || 'Personal',
+          time_allocation:    t.time_allocation,
+          subtasks:           t.subtasks,
+          carried_from:       t.date,
+          duration_minutes:   t.duration_minutes,
+          priority_level:     t.priority_level,
+          is_private:         t.is_private ?? false,
+          goal_id:            t.goal_id,
+          sort_order:         t.sort_order,
+          scheduled_time:     t.scheduled_time,
+          weekly_task_ref_id: t.weekly_task_ref_id,
+        }))
+      ).select()
+      if (!error && inserted) setTodos(prev => [...prev, ...inserted])
     }
 
-    // Only archive after confirmed insert
-    const sourceDateList = [...new Set(toCarry.map(t => t.date))]
-    await supabase.from('daily_todos')
-      .update({ archived: true })
-      .eq('user_id', user.id)
-      .eq('complete', false)
-      .in('date', sourceDateList)
+    // Insert "backlog" tasks into task_backlog
+    if (toBacklog.length) {
+      const { data: inserted } = await supabase.from('task_backlog').insert(
+        toBacklog.map(t => ({
+          user_id:     user.id,
+          text:        t.text,
+          category:    t.category || 'Personal',
+          goal_id:     t.goal_id || null,
+          source_date: t.date,
+        }))
+      ).select()
+      if (inserted) setBacklog(prev => [...prev, ...inserted])
+    }
+
+    // Archive all source todos (carry, backlog, and skip)
+    if (allSrcIds.length) {
+      await supabase.from('daily_todos')
+        .update({ archived: true })
+        .eq('user_id', user.id)
+        .in('id', allSrcIds)
+    }
+  }
+
+  async function loadBacklog() {
+    const { data } = await supabase.from('task_backlog').select('*').eq('user_id', user.id).order('created_at')
+    setBacklog(data || [])
+    setShowBacklogPicker(true)
+  }
+
+  async function pullFromBacklog(item) {
+    const { data, error } = await withNetworkRetry(() =>
+      supabase.from('daily_todos').insert({
+        user_id: user.id, text: item.text, date: viewDate,
+        category: item.category || 'Personal', complete: false, goal_id: item.goal_id || null,
+      }).select().single()
+    )
+    if (error) { alert(`Couldn't pull task: ${friendlyErrorMessage(error)}`); return }
+    setTodos(prev => [...prev, data])
+    // Remove from backlog
+    await supabase.from('task_backlog').delete().eq('id', item.id)
+    setBacklog(prev => prev.filter(b => b.id !== item.id))
+    if (backlog.filter(b => b.id !== item.id).length === 0) setShowBacklogPicker(false)
+  }
+
+  async function deleteFromBacklog(id) {
+    await supabase.from('task_backlog').delete().eq('id', id)
+    setBacklog(prev => prev.filter(b => b.id !== id))
   }
 
   async function loadTodosForDate(date) {
@@ -539,6 +594,9 @@ export default function DailyTodos({ compact = false, date = null }) {
                   <button className="btn btn-ghost btn-xs" style={{ justifyContent: 'flex-start' }} onClick={() => { setShowPullMenu(false); loadIdeas() }}>
                     <Lightbulb size={12} /> Brain dump
                   </button>
+                  <button className="btn btn-ghost btn-xs" style={{ justifyContent: 'flex-start' }} onClick={() => { setShowPullMenu(false); loadBacklog() }}>
+                    <Archive size={12} /> Backlog
+                  </button>
                 </div>
               </>
             )}
@@ -660,6 +718,25 @@ export default function DailyTodos({ compact = false, date = null }) {
 
       {showBrainDumpPicker && (
         <BrainDumpPicker ideas={ideas} onSelect={pullFromBrainDump} onClose={() => setShowBrainDumpPicker(false)} />
+      )}
+
+      {pendingCarryover && (
+        <TaskCarryoverModal
+          tasks={pendingCarryover}
+          catColor={catColor}
+          onConfirm={applyCarryoverDecisions}
+          onDismiss={() => setPendingCarryover(null)}
+        />
+      )}
+
+      {showBacklogPicker && (
+        <BacklogPicker
+          items={backlog}
+          catColor={catColor}
+          onSelect={pullFromBacklog}
+          onDelete={deleteFromBacklog}
+          onClose={() => setShowBacklogPicker(false)}
+        />
       )}
 
       {timerTodo && (
