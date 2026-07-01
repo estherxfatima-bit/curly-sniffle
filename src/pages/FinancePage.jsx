@@ -63,7 +63,8 @@ export default function FinancePage() {
   const [savings, setSavings]   = useState([])
   const [budgets, setBudgets]   = useState([])
   const [moneyOwed, setMoneyOwed] = useState([])
-  const [newMoneyOwed, setNewMoneyOwed] = useState({ person: '', amount: '', note: '', date: format(new Date(), 'yyyy-MM-dd') })
+  const [newMoneyOwed, setNewMoneyOwed] = useState({ person: '', amount: '', note: '', date: format(new Date(), 'yyyy-MM-dd'), expected_date: '' })
+  const [partialPayment, setPartialPayment] = useState({}) // { [id]: amount string }
   const [loading, setLoading]   = useState(true)
   const [aiLoading, setAiLoading] = useState(false)
   const [aiSummary, setAiSummary] = useState('')
@@ -258,15 +259,30 @@ export default function FinancePage() {
     const { data } = await supabase.from('money_owed').insert({
       user_id: user.id, person: newMoneyOwed.person, amount: parseFloat(newMoneyOwed.amount),
       note: newMoneyOwed.note || null, date: newMoneyOwed.date,
+      expected_date: newMoneyOwed.expected_date || null, amount_paid: 0,
     }).select().single()
     setMoneyOwed(prev => [data, ...prev])
-    setNewMoneyOwed({ person: '', amount: '', note: '', date: format(new Date(), 'yyyy-MM-dd') })
+    setNewMoneyOwed({ person: '', amount: '', note: '', date: format(new Date(), 'yyyy-MM-dd'), expected_date: '' })
   }
   async function toggleMoneyOwedSettled(id, settled) {
+    const entry = moneyOwed.find(o => o.id === id)
+    const amount_paid = settled ? (entry?.amount ?? 0) : 0
     const { data } = await supabase.from('money_owed')
-      .update({ settled, settled_at: settled ? new Date().toISOString() : null })
+      .update({ settled, settled_at: settled ? new Date().toISOString() : null, amount_paid })
       .eq('id', id).select().single()
     setMoneyOwed(prev => prev.map(i => i.id === id ? data : i))
+  }
+  async function recordPartialPayment(id) {
+    const amt = parseFloat(partialPayment[id] || 0)
+    if (!amt || amt <= 0) return
+    const entry = moneyOwed.find(o => o.id === id)
+    const newPaid = Math.min((entry.amount_paid || 0) + amt, entry.amount)
+    const settled = newPaid >= entry.amount
+    const { data } = await supabase.from('money_owed')
+      .update({ amount_paid: newPaid, settled, settled_at: settled ? new Date().toISOString() : null })
+      .eq('id', id).select().single()
+    setMoneyOwed(prev => prev.map(i => i.id === id ? data : i))
+    setPartialPayment(prev => { const n = { ...prev }; delete n[id]; return n })
   }
   async function deleteMoneyOwed(id) {
     await supabase.from('money_owed').delete().eq('id', id)
@@ -1009,24 +1025,74 @@ export default function FinancePage() {
       <h3 style={{ fontSize: '0.9rem', marginBottom: 14 }}>
         Owed to me <span className="mono" style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 400 }}>£{totalOwedToMe.toFixed(0)} pending</span>
       </h3>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
-        {moneyOwed.map(o => (
-          <div key={o.id} className="flex items-center justify-between gap-2">
-            <div style={{ minWidth: 0, overflow: 'hidden' }}>
-              <p style={{ fontSize: 13, textDecoration: o.settled ? 'line-through' : 'none', color: o.settled ? 'var(--text-3)' : 'var(--text)' }}>{o.person}</p>
-              <p className="mono" style={{ fontSize: 10, color: 'var(--text-3)' }}>{o.note ? `${o.note} · ` : ''}{o.date}</p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 14 }}>
+        {moneyOwed.map(o => {
+          const paid = o.amount_paid || 0
+          const remaining = Math.max(0, o.amount - paid)
+          const isOverdue = !o.settled && o.expected_date && o.expected_date < format(new Date(), 'yyyy-MM-dd')
+          const showPayInput = partialPayment[o.id] !== undefined
+          return (
+            <div key={o.id} style={{ borderRadius: 8, border: '1px solid var(--border)', padding: '10px 12px', background: 'var(--bg-1)' }}>
+              <div className="flex items-center justify-between gap-2">
+                <div style={{ minWidth: 0, overflow: 'hidden', flex: 1 }}>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p style={{ fontSize: 13, fontWeight: 500, textDecoration: o.settled ? 'line-through' : 'none', color: o.settled ? 'var(--text-3)' : 'var(--text)' }}>{o.person}</p>
+                    {isOverdue && (
+                      <span style={{ fontSize: 9, fontWeight: 700, background: '#ef444420', color: '#ef4444', border: '1px solid #ef444440', borderRadius: 4, padding: '1px 5px', fontFamily: 'var(--font-mono)', textTransform: 'uppercase' }}>Overdue</span>
+                    )}
+                  </div>
+                  <p className="mono" style={{ fontSize: 10, color: 'var(--text-3)', marginTop: 2 }}>
+                    {o.note ? `${o.note} · ` : ''}{o.date}
+                    {o.expected_date && !o.settled && ` · due ${o.expected_date}`}
+                  </p>
+                  {paid > 0 && !o.settled && (
+                    <div style={{ marginTop: 6, height: 4, borderRadius: 2, background: 'var(--border)', overflow: 'hidden', maxWidth: 120 }}>
+                      <div style={{ height: '100%', borderRadius: 2, background: 'var(--finance)', width: `${Math.min(100, (paid / o.amount) * 100)}%` }} />
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center gap-2" style={{ flexShrink: 0 }}>
+                  <div style={{ textAlign: 'right' }}>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, color: o.settled ? 'var(--text-3)' : 'var(--finance)', fontWeight: 600, whiteSpace: 'nowrap', display: 'block' }}>
+                      £{remaining.toFixed(2)}
+                    </span>
+                    {paid > 0 && !o.settled && (
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-3)', display: 'block' }}>of £{o.amount.toFixed(2)}</span>
+                    )}
+                  </div>
+                  {!o.settled && (
+                    <button
+                      className="btn btn-sm btn-ghost"
+                      style={{ fontSize: 10, padding: '3px 7px' }}
+                      onClick={() => setPartialPayment(prev => ({ ...prev, [o.id]: prev[o.id] !== undefined ? undefined : '' }))}
+                    >
+                      Pay
+                    </button>
+                  )}
+                  <button className="btn btn-sm btn-ghost" style={{ fontSize: 10, padding: '3px 7px' }} onClick={() => toggleMoneyOwedSettled(o.id, !o.settled)}>
+                    {o.settled ? 'Unsettle' : 'Settled'}
+                  </button>
+                  <button className="btn-icon btn" onClick={() => deleteMoneyOwed(o.id)}><Trash2 size={12} /></button>
+                </div>
+              </div>
+              {showPayInput && (
+                <div className="flex items-center gap-2 mt-2">
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="Amount paid £"
+                    value={partialPayment[o.id] || ''}
+                    onChange={e => setPartialPayment(prev => ({ ...prev, [o.id]: sanitizeAmountInput(e.target.value) }))}
+                    style={{ fontSize: 12, flex: 1, minWidth: 0 }}
+                    autoFocus
+                  />
+                  <button className="btn btn-sm btn-finance" style={{ color: '#fff', fontSize: 11 }} onClick={() => recordPartialPayment(o.id)}>Record</button>
+                  <button className="btn-icon btn" onClick={() => setPartialPayment(prev => { const n = { ...prev }; delete n[o.id]; return n })}><XIcon size={12} /></button>
+                </div>
+              )}
             </div>
-            <div className="flex items-center gap-2" style={{ flexShrink: 0 }}>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, color: o.settled ? 'var(--text-3)' : 'var(--finance)', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                £{o.amount.toFixed(0)}
-              </span>
-              <button className="btn btn-sm btn-ghost" onClick={() => toggleMoneyOwedSettled(o.id, !o.settled)}>
-                {o.settled ? 'Unsettle' : 'Settled'}
-              </button>
-              <button className="btn-icon btn" onClick={() => deleteMoneyOwed(o.id)}><Trash2 size={12} /></button>
-            </div>
-          </div>
-        ))}
+          )
+        })}
         {moneyOwed.length === 0 && (
           <p style={{ fontSize: 12, color: 'var(--text-3)', fontStyle: 'italic' }}>Nobody owes you anything right now.</p>
         )}
@@ -1038,6 +1104,10 @@ export default function FinancePage() {
           <input type="date" value={newMoneyOwed.date} onChange={e => setNewMoneyOwed(p => ({ ...p, date: e.target.value }))} style={{ fontSize: 12, flex: '1 1 110px' }} />
         </div>
         <input placeholder="What for (optional)" value={newMoneyOwed.note} onChange={e => setNewMoneyOwed(p => ({ ...p, note: e.target.value }))} style={{ fontSize: 12 }} />
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <label style={{ fontSize: 11, color: 'var(--text-3)', whiteSpace: 'nowrap' }}>Expect by:</label>
+          <input type="date" value={newMoneyOwed.expected_date || ''} onChange={e => setNewMoneyOwed(p => ({ ...p, expected_date: e.target.value }))} style={{ fontSize: 12, flex: 1 }} />
+        </div>
         <button className="btn btn-sm btn-ghost" onClick={addMoneyOwed}><Plus size={12} /> Add entry</button>
       </div>
     </div>

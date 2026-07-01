@@ -35,6 +35,7 @@ export default function BrainDump() {
   const [showExtra, setShowExtra] = useState(false)
   const [showActedOn, setShowActedOn] = useState(false)
   const [openMenuId, setOpenMenuId] = useState(null)
+  const [expanded, setExpanded] = useState(false)
 
   async function load() {
     setLoading(true)
@@ -104,8 +105,27 @@ export default function BrainDump() {
   const acted = ideas.filter(i => i.acted_on)
 
   return (
+
     <div className="card card-wellness">
-      <h3 style={{ marginBottom: 4 }}>Brain dump</h3>
+      <button
+        className="btn btn-ghost"
+        style={{ width: '100%', justifyContent: 'space-between', padding: '0 0 4px', marginBottom: expanded ? 12 : 0 }}
+        onClick={() => setExpanded(v => !v)}
+      >
+        <span style={{ fontSize: '0.9rem', fontWeight: 600 }}>
+          Brain dump {active.length > 0 && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-3)', fontWeight: 400 }}>{active.length} idea{active.length !== 1 ? 's' : ''}</span>}
+        </span>
+        <ChevronDown size={14} style={{ transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s', color: 'var(--text-3)' }} />
+      </button>
+
+      {!expanded && (
+        <p style={{ fontSize: 12, color: 'var(--text-3)' }}>
+          {active.length === 0 ? 'Nothing parked yet — tap to open.' : `${active.length} idea${active.length !== 1 ? 's' : ''} parked — tap to view.`}
+        </p>
+      )}
+
+      {expanded && (
+      <>
       <p style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 12 }}>
         Things you don't want to lose but don't need to do right now. Send them to today, this week, or a quarterly goal when you're ready.
       </p>
@@ -185,6 +205,8 @@ export default function BrainDump() {
             </div>
           )}
         </div>
+      )}
+      </>
       )}
     </div>
   )

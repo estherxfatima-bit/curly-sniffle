@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { format, startOfWeek, addWeeks, addDays } from 'date-fns'
-import { ArrowLeft, MessageSquare, Send, Flame, Target, CheckSquare, ListTodo, ChevronLeft, ChevronRight } from 'lucide-react'
+import { format, startOfWeek, addWeeks, addDays, startOfMonth } from 'date-fns'
+import { ArrowLeft, MessageSquare, Send, Flame, Target, CheckSquare, ListTodo, ChevronLeft, ChevronRight, BarChart2, Layers } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import ArcRing from '../components/ui/ArcRing'
@@ -281,6 +281,91 @@ function CompareColumn({
   )
 }
 
+function financeHealthLabel(expenseCount) {
+  if (expenseCount === 0) return { label: 'Not logging', color: '#ef4444', dot: '●' }
+  if (expenseCount < 5) return { label: 'Logging (light)', color: '#f59e0b', dot: '●' }
+  return { label: 'Actively logging', color: '#22c55e', dot: '●' }
+}
+
+function SimplePersonCard({ name, isSelf, data, onNudge }) {
+  if (!data) return null
+  const { goals, weekTasks, habits, habitLogs, moodLogs, milestones, milestoneTasks, expenseCount } = data
+  const momentum = momentumScore(habits, habitLogs, weekTasks, moodLogs)
+  const weekDone = weekTasks.filter(t => t.complete).length
+  const weekPct = weekTasks.length ? Math.round((weekDone / weekTasks.length) * 100) : null
+
+  const periodGoals = goals.filter(g => g.quarter === currentQuarter && g.year === currentYear)
+  const avgGoalPct = periodGoals.length
+    ? Math.round(periodGoals.reduce((s, g) => s + computeProgress(g, goals, milestones, milestoneTasks).pct, 0) / periodGoals.length)
+    : null
+
+  const logSetMap = new Map()
+  habitLogs.forEach(l => {
+    if (!logSetMap.has(l.habit_id)) logSetMap.set(l.habit_id, new Set())
+    logSetMap.get(l.habit_id).add(l.log_date)
+  })
+  const topStreakHabits = habits
+    .map(h => ({ ...h, streak: simulateHabit(h, logSetMap.get(h.id) || new Set(), today).streak }))
+    .sort((a, b) => b.streak - a.streak)
+    .slice(0, 3)
+  const finance = financeHealthLabel(expenseCount || 0)
+
+  function chip(label, value, color, extra) {
+    const isGood = value !== null && (typeof value === 'number' ? value >= 60 : true)
+    const bgColor = value === null ? 'var(--bg-2)' : isGood ? `${color}18` : '#ef444415'
+    const textColor = value === null ? 'var(--text-3)' : isGood ? color : '#ef4444'
+    return (
+      <div style={{ borderRadius: 10, background: bgColor, border: `1px solid ${value === null ? 'var(--border)' : isGood ? `${color}40` : '#ef444430'}`, padding: '10px 14px' }}>
+        <p style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', marginBottom: 3 }}>{label}</p>
+        <p style={{ fontSize: 18, fontWeight: 700, color: textColor, lineHeight: 1 }}>
+          {value === null ? '—' : typeof value === 'number' ? `${value}%` : value}
+        </p>
+        {extra && <p style={{ fontSize: 10, color: 'var(--text-3)', marginTop: 2 }}>{extra}</p>}
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ flex: 1, minWidth: 0 }}>
+      <div className="card" style={{ marginBottom: 12 }}>
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <p style={{ fontSize: 14, fontWeight: 700 }}>{name}</p>
+            <p style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>{isSelf ? 'You' : 'Partner'}</p>
+          </div>
+          {!isSelf && <NudgeButton onSend={onNudge} />}
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
+          {chip('Momentum', momentum, 'var(--career)', 'out of 100')}
+          {chip('Weekly tasks', weekPct, 'var(--career)', weekPct !== null ? `${weekDone}/${weekTasks.length} done` : 'no tasks')}
+          {chip('Goal progress', avgGoalPct, 'var(--creative)', avgGoalPct !== null ? `avg across ${periodGoals.length} goal${periodGoals.length !== 1 ? 's' : ''}` : 'no goals')}
+          <div style={{ borderRadius: 10, background: `${finance.color}18`, border: `1px solid ${finance.color}40`, padding: '10px 14px' }}>
+            <p style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', marginBottom: 3 }}>Finance</p>
+            <p style={{ fontSize: 13, fontWeight: 600, color: finance.color, lineHeight: 1.3 }}>{finance.label}</p>
+            <p style={{ fontSize: 10, color: 'var(--text-3)', marginTop: 2 }}>{expenseCount || 0} entries this month</p>
+          </div>
+        </div>
+
+        {topStreakHabits.length > 0 && (
+          <div>
+            <p style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', marginBottom: 6 }}>Top habit streaks</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {topStreakHabits.map(h => (
+                <div key={h.id} className="flex items-center gap-2">
+                  <span style={{ fontSize: 14 }}>{h.streak > 0 ? '🔥' : '○'}</span>
+                  <span style={{ fontSize: 12, flex: 1, color: 'var(--text-2)' }}>{h.name}</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-3)' }}>{h.streak}d</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function ComparePage() {
   const { partnerId } = useParams()
   const { user } = useAuth()
@@ -289,6 +374,8 @@ export default function ComparePage() {
   const [partnerName, setPartnerName] = useState('Partner')
   const [loading, setLoading] = useState(true)
   const [nudgeSent, setNudgeSent] = useState(false)
+  const [view, setView] = useState('simple') // 'simple' | 'deep'
+  const [mobileTab, setMobileTab] = useState('self') // 'self' | 'partner'
 
   // Shared navigation state — applies to both columns so the comparison stays apples-to-apples.
   const [weekRef, setWeekRef] = useState(new Date())
@@ -315,7 +402,8 @@ export default function ComparePage() {
   }
 
   async function loadForUser(uid) {
-    const [goalsRes, weekTasksRes, habitsRes, habitLogsRes, moodRes, todosRes, milestonesRes, milestoneTasksRes] = await Promise.all([
+    const monthStart = format(startOfMonth(new Date()), 'yyyy-MM-dd')
+    const [goalsRes, weekTasksRes, habitsRes, habitLogsRes, moodRes, todosRes, milestonesRes, milestoneTasksRes, expensesRes] = await Promise.all([
       supabase.from('goals').select('*').eq('user_id', uid),
       supabase.from('weekly_tasks').select('*').eq('user_id', uid).eq('week_start', weekStartStr),
       supabase.from('habits').select('*').eq('user_id', uid),
@@ -324,6 +412,7 @@ export default function ComparePage() {
       supabase.from('daily_todos').select('*').eq('user_id', uid).eq('date', todoDateStr).eq('archived', false).order('sort_order'),
       supabase.from('milestones').select('*').eq('user_id', uid),
       supabase.from('milestone_tasks').select('*').eq('user_id', uid),
+      supabase.from('expenses').select('id', { count: 'exact', head: true }).eq('user_id', uid).gte('date', monthStart),
     ])
     return {
       goals: goalsRes.data || [],
@@ -334,6 +423,7 @@ export default function ComparePage() {
       todos: todosRes.data || [],
       milestones: milestonesRes.data || [],
       milestoneTasks: milestoneTasksRes.data || [],
+      expenseCount: expensesRes.count || 0,
     }
   }
 
@@ -366,6 +456,12 @@ export default function ComparePage() {
     setTimeout(() => setNudgeSent(false), 2000)
   }
 
+  const sharedColProps = {
+    weekStart: weekStartStr, onWeekShift: shiftWeek, onWeekToday: () => setWeekRef(new Date()), isCurrentWeek,
+    todoDate: todoDateStr, onTodoShift: shiftTodoDate, onTodoToday: () => setTodoDate(new Date()), isCurrentTodoDate,
+    goalQuarter, goalYear, onGoalPeriodShift: shiftGoalPeriod, onGoalPeriodToday: () => { setGoalQuarter(currentQuarter); setGoalYear(currentYear) }, isCurrentGoalPeriod,
+  }
+
   return (
     <div>
       <div className="page-header">
@@ -374,8 +470,28 @@ export default function ComparePage() {
             <ArrowLeft size={14} /> Partners
           </Link>
         </div>
-        <h1>Compare</h1>
-        <p>You vs {partnerName} — navigate weeks, days and quarters independently of "now"</p>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div>
+            <h1>Compare</h1>
+            <p>You vs {partnerName}</p>
+          </div>
+          <div className="flex items-center gap-1" style={{ background: 'var(--bg-2)', borderRadius: 8, padding: 3 }}>
+            <button
+              className={`btn btn-sm ${view === 'simple' ? 'btn-career' : 'btn-ghost'}`}
+              style={{ fontSize: 11, color: view === 'simple' ? '#fff' : undefined }}
+              onClick={() => setView('simple')}
+            >
+              <Layers size={12} /> Simple
+            </button>
+            <button
+              className={`btn btn-sm ${view === 'deep' ? 'btn-career' : 'btn-ghost'}`}
+              style={{ fontSize: 11, color: view === 'deep' ? '#fff' : undefined }}
+              onClick={() => setView('deep')}
+            >
+              <BarChart2 size={12} /> Deep dive
+            </button>
+          </div>
+        </div>
         {nudgeSent && (
           <span style={{ fontSize: 11, color: 'var(--success)', fontFamily: 'var(--font-mono)' }}>Nudge sent!</span>
         )}
@@ -383,27 +499,40 @@ export default function ComparePage() {
 
       {loading ? (
         <p className="text-dim" style={{ padding: '40px', textAlign: 'center', fontFamily: 'var(--font-mono)', fontSize: 12 }}>Loading…</p>
+      ) : view === 'simple' ? (
+        <>
+          {/* Mobile tab switcher */}
+          <div className="flex items-center gap-1 mb-3" style={{ background: 'var(--bg-2)', borderRadius: 8, padding: 3, display: 'flex' }}>
+            <button className={`btn btn-sm ${mobileTab === 'self' ? 'btn-ghost' : 'btn-ghost'}`} style={{ flex: 1, fontSize: 12, fontWeight: mobileTab === 'self' ? 600 : 400, background: mobileTab === 'self' ? 'var(--bg)' : 'transparent', borderRadius: 6 }} onClick={() => setMobileTab('self')}>You</button>
+            <button className={`btn btn-sm btn-ghost`} style={{ flex: 1, fontSize: 12, fontWeight: mobileTab === 'partner' ? 600 : 400, background: mobileTab === 'partner' ? 'var(--bg)' : 'transparent', borderRadius: 6 }} onClick={() => setMobileTab('partner')}>{partnerName}</button>
+          </div>
+          <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+            <div style={{ flex: 1, minWidth: 0, display: mobileTab === 'self' ? 'block' : 'none' }} className="compare-col-self">
+              <SimplePersonCard name="You" isSelf data={selfData} onNudge={() => {}} />
+            </div>
+            <div style={{ flex: 1, minWidth: 0, display: mobileTab === 'partner' ? 'block' : 'none' }} className="compare-col-partner">
+              <SimplePersonCard name={partnerName} isSelf={false} data={partnerData} onNudge={msg => sendNudge(msg, null)} />
+            </div>
+          </div>
+          <style>{`@media (min-width: 640px) { .compare-col-self, .compare-col-partner { display: block !important; } }`}</style>
+        </>
       ) : (
-        <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-          <CompareColumn
-            name="You"
-            data={selfData}
-            onNudge={() => {}}
-            isSelf={true}
-            weekStart={weekStartStr} onWeekShift={shiftWeek} onWeekToday={() => setWeekRef(new Date())} isCurrentWeek={isCurrentWeek}
-            todoDate={todoDateStr} onTodoShift={shiftTodoDate} onTodoToday={() => setTodoDate(new Date())} isCurrentTodoDate={isCurrentTodoDate}
-            goalQuarter={goalQuarter} goalYear={goalYear} onGoalPeriodShift={shiftGoalPeriod} onGoalPeriodToday={() => { setGoalQuarter(currentQuarter); setGoalYear(currentYear) }} isCurrentGoalPeriod={isCurrentGoalPeriod}
-          />
-          <CompareColumn
-            name={partnerName}
-            data={partnerData}
-            onNudge={sendNudge}
-            isSelf={false}
-            weekStart={weekStartStr} onWeekShift={shiftWeek} onWeekToday={() => setWeekRef(new Date())} isCurrentWeek={isCurrentWeek}
-            todoDate={todoDateStr} onTodoShift={shiftTodoDate} onTodoToday={() => setTodoDate(new Date())} isCurrentTodoDate={isCurrentTodoDate}
-            goalQuarter={goalQuarter} goalYear={goalYear} onGoalPeriodShift={shiftGoalPeriod} onGoalPeriodToday={() => { setGoalQuarter(currentQuarter); setGoalYear(currentYear) }} isCurrentGoalPeriod={isCurrentGoalPeriod}
-          />
-        </div>
+        <>
+          {/* Mobile tab switcher for deep dive */}
+          <div className="flex items-center gap-1 mb-3" style={{ background: 'var(--bg-2)', borderRadius: 8, padding: 3, display: 'flex' }}>
+            <button style={{ flex: 1, fontSize: 12, fontWeight: mobileTab === 'self' ? 600 : 400, background: mobileTab === 'self' ? 'var(--bg)' : 'transparent', borderRadius: 6, padding: '5px 0', border: 'none', cursor: 'pointer', color: 'var(--text)' }} onClick={() => setMobileTab('self')}>You</button>
+            <button style={{ flex: 1, fontSize: 12, fontWeight: mobileTab === 'partner' ? 600 : 400, background: mobileTab === 'partner' ? 'var(--bg)' : 'transparent', borderRadius: 6, padding: '5px 0', border: 'none', cursor: 'pointer', color: 'var(--text)' }} onClick={() => setMobileTab('partner')}>{partnerName}</button>
+          </div>
+          <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+            <div style={{ flex: 1, minWidth: 0, display: mobileTab === 'self' ? 'flex' : 'none', flexDirection: 'column', gap: 16 }} className="compare-col-self">
+              <CompareColumn name="You" data={selfData} onNudge={() => {}} isSelf={true} {...sharedColProps} />
+            </div>
+            <div style={{ flex: 1, minWidth: 0, display: mobileTab === 'partner' ? 'flex' : 'none', flexDirection: 'column', gap: 16 }} className="compare-col-partner">
+              <CompareColumn name={partnerName} data={partnerData} onNudge={sendNudge} isSelf={false} {...sharedColProps} />
+            </div>
+          </div>
+          <style>{`@media (min-width: 640px) { .compare-col-self, .compare-col-partner { display: flex !important; } }`}</style>
+        </>
       )}
     </div>
   )
