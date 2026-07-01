@@ -15,7 +15,7 @@ import TaskCarryoverModal from './TaskCarryoverModal'
 import BacklogPicker from './BacklogPicker'
 import TimerWidget from './TimerWidget'
 import TimeBlockModal from './TimeBlockModal'
-import { Plus, Trash2, ChevronDown, ChevronRight, Check, Target, Hourglass, AlarmClock, Link2, Timer as TimerIcon, CalendarClock, ChevronLeft, Download, Lightbulb, Lock, Unlock, FastForward, Rewind, Archive } from 'lucide-react'
+import { Plus, Trash2, ChevronDown, ChevronRight, Check, Target, Hourglass, AlarmClock, Link2, Timer as TimerIcon, CalendarClock, ChevronLeft, Download, Lightbulb, Lock, Unlock, FastForward, Rewind, Archive, Pencil } from 'lucide-react'
 
 const DEFAULT_CATS = DEFAULT_TODO_CATEGORIES.map(c => c.name)
 
@@ -859,8 +859,7 @@ function TodoItem({ todo, categories, catColor, goals, isTimerRunning, onToggle,
           />
         ) : (
           <span
-            onClick={() => { setTextInput(todo.text); setEditingText(true) }}
-            title="Click to edit"
+            onClick={() => setShowOptions(v => !v)}
             style={{
               flex: 1,
               fontSize: 13,
@@ -875,13 +874,13 @@ function TodoItem({ todo, categories, catColor, goals, isTimerRunning, onToggle,
               WebkitLineClamp: 4,
               WebkitBoxOrient: 'vertical',
               overflow: 'hidden',
-              cursor: 'text',
+              cursor: 'pointer',
             }}>
             {todo.text}
           </span>
         )}
 
-        {/* Options toggle */}
+        {/* Options toggle chevron */}
         <button className="btn-icon" style={{ padding: 2, flexShrink: 0, color: showOptions ? 'var(--career)' : 'var(--text-3)' }}
           onClick={() => setShowOptions(v => !v)} title="Show options">
           {showOptions ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
@@ -1038,6 +1037,11 @@ function TodoItem({ todo, categories, catColor, goals, isTimerRunning, onToggle,
             <FastForward size={12} />
           </button>
         )}
+
+        {/* Edit text */}
+        <button className="btn-icon" style={{ padding: 2, flexShrink: 0, color: 'var(--text-3)' }} onClick={() => { setTextInput(todo.text); setEditingText(true); setShowOptions(false) }} title="Edit task text">
+          <Pencil size={12} />
+        </button>
 
         {/* Delete */}
         <button className="btn-icon" style={{ padding: 2, flexShrink: 0 }} onClick={onRemove} title="Delete to-do">
