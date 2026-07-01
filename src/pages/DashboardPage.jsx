@@ -52,7 +52,7 @@ export default function DashboardPage() {
   const [activeView, setActiveView] = useState('daily')
   const [refDate, setRefDate] = useState(new Date())
   const realToday  = format(new Date(), 'yyyy-MM-dd')
-  const isFriday   = new Date().getDay() === 5
+  const isWeekend  = new Date().getDay() === 6 || new Date().getDay() === 0 // Sat or Sun
 
   // Derived dates from refDate
   const today      = format(refDate, 'yyyy-MM-dd')
@@ -361,10 +361,10 @@ export default function DashboardPage() {
 
       {/* Subline + Friday banner */}
       <div style={{ marginBottom: 20 }}>
-        <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: isFriday ? 14 : 0 }}>
+        <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-3)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: isWeekend ? 14 : 0 }}>
           {format(new Date(), 'EEEE, d MMMM yyyy')} · {getQuarterYear()}
         </p>
-        {isFriday && (
+        {isWeekend && (
           <div style={{
             background: 'linear-gradient(135deg, var(--career-tint) 0%, var(--bg) 100%)',
             border: '1px solid var(--career)',
@@ -373,7 +373,7 @@ export default function DashboardPage() {
             display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
           }}>
             <div>
-              <p style={{ color: 'var(--career)', fontWeight: 600, fontSize: 14 }}>It's Friday — time for your end-of-week review</p>
+              <p style={{ color: 'var(--career)', fontWeight: 600, fontSize: 14 }}>Week ending — time for your end-of-week review</p>
               <p style={{ color: 'var(--text-3)', fontSize: 12, marginTop: 3 }}>Reflect, carry forward, set intentions for next week.</p>
             </div>
             <Link to="/weekly?review=1" className="btn btn-career btn-sm" style={{ flexShrink: 0, color: '#fff' }}>Start →</Link>

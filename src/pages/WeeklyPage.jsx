@@ -338,9 +338,9 @@ export default function WeeklyPage() {
   const doneCount = tasks.filter(t => t.complete).length
 
   // Show a nudge Thu/Fri of the current week when any task is missing a note
-  const todayDow = new Date().getDay() // 0=Sun,4=Thu,5=Fri
+  const todayDow = new Date().getDay() // 0=Sun,6=Sat
   const isCurrentWeek = weekStartStr === format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
-  const showMissingNotesNudge = isCurrentWeek && (todayDow === 4 || todayDow === 5) && tasks.some(t => !t.notes?.trim())
+  const showMissingNotesNudge = isCurrentWeek && (todayDow === 6 || todayDow === 0) && tasks.some(t => !t.notes?.trim())
   const missingNotesCount = tasks.filter(t => !t.notes?.trim()).length
 
   const visibleTasks = tasks.filter(t => {
