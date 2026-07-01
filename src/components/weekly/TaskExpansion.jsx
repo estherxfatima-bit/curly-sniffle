@@ -42,6 +42,19 @@ export default function TaskExpansion({ task, goals, onUpdateField, onToggleSubt
 
   return (
     <div onClick={e => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '4px 4px 8px' }}>
+      {/* Notes — shown first so it's the first thing visible on expand */}
+      <div>
+        <p className="mono mb-2" style={{ fontSize: 10 }}>Notes</p>
+        <textarea
+          value={notes}
+          onChange={e => setNotes(e.target.value)}
+          onBlur={() => { if (notes !== (task.notes || '')) onUpdateField('notes', notes) }}
+          placeholder={task.complete ? 'What got done? Any context for partners or Claude…' : 'Any blockers, progress, or context…'}
+          rows={2}
+          style={{ fontSize: 12, width: '100%', resize: 'vertical' }}
+        />
+      </div>
+
       {/* Subtasks */}
       <div>
         <p className="mono mb-2">Subtasks</p>
@@ -113,19 +126,6 @@ export default function TaskExpansion({ task, goals, onUpdateField, onToggleSubt
         >
           <Repeat size={12} /> {task.recurring ? 'Recurring weekly' : 'Make recurring'}
         </button>
-      </div>
-
-      {/* Notes */}
-      <div>
-        <p className="mono mb-2">Notes</p>
-        <textarea
-          value={notes}
-          onChange={e => setNotes(e.target.value)}
-          onBlur={() => { if (notes !== (task.notes || '')) onUpdateField('notes', notes) }}
-          placeholder="Add a note…"
-          rows={2}
-          style={{ fontSize: 12, width: '100%', resize: 'vertical' }}
-        />
       </div>
 
       {/* Comments */}

@@ -68,7 +68,6 @@ export default function WeeklyPage() {
   const [savedQuote, setSavedQuote] = useState(null)
   const [prefs, setPrefs] = useState(null)
   const [timeBlocking, setTimeBlocking] = useState(false)
-  const [taskNotePrompt, setTaskNotePrompt] = useState(null) // { task, newVal, note }
 
   const weekStart = startOfWeek(currentWeek, { weekStartsOn: 1 })
   const weekEnd   = endOfWeek(currentWeek, { weekStartsOn: 1 })
@@ -264,20 +263,10 @@ export default function WeeklyPage() {
 
   async function toggleTask(task) {
     const newVal = !task.complete
-    // Always prompt for a note — what was done (complete) or why not (incomplete)
-    setTaskNotePrompt({ task, newVal, note: task.notes || '' })
-  }
-
-  async function confirmTaskNote() {
-    if (!taskNotePrompt) return
-    const { task, newVal, note } = taskNotePrompt
-    setTaskNotePrompt(null)
-    const trimmed = note.trim()
-    await supabase.from('weekly_tasks').update({ complete: newVal, ...(trimmed ? { notes: trimmed } : {}) }).eq('id', task.id)
-    if (trimmed) {
-      await supabase.from('comments').insert({ user_id: user.id, task_id: task.id, content: trimmed })
-    }
-    setTasks(prev => prev.map(t => t.id === task.id ? { ...t, complete: newVal, ...(trimmed ? { notes: trimmed } : {}) } : t))
+    await supabase.from('weekly_tasks').update({ complete: newVal }).eq('id', task.id)
+    setTasks(prev => prev.map(t => t.id === task.id ? { ...t, complete: newVal } : t))
+    // Auto-expand so the notes field is immediately visible inline
+    setExpandedTask(prev => prev === task.id ? prev : task.id)
   }
 
   async function deleteTask(id) {
@@ -684,40 +673,6 @@ export default function WeeklyPage() {
       {showPastReviews && <PastReviews onClose={() => setShowPastReviews(false)} />}
       {showGoalPicker && <GoalTaskPicker goals={goals} milestones={milestones} milestoneTasks={milestoneTasks} onSelect={pullFromGoalTask} onClose={() => setShowGoalPicker(false)} />}
 
-      {/* Task note prompt — shown when toggling complete status */}
-      {taskNotePrompt && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 300, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', padding: 16 }}
-          onClick={() => { confirmTaskNote() }}>
-          <div className="card" style={{ width: '100%', maxWidth: 500, padding: 20 }} onClick={e => e.stopPropagation()}>
-            <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
-              {taskNotePrompt.newVal ? '✅ What did you get done?' : '⏸ Why didn't this happen?'}
-            </p>
-            <p style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 10 }}>
-              {taskNotePrompt.task.specific_task}
-            </p>
-            <p style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 6 }}>
-              {taskNotePrompt.newVal
-                ? 'Add a note on what was done — helps partners see progress and gives Claude context.'
-                : 'Add a note on why it didn't happen or what's still left to do.'}
-            </p>
-            <textarea
-              autoFocus
-              rows={3}
-              value={taskNotePrompt.note}
-              onChange={e => setTaskNotePrompt(p => ({ ...p, note: e.target.value }))}
-              placeholder={taskNotePrompt.newVal ? 'e.g. Finished the first draft, sent for review…' : 'e.g. Got blocked waiting for feedback, will carry forward…'}
-              style={{ fontSize: 13, width: '100%', resize: 'vertical', marginBottom: 12 }}
-              onKeyDown={e => { if (e.key === 'Enter' && e.metaKey) confirmTaskNote() }}
-            />
-            <div className="flex items-center gap-2 justify-end">
-              <button className="btn btn-ghost btn-sm" onClick={confirmTaskNote}>Skip note</button>
-              <button className="btn btn-career btn-sm" style={{ color: '#fff' }} onClick={confirmTaskNote}>
-                {taskNotePrompt.newVal ? 'Mark complete' : 'Mark incomplete'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
