@@ -64,7 +64,7 @@ export default function WeeklyPage() {
   const [showPastReviews, setShowPastReviews] = useState(false)
   const [showCarryForwardReview, setShowCarryForwardReview] = useState(false)
   const [expandedTask, setExpandedTask] = useState(null)
-  const [groupBy, setGroupBy] = useState('area')
+  const [groupBy, setGroupBy] = useState('none')
   const [priorityFilter, setPriorityFilter] = useState('') // '' | urgent | high | medium | low | none
   const [newTask, setNewTask] = useState({ area: 'Career', action: '', frequency: 'Weekly', specific_task: '', goal_id: '', recurring: false })
   const [savedQuote, setSavedQuote] = useState(null)
@@ -362,7 +362,9 @@ export default function WeeklyPage() {
 
   // Build groups based on the grouping toggle
   let groups = []
-  if (groupBy === 'area') {
+  if (groupBy === 'none') {
+    groups = [{ key: 'all', label: null, tasks: visibleTasks.sort(byPriority) }]
+  } else if (groupBy === 'area') {
     groups = TASK_AREAS.map(area => ({
       key: area, label: area, color: areaColor(area), tasks: visibleTasks.filter(t => t.area === area).sort(byPriority),
     })).filter(g => g.tasks.length)
@@ -445,6 +447,7 @@ export default function WeeklyPage() {
 
         {/* Grouping toggle */}
         <div className="flex items-center gap-1" style={{ marginLeft: 8 }}>
+          <button className={`btn btn-xs ${groupBy === 'none' ? 'btn-career' : 'btn-ghost'}`} style={groupBy === 'none' ? { color: '#fff' } : {}} onClick={() => setGroupBy('none')}>All tasks</button>
           <button className={`btn btn-xs ${groupBy === 'area' ? 'btn-career' : 'btn-ghost'}`} style={groupBy === 'area' ? { color: '#fff' } : {}} onClick={() => setGroupBy('area')}>Group by Area</button>
           <button className={`btn btn-xs ${groupBy === 'goal' ? 'btn-career' : 'btn-ghost'}`} style={groupBy === 'goal' ? { color: '#fff' } : {}} onClick={() => setGroupBy('goal')}>Group by Goal</button>
         </div>
@@ -535,6 +538,7 @@ export default function WeeklyPage() {
                 const isWorkGroup = groupBy === 'area' && group.key === WORK_AREA
                 return (
                 <Fragment key={group.key}>
+                  {group.label !== null && (
                   <tr style={isWorkGroup ? { background: 'rgba(100,116,139,0.08)', boxShadow: 'inset 3px 0 0 0 #64748b' } : { background: 'var(--bg-2)' }}>
                     <td colSpan={8} style={{ padding: '8px 16px' }}>
                       {groupBy === 'area' ? (
@@ -549,6 +553,7 @@ export default function WeeklyPage() {
                       )}
                     </td>
                   </tr>
+                  )}
                   {group.tasks.length === 0 && groupBy === 'goal' && (
                     <tr>
                       <td colSpan={8} style={{ padding: '8px 16px 10px', color: 'var(--text-3)', fontSize: 12, fontStyle: 'italic' }}>
@@ -683,6 +688,7 @@ export default function WeeklyPage() {
                 ...(isWorkGroup ? { background: 'rgba(100,116,139,0.08)', borderLeft: '3px solid #64748b', borderRadius: 'var(--radius)', padding: '6px 8px 8px' } : {}),
               }}
             >
+              {group.label !== null && (
               <div style={{ padding: '4px 2px' }}>
                 {groupBy === 'area' ? (
                   <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 600, color: group.color, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -695,6 +701,7 @@ export default function WeeklyPage() {
                   </div>
                 )}
               </div>
+              )}
               {group.tasks.length === 0 && groupBy === 'goal' && (
                 <p style={{ fontSize: 12, color: 'var(--text-3)', fontStyle: 'italic', padding: '4px 2px' }}>
                   No tasks this week
