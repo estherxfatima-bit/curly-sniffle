@@ -369,7 +369,7 @@ export default function WeeklyPage() {
   } else {
     groups = goals.map(g => ({
       key: g.id, label: g.primary_goal, goal: g, pct: goalProgress(g, milestones), tasks: visibleTasks.filter(t => t.goal_id === g.id).sort(byPriority),
-    })).filter(g => g.tasks.length)
+    }))
     const ungrouped = visibleTasks.filter(t => !t.goal_id).sort(byPriority)
     if (ungrouped.length) groups.push({ key: 'ungrouped', label: 'Ungrouped', tasks: ungrouped })
   }
@@ -549,6 +549,18 @@ export default function WeeklyPage() {
                       )}
                     </td>
                   </tr>
+                  {group.tasks.length === 0 && groupBy === 'goal' && (
+                    <tr>
+                      <td colSpan={8} style={{ padding: '8px 16px 10px', color: 'var(--text-3)', fontSize: 12, fontStyle: 'italic' }}>
+                        No tasks this week
+                        {group.goal && (
+                          <button className="btn btn-xs btn-ghost" style={{ marginLeft: 10 }} onClick={() => { setNewTask(p => ({ ...p, goal_id: group.key, area: group.goal.category === 'Wellness' ? 'Health/Wellness' : group.goal.category })); setShowAddRow(true) }}>
+                            + Add task
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  )}
                   {group.tasks.map(task => {
                     const expanded = expandedTask === task.id
                     return (
@@ -683,6 +695,16 @@ export default function WeeklyPage() {
                   </div>
                 )}
               </div>
+              {group.tasks.length === 0 && groupBy === 'goal' && (
+                <p style={{ fontSize: 12, color: 'var(--text-3)', fontStyle: 'italic', padding: '4px 2px' }}>
+                  No tasks this week
+                  {group.goal && (
+                    <button className="btn btn-xs btn-ghost" style={{ marginLeft: 8 }} onClick={() => { setNewTask(p => ({ ...p, goal_id: group.key, area: group.goal.category === 'Wellness' ? 'Health/Wellness' : group.goal.category })); setShowAddRow(true) }}>
+                      + Add task
+                    </button>
+                  )}
+                </p>
+              )}
               {group.tasks.map(task => (
                 <WeeklyTaskCard
                   key={task.id}
