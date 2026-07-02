@@ -1,10 +1,16 @@
 // Shared finance helpers — categories, colours, monthly conversion, budget status
 import { differenceInCalendarDays, parseISO } from 'date-fns'
 
-export const VARIABLE_CATS = ['Food', 'Travel', 'Outings', 'Shopping', 'Business', 'Personal Care', 'Other']
+export const VARIABLE_CATS = ['Groceries', 'Eating out', 'Takeaway', 'Travel', 'Outings', 'Shopping', 'Business', 'Personal Care', 'Other']
+
+// Legacy 'Food' category — kept so old expenses aren't lost; maps to Groceries in the UI where needed
+export const CAT_LEGACY_MAP = { Food: 'Groceries' }
 
 export const CAT_COLORS = {
-  Food: 'var(--wellness)',
+  Groceries: 'var(--wellness)',
+  'Eating out': '#e8843a',
+  Takeaway: '#d4622a',
+  Food: 'var(--wellness)', // legacy
   Travel: 'var(--career)',
   Outings: 'var(--creative)',
   Shopping: 'var(--personal)',
@@ -14,7 +20,10 @@ export const CAT_COLORS = {
 }
 
 export const CAT_EMOJI = {
-  Food: '🍔',
+  Groceries: '🛒',
+  'Eating out': '🍽️',
+  Takeaway: '🥡',
+  Food: '🍔', // legacy
   Travel: '🚆',
   Outings: '🎉',
   Shopping: '🛍️',
