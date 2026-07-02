@@ -10,6 +10,7 @@ import { toMinutes, minutesToTimeString, dateAndMinutesToISO } from '../lib/time
 import { createCalendarEvent } from '../lib/googleCalendar'
 import { ChevronLeft, ChevronRight, ChevronDown, Plus, Trash2, RotateCcw, Repeat, MessageSquare, Check, Target, Star, CalendarClock } from 'lucide-react'
 import WeeklyReviewModal from '../components/weekly/WeeklyReviewModal'
+import CarryForwardReviewModal from '../components/weekly/CarryForwardReviewModal'
 import PastReviews from '../components/weekly/PastReviews'
 import WeeklyQuote from '../components/dashboard/WeeklyQuote'
 import TaskExpansion from '../components/weekly/TaskExpansion'
@@ -61,6 +62,7 @@ export default function WeeklyPage() {
   const [showGoalPicker, setShowGoalPicker] = useState(false)
   const [showReview, setShowReview] = useState(false)
   const [showPastReviews, setShowPastReviews] = useState(false)
+  const [showCarryForwardReview, setShowCarryForwardReview] = useState(false)
   const [expandedTask, setExpandedTask] = useState(null)
   const [groupBy, setGroupBy] = useState('area')
   const [priorityFilter, setPriorityFilter] = useState('') // '' | urgent | high | medium | low | none
@@ -286,14 +288,19 @@ export default function WeeklyPage() {
     if (expandedTask === task.id) setExpandedTask(null)
   }
 
-  async function carryForwardIncomplete() {
-    const nextWeekStart = format(addWeeks(weekStart, 1), 'yyyy-MM-dd')
+  function carryForwardIncomplete() {
     const incomplete = tasks.filter(t => !t.complete)
     if (!incomplete.length) return
+    setShowCarryForwardReview(true)
+  }
+
+  async function confirmCarryForward(tasksToKeep) {
+    setShowCarryForwardReview(false)
+    if (!tasksToKeep.length) return
+    const nextWeekStart = format(addWeeks(weekStart, 1), 'yyyy-MM-dd')
     await supabase.from('weekly_tasks').insert(
-      incomplete.map(t => ({ user_id: user.id, week_start: nextWeekStart, area: t.area, action: t.action, frequency: t.frequency, specific_task: t.specific_task, goal_id: t.goal_id, complete: false, carried_forward: true, notes: t.notes, subtasks: t.subtasks, time_allocation: t.time_allocation }))
+      tasksToKeep.map(t => ({ user_id: user.id, week_start: nextWeekStart, area: t.area, action: t.action, frequency: t.frequency, specific_task: t.specific_task, goal_id: t.goal_id, complete: false, carried_forward: true, notes: t.notes, subtasks: t.subtasks, time_allocation: t.time_allocation }))
     )
-    alert(`${incomplete.length} task(s) carried forward to next week`)
   }
 
   function togglePriority(task) {
@@ -342,6 +349,7 @@ export default function WeeklyPage() {
   const isCurrentWeek = weekStartStr === format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
   const showMissingNotesNudge = isCurrentWeek && (todayDow === 6 || todayDow === 0) && tasks.some(t => !t.notes?.trim())
   const missingNotesCount = tasks.filter(t => !t.notes?.trim()).length
+  const carriedThisWeek = tasks.filter(t => t.carried_forward && !t.complete).length
 
   const visibleTasks = tasks.filter(t => {
     if (priorityFilter === 'none') return !t.priority_level
@@ -390,6 +398,23 @@ export default function WeeklyPage() {
               Tap any task below to expand and add what happened — partners and Claude use this context.
             </p>
           </div>
+        </div>
+      )}
+
+      {/* Carried-forward nudge */}
+      {isCurrentWeek && carriedThisWeek > 0 && (
+        <div style={{
+          background: 'var(--bg-2)', border: '1px solid var(--warning)',
+          borderRadius: 'var(--radius-lg)', padding: '12px 18px',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+          marginBottom: 16,
+        }}>
+          <p style={{ fontSize: 13, color: 'var(--text-2)' }}>
+            <span style={{ color: 'var(--warning)', fontWeight: 600 }}>{carriedThisWeek} task{carriedThisWeek !== 1 ? 's' : ''}</span> carried from last week — still incomplete.
+          </p>
+          <button className="btn btn-xs btn-ghost" style={{ flexShrink: 0 }} onClick={carryForwardIncomplete}>
+            Review now
+          </button>
         </div>
       )}
 
@@ -696,7 +721,8 @@ export default function WeeklyPage() {
         <BrainDump />
       </div>
 
-      {showReview && <WeeklyReviewModal weekStart={weekStartStr} incompleteTasks={tasks.filter(t => !t.complete)} onClose={() => setShowReview(false)} onComplete={carryForwardIncomplete} />}
+      {showReview && <WeeklyReviewModal weekStart={weekStartStr} incompleteTasks={tasks.filter(t => !t.complete)} onClose={() => setShowReview(false)} onComplete={() => { setShowReview(false); carryForwardIncomplete() }} />}
+      {showCarryForwardReview && <CarryForwardReviewModal incompleteTasks={tasks.filter(t => !t.complete)} onConfirm={confirmCarryForward} onClose={() => setShowCarryForwardReview(false)} />}
       {showPastReviews && <PastReviews onClose={() => setShowPastReviews(false)} />}
       {showGoalPicker && <GoalTaskPicker goals={goals} milestones={milestones} milestoneTasks={milestoneTasks} onSelect={pullFromGoalTask} onClose={() => setShowGoalPicker(false)} />}
 
