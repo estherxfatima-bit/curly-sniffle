@@ -122,6 +122,7 @@ export default function DailyTodos({ compact = false, date = null, onDateChange 
       const map = Object.fromEntries(data.map(r => [r.name, r.colour]))
       categoryColorsRef.current = map
       setCategoryColors(map)
+      setCategories(prev => [...new Set([...prev, ...data.map(r => r.name)])])
       setColorsLoaded(true)
       return
     }
