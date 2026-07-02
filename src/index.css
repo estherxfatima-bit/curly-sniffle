@@ -819,3 +819,14 @@ input[type="range"]::-webkit-slider-thumb {
 /* ── Spinner ── */
 @keyframes spin { to { transform: rotate(360deg); } }
 .spin { animation: spin 1s linear infinite; }
+
+/* ── Dashboard FAB — mobile only ── */
+.dashboard-fab { display: none; }
+@media (max-width: 768px) {
+  .dashboard-fab { display: block; }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}

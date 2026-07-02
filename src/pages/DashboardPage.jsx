@@ -16,6 +16,7 @@ import QuarterlyView, { DEFAULT_ORDER as QUARTERLY_DEFAULT } from '../components
 import { Link } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, Pencil, Check as CheckIcon } from 'lucide-react'
 import SpendingReminderBanner from '../components/finance/SpendingReminderBanner'
+import DashboardFab from '../components/dashboard/DashboardFab'
 import { shouldShowSpendingReminder, isReminderDismissedToday, dismissReminderToday } from '../lib/financeUtils'
 
 const VIEWS = ['Daily', 'Weekly', 'Monthly', 'Quarterly']
@@ -535,6 +536,8 @@ export default function DashboardPage() {
           window.history.replaceState({}, '', url.toString())
         }} />
       )}
+
+      <DashboardFab onAddExpense={addFinanceVariable} />
     </div>
   )
 }
