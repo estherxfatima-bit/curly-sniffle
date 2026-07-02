@@ -289,7 +289,7 @@ function financeHealthLabel(expenseCount) {
 
 function SimplePersonCard({ name, isSelf, data, onNudge }) {
   if (!data) return null
-  const { goals, weekTasks, habits, habitLogs, moodLogs, milestones, milestoneTasks, expenseCount } = data
+  const { goals, weekTasks, habits, habitLogs, moodLogs, milestones, milestoneTasks, expenseCount, budgetAdherence } = data
   const momentum = momentumScore(habits, habitLogs, weekTasks, moodLogs)
   const weekDone = weekTasks.filter(t => t.complete).length
   const weekPct = weekTasks.length ? Math.round((weekDone / weekTasks.length) * 100) : null
@@ -308,7 +308,7 @@ function SimplePersonCard({ name, isSelf, data, onNudge }) {
     .map(h => ({ ...h, streak: simulateHabit(h, logSetMap.get(h.id) || new Set(), todayStr()).streak }))
     .sort((a, b) => b.streak - a.streak)
     .slice(0, 3)
-  const finance = financeHealthLabel(expenseCount || 0)
+  const finance = isSelf ? financeHealthLabel(expenseCount || 0) : null
 
   function chip(label, value, color, extra) {
     const isGood = value !== null && (typeof value === 'number' ? value >= 60 : true)
@@ -340,11 +340,25 @@ function SimplePersonCard({ name, isSelf, data, onNudge }) {
           {chip('Momentum', momentum, 'var(--career)', 'out of 100')}
           {chip('Weekly tasks', weekPct, 'var(--career)', weekPct !== null ? `${weekDone}/${weekTasks.length} done` : 'no tasks')}
           {chip('Goal progress', avgGoalPct, 'var(--creative)', avgGoalPct !== null ? `avg across ${periodGoals.length} goal${periodGoals.length !== 1 ? 's' : ''}` : 'no goals')}
-          <div style={{ borderRadius: 10, background: `${finance.color}18`, border: `1px solid ${finance.color}40`, padding: '10px 14px' }}>
-            <p style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', marginBottom: 3 }}>Finance</p>
-            <p style={{ fontSize: 13, fontWeight: 600, color: finance.color, lineHeight: 1.3 }}>{finance.label}</p>
-            <p style={{ fontSize: 10, color: 'var(--text-3)', marginTop: 2 }}>{expenseCount || 0} entries this month</p>
-          </div>
+          {isSelf ? (
+            <div style={{ borderRadius: 10, background: `${finance.color}18`, border: `1px solid ${finance.color}40`, padding: '10px 14px' }}>
+              <p style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', marginBottom: 3 }}>Finance</p>
+              <p style={{ fontSize: 13, fontWeight: 600, color: finance.color, lineHeight: 1.3 }}>{finance.label}</p>
+              <p style={{ fontSize: 10, color: 'var(--text-3)', marginTop: 2 }}>{expenseCount || 0} entries this month</p>
+            </div>
+          ) : budgetAdherence !== null ? (
+            <div style={{ borderRadius: 10, background: budgetAdherence > 100 ? '#ef444415' : '#22c55e18', border: `1px solid ${budgetAdherence > 100 ? '#ef444430' : '#22c55e40'}`, padding: '10px 14px' }}>
+              <p style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', marginBottom: 3 }}>Finance</p>
+              <p style={{ fontSize: 18, fontWeight: 700, color: budgetAdherence > 100 ? '#ef4444' : '#22c55e', lineHeight: 1 }}>{budgetAdherence}%</p>
+              <p style={{ fontSize: 10, color: 'var(--text-3)', marginTop: 2 }}>of monthly budget used</p>
+            </div>
+          ) : (
+            <div style={{ borderRadius: 10, background: 'var(--bg-2)', border: '1px solid var(--border)', padding: '10px 14px' }}>
+              <p style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', marginBottom: 3 }}>Finance</p>
+              <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-3)', lineHeight: 1.3 }}>Not shared</p>
+              <p style={{ fontSize: 10, color: 'var(--text-3)', marginTop: 2 }}>partner hasn't enabled sharing</p>
+            </div>
+          )}
         </div>
 
         {topStreakHabits.length > 0 && (
@@ -401,11 +415,18 @@ export default function ComparePage() {
     setGoalYear(newYear)
   }
 
-  async function loadForUser(uid) {
+  async function loadForUser(uid, isSelf) {
     const monthStart = format(startOfMonth(new Date()), 'yyyy-MM-dd')
-    // Limit habit logs to 90 days so we don't load the entire history
     const ninetyDaysAgo = format(addDays(new Date(), -90), 'yyyy-MM-dd')
-    const [goalsRes, weekTasksRes, habitsRes, habitLogsRes, moodRes, todosRes, milestonesRes, milestoneTasksRes, expensesRes] = await Promise.all([
+
+    // Finance: for self count own expenses directly; for partner use the
+    // security-definer RPC which respects share_finance toggle (returns null
+    // if not shared, a budget-adherence % if shared).
+    const financePromise = isSelf
+      ? supabase.from('variable_expenses').select('id', { count: 'exact', head: true }).eq('user_id', uid).gte('date', monthStart)
+      : supabase.rpc('get_partner_budget_adherence', { p_user_id: uid })
+
+    const [goalsRes, weekTasksRes, habitsRes, habitLogsRes, moodRes, todosRes, milestonesRes, milestoneTasksRes, financeRes] = await Promise.all([
       supabase.from('goals').select('*').eq('user_id', uid),
       supabase.from('weekly_tasks').select('*').eq('user_id', uid).eq('week_start', weekStartStr),
       supabase.from('habits').select('*').eq('user_id', uid),
@@ -414,7 +435,7 @@ export default function ComparePage() {
       supabase.from('daily_todos').select('*').eq('user_id', uid).eq('date', todoDateStr).eq('archived', false).order('sort_order'),
       supabase.from('milestones').select('*').eq('user_id', uid),
       supabase.from('milestone_tasks').select('*').eq('user_id', uid),
-      supabase.from('variable_expenses').select('id', { count: 'exact', head: true }).eq('user_id', uid).gte('date', monthStart),
+      financePromise,
     ])
     return {
       goals: goalsRes.data || [],
@@ -425,15 +446,17 @@ export default function ComparePage() {
       todos: todosRes.data || [],
       milestones: milestonesRes.data || [],
       milestoneTasks: milestoneTasksRes.data || [],
-      expenseCount: expensesRes.count || 0,
+      // For self: count of expenses this month. For partner: budget adherence % (or null if not shared).
+      expenseCount: isSelf ? (financeRes.count || 0) : null,
+      budgetAdherence: isSelf ? null : (financeRes.data ?? null),
     }
   }
 
   async function loadAll() {
     setLoading(true)
     const [selfResult, partnerResult, profileResult] = await Promise.all([
-      loadForUser(user.id),
-      loadForUser(partnerId),
+      loadForUser(user.id, true),
+      loadForUser(partnerId, false),
       supabase.from('profiles').select('display_name, email').eq('id', partnerId).maybeSingle(),
     ])
     setSelfData(selfResult)
