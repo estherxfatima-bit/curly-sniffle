@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
-import { Users, Copy, UserPlus, MessageSquare, BarChart2, Send } from 'lucide-react'
+import { Users, Copy, UserPlus, MessageSquare, BarChart2, Send, ChevronDown, ChevronRight } from 'lucide-react'
+import TaskExpansion from '../components/weekly/TaskExpansion'
 
 function NudgeInline({ partnerId, taskId = null, onSent, label = 'Nudge' }) {
   const { user } = useAuth()
@@ -48,6 +49,8 @@ export default function PartnersPage() {
   const [partners, setPartners] = useState([])
   const [partnerTasks, setPartnerTasks] = useState({}) // userId -> weekly tasks
   const [partnerTodos, setPartnerTodos] = useState({}) // userId -> today's daily todos
+  const [partnerGoals, setPartnerGoals] = useState({}) // userId -> goals[]
+  const [expandedTask, setExpandedTask] = useState(null) // task id
   const [inviteCode, setInviteCode] = useState('')
   const [myCode, setMyCode] = useState('')
   const [loading, setLoading] = useState(true)
@@ -96,15 +99,17 @@ export default function PartnersPage() {
       })()
 
       const taskPromises = partnerRows.map(async (row) => {
-        const [taskRes, todoRes] = await Promise.all([
+        const [taskRes, todoRes, goalRes] = await Promise.all([
           supabase.from('weekly_tasks').select('*').eq('user_id', row.partner_id).eq('week_start', weekStartStr).order('created_at', { ascending: false }).limit(20),
           supabase.from('daily_todos').select('*').eq('user_id', row.partner_id).eq('date', todayStr).eq('archived', false).order('sort_order'),
+          supabase.from('goals').select('id, primary_goal, category').eq('user_id', row.partner_id),
         ])
-        return [row.partner_id, taskRes.data || [], todoRes.data || []]
+        return [row.partner_id, taskRes.data || [], todoRes.data || [], goalRes.data || []]
       })
       const results = await Promise.all(taskPromises)
       setPartnerTasks(Object.fromEntries(results.map(([id, tasks]) => [id, tasks])))
       setPartnerTodos(Object.fromEntries(results.map(([id, , todos]) => [id, todos])))
+      setPartnerGoals(Object.fromEntries(results.map(([id, , , goals]) => [id, goals])))
     } else {
       setPartners([])
       setPartnerTasks({})
@@ -223,9 +228,15 @@ export default function PartnersPage() {
                   {tasks.length === 0 ? (
                     <p style={{ fontSize: 12, color: 'var(--text-3)', fontStyle: 'italic' }}>Nothing planned this week.</p>
                   ) : (
-                    tasks.slice(0, 10).map(task => (
-                      <div key={task.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
-                        <div className="flex items-center gap-2">
+                    tasks.slice(0, 10).map(task => {
+                      const isExpanded = expandedTask === task.id
+                      return (
+                      <div key={task.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                        <div
+                          className="flex items-center gap-2"
+                          style={{ padding: '8px 0', cursor: 'pointer' }}
+                          onClick={() => setExpandedTask(isExpanded ? null : task.id)}
+                        >
                           <span style={{ fontSize: 13, fontWeight: 500, textDecoration: task.complete ? 'line-through' : 'none', color: task.complete ? 'var(--text-3)' : 'var(--text)', flex: 1 }}>
                             {task.specific_task}
                           </span>
@@ -233,20 +244,32 @@ export default function PartnersPage() {
                             ? <span className="badge badge-success" style={{ fontSize: 9 }}>Done</span>
                             : <NudgeInline partnerId={p.partner_id} taskId={task.id} label="Nudge" />
                           }
+                          {isExpanded ? <ChevronDown size={13} color="var(--text-3)" /> : <ChevronRight size={13} color="var(--text-3)" />}
                         </div>
-                        <div className="flex items-center gap-2 wrap" style={{ marginTop: 4 }}>
+                        <div className="flex items-center gap-2 wrap" style={{ paddingBottom: 6 }}>
                           {task.area && <span className="badge" style={{ fontSize: 9 }}>{task.area}</span>}
                           {task.action && <span style={{ fontSize: 11, color: 'var(--text-3)' }}>{task.action}</span>}
                           {task.frequency && task.frequency !== 'One-off' && <span className="mono" style={{ fontSize: 9, color: 'var(--text-3)' }}>{task.frequency}</span>}
                           {task.carried_forward && <span className="badge badge-warning" style={{ fontSize: 9 }}>carried</span>}
                         </div>
-                        {task.notes && (
-                          <p style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 4, lineHeight: 1.5, fontStyle: 'italic' }}>
-                            "{task.notes}"
-                          </p>
+                        {isExpanded && (
+                          <div style={{ paddingBottom: 10 }}>
+                            <TaskExpansion
+                              task={task}
+                              goals={partnerGoals[p.partner_id] || []}
+                              readOnly
+                              onUpdateField={() => {}}
+                              onToggleSubtask={() => {}}
+                              onAddSubtask={() => {}}
+                              onEditSubtask={() => {}}
+                              onRemoveSubtask={() => {}}
+                              onReorderSubtasks={() => {}}
+                            />
+                          </div>
                         )}
                       </div>
-                    ))
+                      )
+                    })
                   )}
                 </div>
 
