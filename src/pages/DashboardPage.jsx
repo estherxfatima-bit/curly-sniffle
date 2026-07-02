@@ -445,6 +445,7 @@ export default function DashboardPage() {
         <DailyView
           habits={habits}
           weekTasks={weekTasks}
+          periodLoading={periodLoading}
           hydration={hydration}
           user={user}
           today={today}

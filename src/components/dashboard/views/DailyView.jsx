@@ -1,4 +1,4 @@
-import { Check, Droplets, Star, Calendar as CalendarIcon } from 'lucide-react'
+import { Check, CheckCircle, Droplets, Star, Calendar as CalendarIcon } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../../../lib/supabase'
 import ArcRing from '../../ui/ArcRing'
@@ -45,7 +45,7 @@ export const DEFAULT_ORDER = [
 const HYDRATION_GOAL = 2500
 
 export default function DailyView({
-  habits, weekTasks, hydration, onOpenPanel,
+  habits, weekTasks, periodLoading, hydration, onOpenPanel,
   cardOrder, onReorder, user, today, onDateChange,
   onHydrationAdd,
   financeTotalVariable, financeOverallBudget, onAddExpense,
@@ -56,8 +56,8 @@ export default function DailyView({
 
   function openPanel(type, data) { onOpenPanel({ type, data }) }
 
-  // Only show a starred incomplete task — no random fallback that confuses users
-  const priorityTask = weekTasks.find(t => t.priority && !t.complete) || null
+  // Show any starred task (complete or not) — complete ones render with a checkmark
+  const priorityTask = weekTasks.find(t => t.priority) || null
 
   const CARDS = {
     quote: (
@@ -77,9 +77,14 @@ export default function DailyView({
           <p className="mono">One priority</p>
           <Star size={13} color="var(--career)" />
         </div>
-        {priorityTask ? (
+        {periodLoading ? (
+          <p style={{ fontSize: 13, color: 'var(--text-3)' }}>Loading…</p>
+        ) : priorityTask ? (
           <div>
-            <p style={{ fontSize: 14, fontWeight: 500, lineHeight: 1.4 }}>{priorityTask.specific_task}</p>
+            <p style={{ fontSize: 14, fontWeight: 500, lineHeight: 1.4, textDecoration: priorityTask.complete ? 'line-through' : 'none', opacity: priorityTask.complete ? 0.6 : 1 }}>
+              {priorityTask.complete && <Check size={13} style={{ display: 'inline', marginRight: 5, color: 'var(--career)' }} />}
+              {priorityTask.specific_task}
+            </p>
             <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-3)', marginTop: 6, textTransform: 'uppercase', letterSpacing: '0.07em' }}>{priorityTask.area}</p>
           </div>
         ) : (

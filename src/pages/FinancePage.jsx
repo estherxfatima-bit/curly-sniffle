@@ -111,7 +111,7 @@ export default function FinancePage() {
   // New item forms
   const [newIncome, setNewIncome]     = useState({ name: '', amount: '', frequency: 'monthly', is_self_employed: false })
   const [newFixed, setNewFixed]       = useState({ name: '', amount: '', category: 'Other' })
-  const [newVariable, setNewVariable] = useState({ name: '', amount: '', category: 'Other', date: format(new Date(), 'yyyy-MM-dd') })
+  const [newVariable, setNewVariable] = useState({ name: '', amount: '', category: 'Other', date: format(new Date(), 'yyyy-MM-dd'), is_one_off: false })
   const [newSavings, setNewSavings]   = useState({ name: '', amount: '', frequency: 'monthly', kind: 'Savings' })
 
   // Inline row editing (income/fixed/variable/savings)
@@ -126,6 +126,7 @@ export default function FinancePage() {
   const [editingBudgets, setEditingBudgets] = useState(false)
   const [budgetInputs, setBudgetInputs] = useState({})
   const [hiddenCats, setHiddenCats] = useState([])
+  const [showCarryForwardPrompt, setShowCarryForwardPrompt] = useState(false)
 
   // Category filter for variable expenses list
   const [filterCat, setFilterCat] = useState(null)
@@ -204,10 +205,10 @@ export default function FinancePage() {
     if (!newVariable.name || !newVariable.amount) return
     const { data } = await supabase.from('variable_expenses').insert({
       user_id: user.id, name: newVariable.name, amount: parseFloat(newVariable.amount),
-      category: newVariable.category, date: newVariable.date,
+      category: newVariable.category, date: newVariable.date, is_one_off: newVariable.is_one_off || false,
     }).select().single()
     setVariable(prev => [data, ...prev])
-    setNewVariable({ name: '', amount: '', category: 'Other', date: format(new Date(), 'yyyy-MM-dd') })
+    setNewVariable({ name: '', amount: '', category: 'Other', date: format(new Date(), 'yyyy-MM-dd'), is_one_off: false })
   }
 
   // Quick-add from FAB — single tap on a category pill (after entering an amount)
@@ -676,31 +677,37 @@ export default function FinancePage() {
   // Budget settings — apply to the month currently being viewed
   function startEditBudgets() {
     const monthBudgets = budgets.filter(b => b.month_year === refMonthYear)
-    const inputs = { overall: monthBudgets.find(b => b.category === null)?.amount?.toString() ?? '' }
-    VARIABLE_CATS.forEach(c => { inputs[c] = monthBudgets.find(b => b.category === c)?.amount?.toString() ?? '' })
+    // If this month has no budgets, pre-fill from the 'default' template
+    const sourceBudgets = monthBudgets.length > 0
+      ? monthBudgets
+      : budgets.filter(b => b.month_year === 'default')
+    const inputs = { overall: sourceBudgets.find(b => b.category === null)?.amount?.toString() ?? '' }
+    VARIABLE_CATS.forEach(c => { inputs[c] = sourceBudgets.find(b => b.category === c)?.amount?.toString() ?? '' })
     setBudgetInputs(inputs)
     setEditingBudgets(true)
   }
 
-  async function saveBudgets() {
-    const monthBudgets = budgets.filter(b => b.month_year === refMonthYear)
-    const entries = [{ category: null, key: 'overall' }, ...VARIABLE_CATS.map(c => ({ category: c, key: c }))]
-    for (const { category, key } of entries) {
-      const raw = budgetInputs[key]
-      if (raw === undefined || raw === '') continue
-      const amt = parseFloat(raw) || 0
-      const existing = monthBudgets.find(b => b.category === category)
-      if (existing) {
-        if (existing.amount !== amt) {
-          await supabase.from('budgets').update({ amount: amt }).eq('id', existing.id)
+  async function saveBudgets(carryForward = false) {
+    const targets = carryForward ? [refMonthYear, 'default'] : [refMonthYear]
+    for (const monthYear of targets) {
+      const targetBudgets = budgets.filter(b => b.month_year === monthYear)
+      const entries = [{ category: null, key: 'overall' }, ...VARIABLE_CATS.map(c => ({ category: c, key: c }))]
+      for (const { category, key } of entries) {
+        const raw = budgetInputs[key]
+        if (raw === undefined || raw === '') continue
+        const amt = parseFloat(raw) || 0
+        const existing = targetBudgets.find(b => b.category === category)
+        if (existing) {
+          if (existing.amount !== amt) await supabase.from('budgets').update({ amount: amt }).eq('id', existing.id)
+        } else {
+          await supabase.from('budgets').insert({ user_id: user.id, category, amount: amt, month_year: monthYear })
         }
-      } else {
-        await supabase.from('budgets').insert({ user_id: user.id, category, amount: amt, month_year: refMonthYear })
       }
     }
     const { data } = await supabase.from('budgets').select('*').eq('user_id', user.id)
     setBudgets(data || [])
     setEditingBudgets(false)
+    setShowCarryForwardPrompt(false)
   }
 
   // Card layout persistence
@@ -722,14 +729,17 @@ export default function FinancePage() {
   const totalFixed    = fixed.reduce((s, i) => s + i.amount, 0)
   const totalSavings  = savings.reduce((s, i) => s + toMonthly(i.amount, i.frequency), 0)
   const varThisMonth  = variable.filter(v => v.date.startsWith(thisMonth))
-  const totalVariable = varThisMonth.reduce((s, i) => s + i.amount, 0)
+  // One-off expenses (moving costs, large irregular purchases) are tracked
+  // separately so they don't distort category budget comparisons.
+  const varThisMonthBudgeted = varThisMonth.filter(v => !v.is_one_off)
+  const totalVariable = varThisMonthBudgeted.reduce((s, i) => s + i.amount, 0)
   const totalOwedToMe = moneyOwed.filter(o => !o.settled).reduce((s, o) => s + o.amount, 0)
   const takeHome      = totalIncome - taxPot - totalFixed - totalSavings - totalVariable + totalOwedToMe
 
   const monthBudgets = budgets.filter(b => b.month_year === refMonthYear)
   const overallBudget = monthBudgets.find(b => b.category === null)?.amount || 0
   const categorySpend = {}
-  VARIABLE_CATS.forEach(c => { categorySpend[c] = varThisMonth.filter(v => v.category === c).reduce((s, v) => s + v.amount, 0) })
+  VARIABLE_CATS.forEach(c => { categorySpend[c] = varThisMonthBudgeted.filter(v => v.category === c).reduce((s, v) => s + v.amount, 0) })
   const categoryBudget = {}
   VARIABLE_CATS.forEach(c => { categoryBudget[c] = monthBudgets.find(b => b.category === c)?.amount || 0 })
 
@@ -741,10 +751,11 @@ export default function FinancePage() {
   const periodEndStr = format(periodEnd, 'yyyy-MM-dd')
 
   const periodVariable = variable.filter(v => v.date >= periodStartStr && v.date <= periodEndStr)
+  const periodVariableBudgeted = periodVariable.filter(v => !v.is_one_off)
   const periodTotal = periodVariable.reduce((s, i) => s + i.amount, 0)
   const periodOverallBudget = overallBudget * BUDGET_SCALE[activeView]
   const periodCategorySpend = {}
-  VARIABLE_CATS.forEach(c => { periodCategorySpend[c] = periodVariable.filter(v => v.category === c).reduce((s, v) => s + v.amount, 0) })
+  VARIABLE_CATS.forEach(c => { periodCategorySpend[c] = periodVariableBudgeted.filter(v => v.category === c).reduce((s, v) => s + v.amount, 0) })
   const periodCategoryBudget = {}
   VARIABLE_CATS.forEach(c => { periodCategoryBudget[c] = categoryBudget[c] * BUDGET_SCALE[activeView] })
 
@@ -1120,8 +1131,8 @@ export default function FinancePage() {
           <h3>Category budgets <span className="mono" style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 400 }}>({format(refDate, 'MMM yyyy')})</span></h3>
           {editingBudgets ? (
             <div className="flex items-center gap-2">
-              <button className="btn btn-sm btn-finance" style={{ color: '#fff' }} onClick={e => { e.stopPropagation(); saveBudgets() }}><CheckIcon size={12} /> Save</button>
-              <button className="btn-icon btn" onClick={e => { e.stopPropagation(); setEditingBudgets(false) }}><XIcon size={12} /></button>
+              <button className="btn btn-sm btn-finance" style={{ color: '#fff' }} onClick={e => { e.stopPropagation(); setShowCarryForwardPrompt(true) }}><CheckIcon size={12} /> Save</button>
+              <button className="btn-icon btn" onClick={e => { e.stopPropagation(); setEditingBudgets(false); setShowCarryForwardPrompt(false) }}><XIcon size={12} /></button>
             </div>
           ) : (
             <button className="btn btn-sm btn-ghost" onClick={e => { e.stopPropagation(); startEditBudgets() }}><Pencil size={12} /> Edit budgets</button>
@@ -1161,6 +1172,18 @@ export default function FinancePage() {
                 })()}
               </p>
             )}
+            {showCarryForwardPrompt && (
+              <div style={{ marginTop: 14, padding: '12px 14px', background: 'var(--bg-2)', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
+                <p style={{ fontSize: 13, fontWeight: 500, marginBottom: 8 }}>Apply to future months?</p>
+                <p style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 10 }}>
+                  Save as your default so new months start with these budgets pre-filled — you can always adjust.
+                </p>
+                <div className="flex gap-2">
+                  <button className="btn btn-sm btn-finance" style={{ color: '#fff' }} onClick={() => saveBudgets(true)}>Yes, carry forward</button>
+                  <button className="btn btn-sm btn-ghost" onClick={() => saveBudgets(false)}>One-off this month</button>
+                </div>
+              </div>
+            )}
           </>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 12 }}>
@@ -1191,6 +1214,10 @@ export default function FinancePage() {
             {VARIABLE_CATS.map(c => <option key={c}>{c}</option>)}
           </select>
           <input type="date" value={newVariable.date} onChange={e => setNewVariable(p => ({ ...p, date: e.target.value }))} style={{ fontSize: 12 }} />
+          <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--text-3)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            <input type="checkbox" checked={newVariable.is_one_off} onChange={e => setNewVariable(p => ({ ...p, is_one_off: e.target.checked }))} />
+            One-off
+          </label>
           <button className="btn btn-sm btn-ghost" onClick={addVariable}><Plus size={12} /> Add</button>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }} onClick={e => e.stopPropagation()}>
@@ -1210,7 +1237,7 @@ export default function FinancePage() {
               <div key={i.id} className="flex items-center justify-between gap-2" style={{ fontSize: 13 }}>
                 <span style={{ color: 'var(--text-2)' }}>{CAT_EMOJI[i.category] || '📦'} {i.name}</span>
                 <div className="flex items-center gap-3">
-                  <span className="mono" style={{ fontSize: 10, color: 'var(--text-3)' }}>{i.category} · {i.date}</span>
+                  <span className="mono" style={{ fontSize: 10, color: 'var(--text-3)' }}>{i.is_one_off ? '⭐ one-off · ' : ''}{i.category} · {i.date}</span>
                   <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 500 }}>£{i.amount.toFixed(2)}</span>
                   <button className="btn-icon btn" onClick={() => startEdit('variable', i)}><Pencil size={12} /></button>
                   <button className="btn-icon btn" onClick={() => deleteVariable(i.id)}><Trash2 size={12} /></button>
