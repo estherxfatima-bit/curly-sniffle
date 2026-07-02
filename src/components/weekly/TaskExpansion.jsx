@@ -10,7 +10,7 @@ const HOUR_OPTS = Array.from({ length: 9 }, (_, i) => i) // 0-8 hours
 const MINUTE_OPTS = [0, 15, 30, 45]
 const DAY_LABELS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 
-export default function TaskExpansion({ task, goals, onUpdateField, onToggleSubtask, onAddSubtask, onEditSubtask, onRemoveSubtask, onReorderSubtasks, onPushNextWeek }) {
+export default function TaskExpansion({ task, goals, onUpdateField, onToggleSubtask, onAddSubtask, onEditSubtask, onRemoveSubtask, onReorderSubtasks, onPushNextWeek, readOnly }) {
   const { user } = useAuth()
   const [subInput, setSubInput] = useState('')
   const [notes, setNotes] = useState(task.notes || '')
@@ -40,19 +40,27 @@ export default function TaskExpansion({ task, goals, onUpdateField, onToggleSubt
     if (subInput.trim()) { onAddSubtask(subInput.trim()); setSubInput('') }
   }
 
+  const locked = readOnly || task.complete
+
   return (
     <div onClick={e => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '4px 4px 8px' }}>
       {/* Notes — shown first so it's the first thing visible on expand */}
       <div>
         <p className="mono mb-2" style={{ fontSize: 10 }}>Notes</p>
-        <textarea
-          value={notes}
-          onChange={e => setNotes(e.target.value)}
-          onBlur={() => { if (notes !== (task.notes || '')) onUpdateField('notes', notes) }}
-          placeholder={task.complete ? 'What got done? Any context for partners or Claude…' : 'Any blockers, progress, or context…'}
-          rows={2}
-          style={{ fontSize: 12, width: '100%', resize: 'vertical' }}
-        />
+        {locked ? (
+          <p style={{ fontSize: 12, color: notes ? 'var(--text-2)' : 'var(--text-3)', fontStyle: notes ? 'normal' : 'italic', lineHeight: 1.5 }}>
+            {notes || (task.complete ? 'No notes added.' : 'No notes yet.')}
+          </p>
+        ) : (
+          <textarea
+            value={notes}
+            onChange={e => setNotes(e.target.value)}
+            onBlur={() => { if (notes !== (task.notes || '')) onUpdateField('notes', notes) }}
+            placeholder="Any blockers, progress, or context…"
+            rows={2}
+            style={{ fontSize: 12, width: '100%', resize: 'vertical' }}
+          />
+        )}
       </div>
 
       {/* Subtasks */}
@@ -61,33 +69,43 @@ export default function TaskExpansion({ task, goals, onUpdateField, onToggleSubt
         {subtasks.length > 0 ? (
           <SubtaskList
             subtasks={subtasks}
-            onToggle={onToggleSubtask}
-            onEditText={onEditSubtask}
-            onDelete={onRemoveSubtask}
-            onReorder={onReorderSubtasks}
+            onToggle={locked ? undefined : onToggleSubtask}
+            onEditText={locked ? undefined : onEditSubtask}
+            onDelete={locked ? undefined : onRemoveSubtask}
+            onReorder={locked ? undefined : onReorderSubtasks}
+            readOnly={locked}
           />
         ) : (
-          <p style={{ fontSize: 12, color: 'var(--text-3)', fontStyle: 'italic' }}>No subtasks yet.</p>
+          <p style={{ fontSize: 12, color: 'var(--text-3)', fontStyle: 'italic' }}>No subtasks.</p>
         )}
-        <div style={{ display: 'flex', gap: 7, marginTop: 8 }}>
-          <input value={subInput} onChange={e => setSubInput(e.target.value)} placeholder="Add subtask…" style={{ fontSize: 12, flex: 1, maxWidth: 260 }}
-            onKeyDown={e => e.key === 'Enter' && submitSub()} />
-          <button className="btn btn-career btn-xs" style={{ color: '#fff' }} onClick={submitSub}><Plus size={11} /></button>
-        </div>
+        {!locked && (
+          <div style={{ display: 'flex', gap: 7, marginTop: 8 }}>
+            <input value={subInput} onChange={e => setSubInput(e.target.value)} placeholder="Add subtask…" style={{ fontSize: 12, flex: 1, maxWidth: 260 }}
+              onKeyDown={e => e.key === 'Enter' && submitSub()} />
+            <button className="btn btn-career btn-xs" style={{ color: '#fff' }} onClick={submitSub}><Plus size={11} /></button>
+          </div>
+        )}
       </div>
 
       {/* Time allocation + linked goal */}
       <div className="flex items-center gap-4 wrap">
         <div className="flex items-center gap-2">
           <Tag size={13} color="var(--text-3)" />
-          <select value={task.area} onChange={e => onUpdateField('area', e.target.value)} style={{ fontSize: 12, padding: '4px 8px' }}>
-            {TASK_AREAS.map(a => <option key={a} value={a}>{a}</option>)}
-          </select>
+          {locked ? (
+            <span style={{ fontSize: 12, color: 'var(--text-2)' }}>{task.area}</span>
+          ) : (
+            <select value={task.area} onChange={e => onUpdateField('area', e.target.value)} style={{ fontSize: 12, padding: '4px 8px' }}>
+              {TASK_AREAS.map(a => <option key={a} value={a}>{a}</option>)}
+            </select>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <Clock size={13} color="var(--text-3)" />
           {(() => {
             const { hours, minutes } = parseTimeAllocationToParts(task.time_allocation)
+            if (locked) {
+              return <span style={{ fontSize: 12, color: 'var(--text-2)' }}>{hours > 0 || minutes > 0 ? `${hours}h ${minutes}m` : 'No estimate'}</span>
+            }
             return (
               <>
                 <select value={hours} onChange={e => onUpdateField('time_allocation', buildTimeAllocation(Number(e.target.value), minutes))} style={{ fontSize: 12, padding: '4px 8px' }}>
@@ -100,32 +118,36 @@ export default function TaskExpansion({ task, goals, onUpdateField, onToggleSubt
             )
           })()}
         </div>
-        <div className="flex items-center gap-2">
-          <Target size={13} color="var(--text-3)" />
-          <select value={task.goal_id || ''} onChange={e => onUpdateField('goal_id', e.target.value || null)} style={{ fontSize: 12, padding: '4px 8px', maxWidth: 220 }}>
-            <option value="">No linked goal</option>
-            {goals.map(g => <option key={g.id} value={g.id}>{g.category}: {g.primary_goal?.slice(0, 28)}</option>)}
-          </select>
-        </div>
-        <div className="flex items-center gap-2">
-          <CalendarDays size={13} color="var(--text-3)" />
-          <select
-            value={task.day_of_week ?? ''}
-            onChange={e => onUpdateField('day_of_week', e.target.value === '' ? null : Number(e.target.value))}
-            style={{ fontSize: 12, padding: '4px 8px' }}
-          >
-            <option value="">No specific day</option>
-            {DAY_LABELS.map((label, i) => <option key={i} value={i}>{label}</option>)}
-          </select>
-        </div>
-        <button
-          className={`btn btn-xs ${task.recurring ? 'btn-career' : 'btn-ghost'}`}
-          style={task.recurring ? { color: '#fff' } : {}}
-          onClick={() => onUpdateField('recurring', !task.recurring)}
-          title="Automatically re-create this task every week"
-        >
-          <Repeat size={12} /> {task.recurring ? 'Recurring weekly' : 'Make recurring'}
-        </button>
+        {!locked && (
+          <>
+            <div className="flex items-center gap-2">
+              <Target size={13} color="var(--text-3)" />
+              <select value={task.goal_id || ''} onChange={e => onUpdateField('goal_id', e.target.value || null)} style={{ fontSize: 12, padding: '4px 8px', maxWidth: 220 }}>
+                <option value="">No linked goal</option>
+                {goals.map(g => <option key={g.id} value={g.id}>{g.category}: {g.primary_goal?.slice(0, 28)}</option>)}
+              </select>
+            </div>
+            <div className="flex items-center gap-2">
+              <CalendarDays size={13} color="var(--text-3)" />
+              <select
+                value={task.day_of_week ?? ''}
+                onChange={e => onUpdateField('day_of_week', e.target.value === '' ? null : Number(e.target.value))}
+                style={{ fontSize: 12, padding: '4px 8px' }}
+              >
+                <option value="">No specific day</option>
+                {DAY_LABELS.map((label, i) => <option key={i} value={i}>{label}</option>)}
+              </select>
+            </div>
+            <button
+              className={`btn btn-xs ${task.recurring ? 'btn-career' : 'btn-ghost'}`}
+              style={task.recurring ? { color: '#fff' } : {}}
+              onClick={() => onUpdateField('recurring', !task.recurring)}
+              title="Automatically re-create this task every week"
+            >
+              <Repeat size={12} /> {task.recurring ? 'Recurring weekly' : 'Make recurring'}
+            </button>
+          </>
+        )}
       </div>
 
       {/* Comments */}

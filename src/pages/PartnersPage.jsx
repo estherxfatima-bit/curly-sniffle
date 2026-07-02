@@ -224,9 +224,9 @@ export default function PartnersPage() {
                     <p style={{ fontSize: 12, color: 'var(--text-3)', fontStyle: 'italic' }}>Nothing planned this week.</p>
                   ) : (
                     tasks.slice(0, 10).map(task => (
-                      <div key={task.id} style={{ padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
+                      <div key={task.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
                         <div className="flex items-center gap-2">
-                          <span style={{ fontSize: 13, textDecoration: task.complete ? 'line-through' : 'none', color: task.complete ? 'var(--text-3)' : 'var(--text)', flex: 1 }}>
+                          <span style={{ fontSize: 13, fontWeight: 500, textDecoration: task.complete ? 'line-through' : 'none', color: task.complete ? 'var(--text-3)' : 'var(--text)', flex: 1 }}>
                             {task.specific_task}
                           </span>
                           {task.complete
@@ -234,6 +234,17 @@ export default function PartnersPage() {
                             : <NudgeInline partnerId={p.partner_id} taskId={task.id} label="Nudge" />
                           }
                         </div>
+                        <div className="flex items-center gap-2 wrap" style={{ marginTop: 4 }}>
+                          {task.area && <span className="badge" style={{ fontSize: 9 }}>{task.area}</span>}
+                          {task.action && <span style={{ fontSize: 11, color: 'var(--text-3)' }}>{task.action}</span>}
+                          {task.frequency && task.frequency !== 'One-off' && <span className="mono" style={{ fontSize: 9, color: 'var(--text-3)' }}>{task.frequency}</span>}
+                          {task.carried_forward && <span className="badge badge-warning" style={{ fontSize: 9 }}>carried</span>}
+                        </div>
+                        {task.notes && (
+                          <p style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 4, lineHeight: 1.5, fontStyle: 'italic' }}>
+                            "{task.notes}"
+                          </p>
+                        )}
                       </div>
                     ))
                   )}
