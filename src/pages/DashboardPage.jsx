@@ -56,8 +56,11 @@ export default function DashboardPage() {
 
   // Derived dates from refDate
   const today      = format(refDate, 'yyyy-MM-dd')
-  const weekStart  = format(startOfWeek(refDate, { weekStartsOn: 1 }), 'yyyy-MM-dd')
-  const weekEnd    = format(endOfWeek(refDate, { weekStartsOn: 1 }), 'yyyy-MM-dd')
+  // weekStart/weekEnd always anchor to real-today's week so day navigation
+  // doesn't cause weekly cards (priority task, weekly habits) to load a
+  // different week's data when the user browses to a day in another week.
+  const weekStart  = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
+  const weekEnd    = format(endOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')
   const monthStart = format(startOfMonth(refDate), 'yyyy-MM-dd')
   const quarter    = getQuarterFromDate(refDate)
   const year       = refDate.getFullYear()
