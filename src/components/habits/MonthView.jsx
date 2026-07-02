@@ -1,11 +1,93 @@
-import { format, isSameMonth, startOfMonth, endOfMonth, startOfWeek, addDays } from 'date-fns'
+import { useState } from 'react'
+import { format, isSameMonth, startOfMonth, endOfMonth, startOfWeek, addDays, subDays } from 'date-fns'
 import { ChevronLeft, ChevronRight, Check, Snowflake } from 'lucide-react'
 import ArcRing from '../ui/ArcRing'
 import { habitColor, monthStats, dayStatus, DAY_NAMES } from '../../lib/habitUtils'
 
 const CELL = 18
+const HEATMAP_WEEKS = 13 // ~3 months
+
+function CompletionHeatmap({ habits, logsByHabit, today }) {
+  const todayStr = format(today, 'yyyy-MM-dd')
+  const total = habits.length || 1
+
+  // Build a 13-week grid ending today
+  const gridEnd = today
+  const gridEndWeekSun = addDays(startOfWeek(gridEnd, { weekStartsOn: 1 }), 6)
+  const gridStart = subDays(gridEndWeekSun, HEATMAP_WEEKS * 7 - 1)
+  const weeks = []
+  for (let d = gridStart; d <= gridEndWeekSun; d = addDays(d, 7)) weeks.push(d)
+
+  function pct(dateStr) {
+    if (dateStr > todayStr) return null
+    let done = 0
+    for (const h of habits) {
+      if (logsByHabit[h.id]?.has(dateStr)) done++
+    }
+    return total > 0 ? done / total : 0
+  }
+
+  function cellColor(p) {
+    if (p === null) return 'var(--bg-3)'
+    if (p === 0) return 'var(--bg-2)'
+    if (p < 0.34) return 'color-mix(in srgb, var(--personal) 25%, var(--bg-2))'
+    if (p < 0.67) return 'color-mix(in srgb, var(--personal) 55%, var(--bg-2))'
+    if (p < 1)    return 'color-mix(in srgb, var(--personal) 80%, var(--bg-2))'
+    return 'var(--personal)'
+  }
+
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <div style={{ display: 'flex', gap: 3, alignItems: 'flex-start' }}>
+        {/* Day labels */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginTop: 18, flexShrink: 0 }}>
+          {DAY_NAMES.map(d => (
+            <div key={d} style={{ height: CELL, display: 'flex', alignItems: 'center', fontSize: 8, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', width: 12 }}>
+              {d.slice(0, 1)}
+            </div>
+          ))}
+        </div>
+        {/* Week columns */}
+        {weeks.map((weekStart, wi) => {
+          const monthLabel = wi === 0 || format(weekStart, 'M') !== format(subDays(weekStart, 7), 'M')
+            ? format(weekStart, 'MMM')
+            : ''
+          return (
+            <div key={wi} style={{ display: 'flex', flexDirection: 'column', gap: 3, flexShrink: 0 }}>
+              <div style={{ height: 14, fontSize: 8, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', whiteSpace: 'nowrap' }}>{monthLabel}</div>
+              {Array.from({ length: 7 }, (_, i) => {
+                const date = addDays(weekStart, i)
+                const ds = format(date, 'yyyy-MM-dd')
+                const p = pct(ds)
+                return (
+                  <div
+                    key={ds}
+                    title={ds + (p !== null ? ` — ${Math.round(p * 100)}%` : '')}
+                    style={{
+                      width: CELL, height: CELL, borderRadius: 3,
+                      background: cellColor(p),
+                      flexShrink: 0,
+                    }}
+                  />
+                )
+              })}
+            </div>
+          )
+        })}
+      </div>
+      <div className="flex items-center gap-2 mt-3" style={{ justifyContent: 'flex-end' }}>
+        <p style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--text-3)' }}>Less</p>
+        {[0, 0.33, 0.66, 1].map(p => (
+          <div key={p} style={{ width: 10, height: 10, borderRadius: 2, background: cellColor(p) }} />
+        ))}
+        <p style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--text-3)' }}>More</p>
+      </div>
+    </div>
+  )
+}
 
 export default function MonthView({ habits, logsByHabit, sims, monthDate, today, onPrevMonth, onNextMonth, onToggleLog }) {
+  const [tab, setTab] = useState('overview')
   const isCurrentMonth = isSameMonth(monthDate, today)
 
   if (habits.length === 0) {
@@ -22,14 +104,38 @@ export default function MonthView({ habits, logsByHabit, sims, monthDate, today,
 
   return (
     <div>
-      {/* Month nav */}
-      <div className="flex items-center justify-between mb-4">
-        <button className="btn-icon btn" onClick={onPrevMonth}><ChevronLeft size={16} /></button>
-        <h3 style={{ fontSize: '1rem' }}>{format(monthDate, 'MMMM yyyy')}</h3>
-        <button className="btn-icon btn" onClick={onNextMonth} disabled={isCurrentMonth} style={isCurrentMonth ? { opacity: 0.3, cursor: 'default' } : {}}><ChevronRight size={16} /></button>
+      {/* Tab switcher */}
+      <div className="flex items-center gap-2 mb-4">
+        {['overview', 'by-habit'].map(t => (
+          <button
+            key={t}
+            className={`btn btn-xs ${tab === t ? 'btn-personal' : 'btn-ghost'}`}
+            style={tab === t ? { color: '#fff' } : {}}
+            onClick={() => setTab(t)}
+          >
+            {t === 'overview' ? 'Overview' : 'By habit'}
+          </button>
+        ))}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14 }}>
+      {tab === 'overview' ? (
+        <div className="card" style={{ padding: 20 }}>
+          <p className="mono mb-4" style={{ fontSize: 11 }}>13-week completion heatmap</p>
+          <CompletionHeatmap habits={habits} logsByHabit={logsByHabit} today={today} />
+        </div>
+      ) : null}
+
+      {/* Month nav — only show in by-habit tab */}
+      {tab === 'by-habit' && (
+        <div className="flex items-center justify-between mb-4">
+          <button className="btn-icon btn" onClick={onPrevMonth}><ChevronLeft size={16} /></button>
+          <h3 style={{ fontSize: '1rem' }}>{format(monthDate, 'MMMM yyyy')}</h3>
+          <button className="btn-icon btn" onClick={onNextMonth} disabled={isCurrentMonth} style={isCurrentMonth ? { opacity: 0.3, cursor: 'default' } : {}}><ChevronRight size={16} /></button>
+        </div>
+      )}
+
+      {tab === 'by-habit' && <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14 }}>
+
         {habits.map(habit => {
           const color = habitColor(habit)
           const logSet = logsByHabit[habit.id] || new Set()
@@ -103,7 +209,7 @@ export default function MonthView({ habits, logsByHabit, sims, monthDate, today,
             </div>
           )
         })}
-      </div>
+      </div>}
     </div>
   )
 }
