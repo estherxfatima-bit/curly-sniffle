@@ -7,16 +7,16 @@ import useLockBodyScroll from '../../hooks/useLockBodyScroll'
 import { X, RefreshCw } from 'lucide-react'
 
 const REFLECTION_PROMPTS = [
-  'How did today go?',
-  'What was the most important thing you did today?',
-  'What drained your energy today — and what gave it back?',
-  'What would you do differently if you could replay today?',
-  'What's one thing you're proud of from today, however small?',
-  'What felt hard today, and why?',
-  'What did you learn or notice today?',
-  'Did today match how you wanted to show up? What shifted?',
-  'What are you carrying into tomorrow that you'd rather leave behind?',
-  'Where did your time actually go today vs where you planned?',
+  "How did today go?",
+  "What was the most important thing you did today?",
+  "What drained your energy today — and what gave it back?",
+  "What would you do differently if you could replay today?",
+  "What's one thing you're proud of from today, however small?",
+  "What felt hard today, and why?",
+  "What did you learn or notice today?",
+  "Did today match how you wanted to show up? What shifted?",
+  "What are you carrying into tomorrow that you'd rather leave behind?",
+  "Where did your time actually go today vs where you planned?",
 ]
 
 function dailyPromptIndex(dateStr) {
