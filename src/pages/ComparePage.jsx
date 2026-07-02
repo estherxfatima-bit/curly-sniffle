@@ -417,7 +417,6 @@ export default function ComparePage() {
 
   async function loadForUser(uid, isSelf) {
     const monthStart = format(startOfMonth(new Date()), 'yyyy-MM-dd')
-    const ninetyDaysAgo = format(addDays(new Date(), -90), 'yyyy-MM-dd')
 
     // Finance: for self count own expenses directly; for partner use the
     // security-definer RPC which respects share_finance toggle (returns null
@@ -430,7 +429,8 @@ export default function ComparePage() {
       supabase.from('goals').select('*').eq('user_id', uid),
       supabase.from('weekly_tasks').select('*').eq('user_id', uid).eq('week_start', weekStartStr),
       supabase.from('habits').select('*').eq('user_id', uid),
-      supabase.from('habit_logs').select('habit_id, log_date').eq('user_id', uid).gte('log_date', ninetyDaysAgo),
+      // All logs needed — simulateHabit walks from habit.created_at so truncating breaks streaks
+      supabase.from('habit_logs').select('habit_id, log_date').eq('user_id', uid),
       supabase.from('mood_logs').select('*').eq('user_id', uid).gte('date', weekStartStr),
       supabase.from('daily_todos').select('*').eq('user_id', uid).eq('date', todoDateStr).eq('archived', false).order('sort_order'),
       supabase.from('milestones').select('*').eq('user_id', uid),
