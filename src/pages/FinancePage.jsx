@@ -1186,13 +1186,77 @@ export default function FinancePage() {
             )}
           </>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 12 }}>
-            {VARIABLE_CATS.filter(cat => !hiddenCats.includes(cat)).map(cat => (
-              <div key={cat} onClick={e => { e.stopPropagation(); setFilterCat(filterCat === cat ? null : cat) }} style={{ outline: filterCat === cat ? `2px solid ${CAT_COLORS[cat]}` : 'none', borderRadius: 'var(--radius)' }}>
-                <BudgetRing label={`${CAT_EMOJI[cat]} ${cat}`} spent={periodCategorySpend[cat]} budget={periodCategoryBudget[cat]} size={84} />
-              </div>
-            ))}
-          </div>
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 12 }}>
+              {VARIABLE_CATS.filter(cat => !hiddenCats.includes(cat)).map(cat => (
+                <div key={cat} onClick={e => { e.stopPropagation(); setFilterCat(filterCat === cat ? null : cat) }} style={{ outline: filterCat === cat ? `2px solid ${CAT_COLORS[cat]}` : 'none', borderRadius: 'var(--radius)' }}>
+                  <BudgetRing label={`${CAT_EMOJI[cat]} ${cat}`} spent={periodCategorySpend[cat]} budget={periodCategoryBudget[cat]} size={84} />
+                </div>
+              ))}
+            </div>
+            {/* Category spend breakdown bars */}
+            {(() => {
+              const lastMonthStr = format(subMonths(refDate, 1), 'yyyy-MM')
+              const lastMonthSpend = {}
+              VARIABLE_CATS.forEach(c => {
+                lastMonthSpend[c] = variable.filter(v => !v.is_one_off && v.category === c && v.date.startsWith(lastMonthStr)).reduce((s, v) => s + v.amount, 0)
+              })
+              const catsWithSpend = VARIABLE_CATS.filter(c => !hiddenCats.includes(c) && ((categorySpend[c] || 0) > 0 || (lastMonthSpend[c] || 0) > 0))
+              if (!catsWithSpend.length) return null
+              const maxVal = Math.max(...catsWithSpend.flatMap(c => [categorySpend[c] || 0, lastMonthSpend[c] || 0, categoryBudget[c] || 0]))
+              return (
+                <div style={{ marginTop: 20 }} onClick={e => e.stopPropagation()}>
+                  <p className="mono mb-3" style={{ fontSize: 10 }}>Spend by category — this month vs last</p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {catsWithSpend.sort((a, b) => (categorySpend[b] || 0) - (categorySpend[a] || 0)).map(cat => {
+                      const thisAmt = categorySpend[cat] || 0
+                      const lastAmt = lastMonthSpend[cat] || 0
+                      const budget = categoryBudget[cat] || 0
+                      const color = CAT_COLORS[cat] || 'var(--finance)'
+                      const pctThis = maxVal > 0 ? (thisAmt / maxVal) * 100 : 0
+                      const pctLast = maxVal > 0 ? (lastAmt / maxVal) * 100 : 0
+                      const over = budget > 0 && thisAmt > budget
+                      return (
+                        <div key={cat}>
+                          <div className="flex items-center justify-between mb-1">
+                            <span style={{ fontSize: 11, color: 'var(--text-2)' }}>{CAT_EMOJI[cat]} {cat}</span>
+                            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: over ? 'var(--danger)' : 'var(--text-3)' }}>
+                              £{thisAmt.toFixed(0)}{budget > 0 ? ` / £${budget.toFixed(0)}` : ''}
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                            <div style={{ height: 6, borderRadius: 3, background: 'var(--bg-2)', position: 'relative', overflow: 'visible' }}>
+                              <div style={{ height: '100%', width: `${pctThis}%`, borderRadius: 3, background: over ? 'var(--danger)' : color, transition: 'width 0.3s' }} />
+                              {budget > 0 && (
+                                <div style={{ position: 'absolute', top: -2, bottom: -2, left: `${Math.min((budget / maxVal) * 100, 100)}%`, width: 1.5, background: 'var(--text-3)', borderRadius: 1 }} />
+                              )}
+                            </div>
+                            <div style={{ height: 4, borderRadius: 2, background: 'var(--bg-2)' }}>
+                              <div style={{ height: '100%', width: `${pctLast}%`, borderRadius: 2, background: color, opacity: 0.3 }} />
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <div className="flex items-center gap-4 mt-3">
+                    <div className="flex items-center gap-1">
+                      <div style={{ width: 10, height: 6, borderRadius: 2, background: 'var(--finance)' }} />
+                      <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--text-3)' }}>This month</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <div style={{ width: 10, height: 4, borderRadius: 2, background: 'var(--finance)', opacity: 0.3 }} />
+                      <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--text-3)' }}>Last month</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <div style={{ width: 1.5, height: 10, background: 'var(--text-3)', borderRadius: 1 }} />
+                      <span style={{ fontSize: 9, fontFamily: 'var(--font-mono)', color: 'var(--text-3)' }}>Budget</span>
+                    </div>
+                  </div>
+                </div>
+              )
+            })()}
+          </>
         )}
       </div>
     ),
