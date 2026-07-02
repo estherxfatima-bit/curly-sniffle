@@ -7,6 +7,10 @@ import { estimateCost } from './aiPricing'
 const MODEL = 'claude-opus-4-8'
 
 async function callClaude(prompt, systemPrompt, maxTokens = 1024) {
+  return callClaudeMessages([{ role: 'user', content: prompt }], systemPrompt, maxTokens)
+}
+
+async function callClaudeMessages(messages, systemPrompt, maxTokens = 1024) {
   const { data: { session } } = await supabase.auth.getSession()
   const res = await fetch('/api/claude', {
     method: 'POST',
@@ -18,7 +22,7 @@ async function callClaude(prompt, systemPrompt, maxTokens = 1024) {
       model: MODEL,
       max_tokens: maxTokens,
       system: systemPrompt,
-      messages: [{ role: 'user', content: prompt }],
+      messages,
     }),
   })
   if (!res.ok) {
@@ -104,7 +108,7 @@ For each suggested task, set "priority_level" based on the goal's urgency, deadl
 Only include this block when you are actually suggesting tasks. Omit it entirely for conversational responses.`
 
 // AI planning with full user context — saves to ai_log
-export async function generatePlan(userId, { goals, tasks, habits, moodAvg, todayTodos, question, personalContext, quarterlyWins }) {
+export async function generatePlan(userId, { goals, tasks, habits, moodAvg, todayTodos, question, personalContext, quarterlyWins, recentReflections, history }) {
   let system = CHAT_SYSTEM_PROMPT
 
   if (personalContext) {
@@ -113,6 +117,7 @@ export async function generatePlan(userId, { goals, tasks, habits, moodAvg, toda
 
   // Cap task data to last 2 weeks to control cost
   const recentTasks = tasks.slice(0, 30)
+  const carriedCount = tasks.filter(t => t.carried_forward).length
 
   system += `\n\nCURRENT CONTEXT:
 
@@ -121,8 +126,8 @@ TODAY'S DATE: ${new Date().toISOString().slice(0, 10)}
 THIS QUARTER'S GOALS:
 ${goals.map(g => `- [${g.category}] ${g.primary_goal} — ${g.status}`).join('\n') || 'None set'}
 
-THIS WEEK'S TASKS (${tasks.filter(t => !t.complete).length} incomplete, ${tasks.filter(t => t.complete).length} done):
-${recentTasks.map(t => `- [${t.area}] ${t.specific_task} — ${t.complete ? '✓ done' : 'incomplete'}${t.carried_forward ? ' (carried)' : ''}`).join('\n') || 'None'}
+THIS WEEK'S TASKS (${tasks.filter(t => !t.complete).length} incomplete, ${tasks.filter(t => t.complete).length} done${carriedCount > 0 ? `, ${carriedCount} carried forward` : ''}):
+${recentTasks.map(t => `- [${t.area}] ${t.specific_task} — ${t.complete ? '✓ done' : 'incomplete'}${t.carried_forward ? ' (carried forward)' : ''}${t.notes ? ` [note: ${t.notes}]` : ''}`).join('\n') || 'None'}
 
 HABIT STREAKS:
 ${habits.map(h => `- ${h.name}: ${h.streak} day${h.streak === 1 ? '' : 's'}`).join('\n') || 'None'}
@@ -133,11 +138,19 @@ TODAY'S TO-DOS (${todayTodos.filter(t => !t.complete).length} remaining):
 ${todayTodos.slice(0, 8).map(t => `- ${t.text} [${t.category}]${t.complete ? ' ✓' : ''}`).join('\n') || 'None'}
 
 QUARTERLY WINS LOGGED THIS QUARTER:
-${(quarterlyWins || []).map(w => `- ${w}`).join('\n') || 'None'}`
+${(quarterlyWins || []).map(w => `- ${w}`).join('\n') || 'None'}
 
-  const prompt = question
+RECENT DAILY REFLECTIONS (last 7 days):
+${(recentReflections || []).length > 0 ? (recentReflections || []).map(r => `- ${r.date}: ${r.content?.slice(0, 120) || ''}${(r.content?.length || 0) > 120 ? '…' : ''}`).join('\n') : 'None logged'}`
 
-  const { text: response, usage } = await callClaude(prompt, system, 1800)
+  // Build messages array — include prior conversation turns for follow-up
+  const priorMessages = (history || []).map(m => ({
+    role: m.role,
+    content: m.text,
+  }))
+  const allMessages = [...priorMessages, { role: 'user', content: question }]
+
+  const { text: response, usage } = await callClaudeMessages(allMessages, system, 2400)
   const title = `AI plan — ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}: ${question.slice(0, 40)}`
   const record = await saveAndReturn(userId, 'weekly_plan', title, response, {
     inputTokens: usage.input_tokens,
