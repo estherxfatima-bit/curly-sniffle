@@ -4,6 +4,7 @@ import { startOfMonth, endOfMonth } from 'date-fns'
 import { SortableCard, DraggableCardList } from '../DraggableCard'
 import AddWidgetMenu from '../AddWidgetMenu'
 import { calculateGoalCompletion, calculateExpectedOccurrences } from '../../../lib/habitUtils'
+import { getCurrentQuarter } from '../../../lib/constants'
 
 export const CARD_LABELS = {
   'habit-rings': 'Habit completion',
@@ -56,8 +57,9 @@ export default function MonthlyView({
   const totalSavings  = (savings  || []).reduce((s, i) => s + toMonthly(i.amount, i.frequency), 0)
   const takeHome      = totalIncome - taxPot - totalFixed - totalSavings - totalVariable
 
-  // Goal rings
-  const goalRings = goals.filter(g => g.quarter).map(goal => {
+  // Goal rings — only show goals for the current quarter (not old ones)
+  const currentQuarter = getCurrentQuarter()
+  const goalRings = goals.filter(g => g.quarter === currentQuarter).map(goal => {
     const linked = weekTasks.filter(t => t.goal_id === goal.id)
     const done   = linked.filter(t => t.complete).length
     return { ...goal, pct: linked.length ? Math.round((done / linked.length) * 100) : 0, done, total: linked.length }
