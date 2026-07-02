@@ -403,16 +403,18 @@ export default function ComparePage() {
 
   async function loadForUser(uid) {
     const monthStart = format(startOfMonth(new Date()), 'yyyy-MM-dd')
+    // Limit habit logs to 90 days so we don't load the entire history
+    const ninetyDaysAgo = format(addDays(new Date(), -90), 'yyyy-MM-dd')
     const [goalsRes, weekTasksRes, habitsRes, habitLogsRes, moodRes, todosRes, milestonesRes, milestoneTasksRes, expensesRes] = await Promise.all([
       supabase.from('goals').select('*').eq('user_id', uid),
       supabase.from('weekly_tasks').select('*').eq('user_id', uid).eq('week_start', weekStartStr),
       supabase.from('habits').select('*').eq('user_id', uid),
-      supabase.from('habit_logs').select('*').eq('user_id', uid),
+      supabase.from('habit_logs').select('habit_id, log_date').eq('user_id', uid).gte('log_date', ninetyDaysAgo),
       supabase.from('mood_logs').select('*').eq('user_id', uid).gte('date', weekStartStr),
       supabase.from('daily_todos').select('*').eq('user_id', uid).eq('date', todoDateStr).eq('archived', false).order('sort_order'),
       supabase.from('milestones').select('*').eq('user_id', uid),
       supabase.from('milestone_tasks').select('*').eq('user_id', uid),
-      supabase.from('expenses').select('id', { count: 'exact', head: true }).eq('user_id', uid).gte('date', monthStart),
+      supabase.from('variable_expenses').select('id', { count: 'exact', head: true }).eq('user_id', uid).gte('date', monthStart),
     ])
     return {
       goals: goalsRes.data || [],
