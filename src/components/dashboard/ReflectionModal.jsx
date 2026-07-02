@@ -4,7 +4,25 @@ import { format, addDays } from 'date-fns'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
 import useLockBodyScroll from '../../hooks/useLockBodyScroll'
-import { X } from 'lucide-react'
+import { X, RefreshCw } from 'lucide-react'
+
+const REFLECTION_PROMPTS = [
+  'How did today go?',
+  'What was the most important thing you did today?',
+  'What drained your energy today — and what gave it back?',
+  'What would you do differently if you could replay today?',
+  'What's one thing you're proud of from today, however small?',
+  'What felt hard today, and why?',
+  'What did you learn or notice today?',
+  'Did today match how you wanted to show up? What shifted?',
+  'What are you carrying into tomorrow that you'd rather leave behind?',
+  'Where did your time actually go today vs where you planned?',
+]
+
+function dailyPromptIndex(dateStr) {
+  const n = parseInt(dateStr.replace(/-/g, ''), 10)
+  return n % REFLECTION_PROMPTS.length
+}
 
 export default function ReflectionModal({ onClose }) {
   useLockBodyScroll()
@@ -13,10 +31,17 @@ export default function ReflectionModal({ onClose }) {
   const [priorities, setPriorities] = useState(['', '', ''])
   const [dayRating, setDayRating] = useState(0)
   const [saving, setSaving] = useState(false)
+  const today = format(new Date(), 'yyyy-MM-dd')
+  const [promptIdx, setPromptIdx] = useState(() => dailyPromptIndex(format(new Date(), 'yyyy-MM-dd')))
+  const prompt = REFLECTION_PROMPTS[promptIdx]
+
+  function cyclePrompt(e) {
+    e.stopPropagation()
+    setPromptIdx(i => (i + 1) % REFLECTION_PROMPTS.length)
+  }
 
   async function handleSave() {
     setSaving(true)
-    const today = format(new Date(), 'yyyy-MM-dd')
     const tomorrow = format(addDays(new Date(), 1), 'yyyy-MM-dd')
     const cleanPriorities = priorities.map(p => p.trim()).filter(Boolean)
 
@@ -50,7 +75,12 @@ export default function ReflectionModal({ onClose }) {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div>
-            <p className="mono mb-2">How did today go?</p>
+            <div className="flex items-center justify-between mb-2">
+              <p className="mono" style={{ flex: 1 }}>{prompt}</p>
+              <button className="btn-icon btn" onClick={cyclePrompt} title="Try a different prompt" style={{ flexShrink: 0 }}>
+                <RefreshCw size={12} />
+              </button>
+            </div>
             <textarea
               value={reflectionText}
               onChange={e => setReflectionText(e.target.value)}
