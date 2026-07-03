@@ -44,15 +44,20 @@ function NudgeInline({ partnerId, taskId = null, onSent, label = 'Nudge' }) {
   )
 }
 
-function AssignmentRow({ a, isMine, onToggle, onDelete }) {
+function AssignmentRow({ a, isMine, onToggle, onDelete, onAccept, onDecline }) {
+  const [decliningOpen, setDecliningOpen] = useState(false)
+  const [declineReason, setDeclineReason] = useState('')
+
   const myComplete = isMine ? a.complete_from : a.complete_to
   const theirComplete = isMine ? a.complete_to : a.complete_from
   const bothDone = a.complete_from && a.complete_to
+  const status = a.status || 'accepted' // old rows without status field default to accepted
 
   return (
-    <div style={{ padding: '7px 0', borderBottom: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 3 }}>
+    <div style={{ padding: '7px 0', borderBottom: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 4 }}>
       <div className="flex items-center gap-2">
-        {onToggle ? (
+        {/* Completion tick — only shown once accepted */}
+        {status === 'accepted' && onToggle ? (
           <button
             onClick={onToggle}
             style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 15, lineHeight: 1, flexShrink: 0 }}
@@ -60,29 +65,85 @@ function AssignmentRow({ a, isMine, onToggle, onDelete }) {
           >
             {myComplete ? '✅' : '⬜'}
           </button>
-        ) : (
+        ) : status === 'accepted' ? (
           <span style={{ fontSize: 13, flexShrink: 0 }}>{theirComplete ? '✅' : '⬜'}</span>
+        ) : status === 'declined' ? (
+          <span style={{ fontSize: 13, flexShrink: 0 }}>✕</span>
+        ) : (
+          <span style={{ fontSize: 13, flexShrink: 0, color: 'var(--text-3)' }}>⬜</span>
         )}
-        <span style={{ fontSize: 13, flex: 1, textDecoration: bothDone ? 'line-through' : 'none', color: bothDone ? 'var(--text-3)' : 'var(--text)' }}>
+
+        <span style={{
+          fontSize: 13, flex: 1,
+          textDecoration: (status === 'declined' || bothDone) ? 'line-through' : 'none',
+          color: (status === 'declined' || bothDone) ? 'var(--text-3)' : 'var(--text)',
+        }}>
           {a.text}
         </span>
-        {a.is_joint && (
+
+        {a.is_joint && status === 'accepted' && (
           <span className="badge" style={{ fontSize: 9, background: 'var(--career-tint)', color: 'var(--career)' }}>joint</span>
         )}
-        {bothDone && <span className="badge badge-success" style={{ fontSize: 9 }}>Done</span>}
+        {status === 'pending' && !isMine && (
+          <span className="badge" style={{ fontSize: 9, background: 'var(--warning-tint, #fef3c7)', color: 'var(--warning)' }}>pending</span>
+        )}
+        {status === 'pending' && isMine && (
+          <span className="badge" style={{ fontSize: 9, background: 'var(--bg-3)', color: 'var(--text-3)' }}>awaiting</span>
+        )}
+        {status === 'declined' && (
+          <span className="badge" style={{ fontSize: 9, background: '#ef444415', color: '#ef4444' }}>declined</span>
+        )}
+        {status === 'accepted' && bothDone && (
+          <span className="badge badge-success" style={{ fontSize: 9 }}>Done</span>
+        )}
         {onDelete && (
           <button className="btn-icon" style={{ padding: 2, color: 'var(--text-3)' }} onClick={onDelete} title="Delete">
             <Trash2 size={12} />
           </button>
         )}
       </div>
-      {a.note && <p style={{ fontSize: 11, color: 'var(--text-3)', paddingLeft: 23, fontStyle: 'italic' }}>{a.note}</p>}
-      <div className="flex items-center gap-2" style={{ paddingLeft: 23 }}>
+
+      {a.note && (
+        <p style={{ fontSize: 11, color: 'var(--text-3)', paddingLeft: 23, fontStyle: 'italic' }}>{a.note}</p>
+      )}
+
+      {/* Decline reason */}
+      {status === 'declined' && a.decline_reason && (
+        <p style={{ fontSize: 11, color: '#ef4444', paddingLeft: 23, fontStyle: 'italic' }}>"{a.decline_reason}"</p>
+      )}
+
+      <div className="flex items-center gap-2 wrap" style={{ paddingLeft: 23 }}>
         {a.due_date && <span style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>due {a.due_date}</span>}
-        {a.is_joint && (
+        {status === 'accepted' && a.is_joint && (
           <span style={{ fontSize: 10, color: 'var(--text-3)' }}>
             {isMine ? (a.complete_to ? '· they done' : '· they pending') : (a.complete_from ? '· you done' : '· you pending')}
           </span>
+        )}
+
+        {/* Accept / Decline buttons for the assignee when status is pending */}
+        {status === 'pending' && !isMine && !decliningOpen && (
+          <>
+            <button className="btn btn-xs btn-career" style={{ color: '#fff' }} onClick={onAccept}>
+              <Check size={10} /> Accept
+            </button>
+            <button className="btn btn-xs btn-ghost" style={{ color: '#ef4444' }} onClick={() => setDecliningOpen(true)}>
+              Decline
+            </button>
+          </>
+        )}
+        {decliningOpen && (
+          <div className="flex items-center gap-1" style={{ width: '100%', marginTop: 2 }}>
+            <input
+              autoFocus
+              value={declineReason}
+              onChange={e => setDeclineReason(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { onDecline(declineReason); setDecliningOpen(false) } if (e.key === 'Escape') setDecliningOpen(false) }}
+              placeholder="Reason (optional)…"
+              style={{ fontSize: 12, flex: 1, padding: '3px 8px' }}
+            />
+            <button className="btn btn-xs" style={{ background: '#ef4444', color: '#fff' }} onClick={() => { onDecline(declineReason); setDecliningOpen(false) }}>Send</button>
+            <button className="btn btn-xs btn-ghost" onClick={() => setDecliningOpen(false)}>✕</button>
+          </div>
         )}
       </div>
     </div>
@@ -204,6 +265,16 @@ export default function PartnersPage() {
   async function deleteAssignment(id) {
     await supabase.from('partner_assignments').delete().eq('id', id)
     setAssignments(prev => prev.filter(x => x.id !== id))
+  }
+
+  async function acceptAssignment(id) {
+    await supabase.from('partner_assignments').update({ status: 'accepted' }).eq('id', id)
+    setAssignments(prev => prev.map(x => x.id === id ? { ...x, status: 'accepted' } : x))
+  }
+
+  async function declineAssignment(id, reason) {
+    await supabase.from('partner_assignments').update({ status: 'declined', decline_reason: reason || null }).eq('id', id)
+    setAssignments(prev => prev.map(x => x.id === id ? { ...x, status: 'declined', decline_reason: reason || null } : x))
   }
 
   async function addPartner() {
@@ -438,7 +509,13 @@ export default function PartnersPage() {
                         <div style={{ marginBottom: 10 }}>
                           <p style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', marginBottom: 6 }}>From {partnerName}</p>
                           {incoming.map(a => (
-                            <AssignmentRow key={a.id} a={a} isMine={false} onToggle={() => toggleAssignmentComplete(a)} onDelete={null} />
+                            <AssignmentRow
+                              key={a.id} a={a} isMine={false}
+                              onToggle={(a.status === 'accepted' || !a.status) ? () => toggleAssignmentComplete(a) : null}
+                              onDelete={null}
+                              onAccept={() => acceptAssignment(a.id)}
+                              onDecline={reason => declineAssignment(a.id, reason)}
+                            />
                           ))}
                         </div>
                       )}
@@ -447,7 +524,13 @@ export default function PartnersPage() {
                         <div>
                           <p style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', marginBottom: 6 }}>Assigned to {partnerName}</p>
                           {outgoing.map(a => (
-                            <AssignmentRow key={a.id} a={a} isMine={true} onToggle={a.is_joint ? () => toggleAssignmentComplete(a) : null} onDelete={() => deleteAssignment(a.id)} />
+                            <AssignmentRow
+                              key={a.id} a={a} isMine={true}
+                              onToggle={(a.is_joint && (a.status === 'accepted' || !a.status)) ? () => toggleAssignmentComplete(a) : null}
+                              onDelete={() => deleteAssignment(a.id)}
+                              onAccept={null}
+                              onDecline={null}
+                            />
                           ))}
                         </div>
                       )}
