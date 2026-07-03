@@ -22,7 +22,7 @@ function momentumScore(habits, habitLogs, weekTasks, moodLogs) {
   const totalHabits = habits.length
   const doneHabits = habits.filter(h => {
     const s = logSet.get(h.id) || new Set()
-    const { pending } = simulateHabit(h, s, todayStr())
+    const { pending } = simulateHabit(h, s, new Date())
     return !pending
   }).length
   const habitScore = totalHabits ? (doneHabits / totalHabits) * 40 : 0
@@ -260,7 +260,7 @@ function CompareColumn({
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {habits.map(h => {
               const logSet = logSetMap.get(h.id) || new Set()
-              const { streak } = simulateHabit(h, logSet, todayStr())
+              const { streak } = simulateHabit(h, logSet, new Date())
               return (
                 <div key={h.id}>
                   <div className="flex items-center gap-2">
@@ -305,7 +305,7 @@ function SimplePersonCard({ name, isSelf, data, onNudge }) {
     logSetMap.get(l.habit_id).add(l.log_date)
   })
   const topStreakHabits = habits
-    .map(h => ({ ...h, streak: simulateHabit(h, logSetMap.get(h.id) || new Set(), todayStr()).streak }))
+    .map(h => ({ ...h, streak: simulateHabit(h, logSetMap.get(h.id) || new Set(), new Date()).streak }))
     .sort((a, b) => b.streak - a.streak)
     .slice(0, 3)
   const finance = isSelf ? financeHealthLabel(expenseCount || 0) : null
