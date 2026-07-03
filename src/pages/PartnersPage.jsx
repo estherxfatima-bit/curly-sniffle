@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
-import { Users, Copy, UserPlus, MessageSquare, BarChart2, Send, ChevronDown, ChevronRight } from 'lucide-react'
+import { Users, Copy, UserPlus, MessageSquare, BarChart2, Send, ChevronDown, ChevronRight, ClipboardList, Check, Trash2, Plus } from 'lucide-react'
 import TaskExpansion from '../components/weekly/TaskExpansion'
 
 function NudgeInline({ partnerId, taskId = null, onSent, label = 'Nudge' }) {
@@ -44,6 +44,51 @@ function NudgeInline({ partnerId, taskId = null, onSent, label = 'Nudge' }) {
   )
 }
 
+function AssignmentRow({ a, isMine, onToggle, onDelete }) {
+  const myComplete = isMine ? a.complete_from : a.complete_to
+  const theirComplete = isMine ? a.complete_to : a.complete_from
+  const bothDone = a.complete_from && a.complete_to
+
+  return (
+    <div style={{ padding: '7px 0', borderBottom: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 3 }}>
+      <div className="flex items-center gap-2">
+        {onToggle ? (
+          <button
+            onClick={onToggle}
+            style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 15, lineHeight: 1, flexShrink: 0 }}
+            title={myComplete ? 'Mark as not done' : 'Mark as done'}
+          >
+            {myComplete ? '✅' : '⬜'}
+          </button>
+        ) : (
+          <span style={{ fontSize: 13, flexShrink: 0 }}>{theirComplete ? '✅' : '⬜'}</span>
+        )}
+        <span style={{ fontSize: 13, flex: 1, textDecoration: bothDone ? 'line-through' : 'none', color: bothDone ? 'var(--text-3)' : 'var(--text)' }}>
+          {a.text}
+        </span>
+        {a.is_joint && (
+          <span className="badge" style={{ fontSize: 9, background: 'var(--career-tint)', color: 'var(--career)' }}>joint</span>
+        )}
+        {bothDone && <span className="badge badge-success" style={{ fontSize: 9 }}>Done</span>}
+        {onDelete && (
+          <button className="btn-icon" style={{ padding: 2, color: 'var(--text-3)' }} onClick={onDelete} title="Delete">
+            <Trash2 size={12} />
+          </button>
+        )}
+      </div>
+      {a.note && <p style={{ fontSize: 11, color: 'var(--text-3)', paddingLeft: 23, fontStyle: 'italic' }}>{a.note}</p>}
+      <div className="flex items-center gap-2" style={{ paddingLeft: 23 }}>
+        {a.due_date && <span style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>due {a.due_date}</span>}
+        {a.is_joint && (
+          <span style={{ fontSize: 10, color: 'var(--text-3)' }}>
+            {isMine ? (a.complete_to ? '· they done' : '· they pending') : (a.complete_from ? '· you done' : '· you pending')}
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function PartnersPage() {
   const { user } = useAuth()
   const [partners, setPartners] = useState([])
@@ -51,13 +96,19 @@ export default function PartnersPage() {
   const [partnerTodos, setPartnerTodos] = useState({}) // userId -> today's daily todos
   const [partnerGoals, setPartnerGoals] = useState({}) // userId -> goals[]
   const [expandedTask, setExpandedTask] = useState(null) // task id
+  const [assignments, setAssignments] = useState([]) // all partner_assignments involving me
+  const [showAssignForm, setShowAssignForm] = useState(null) // partnerId or null
+  const [assignText, setAssignText] = useState('')
+  const [assignNote, setAssignNote] = useState('')
+  const [assignDue, setAssignDue] = useState('')
+  const [assignJoint, setAssignJoint] = useState(false)
   const [inviteCode, setInviteCode] = useState('')
   const [myCode, setMyCode] = useState('')
   const [loading, setLoading] = useState(true)
   const [copied, setCopied] = useState(false)
 
   useEffect(() => {
-    if (user) { loadMyCode(); loadPartners() }
+    if (user) { loadMyCode(); loadPartners(); loadAssignments() }
   }, [user])
 
   async function loadMyCode() {
@@ -116,6 +167,43 @@ export default function PartnersPage() {
       setPartnerTodos({})
     }
     setLoading(false)
+  }
+
+  async function loadAssignments() {
+    // Load tasks I assigned out + tasks assigned to me
+    const [outRes, inRes] = await Promise.all([
+      supabase.from('partner_assignments').select('*').eq('from_user_id', user.id).order('created_at', { ascending: false }),
+      supabase.from('partner_assignments').select('*').eq('to_user_id', user.id).order('created_at', { ascending: false }),
+    ])
+    setAssignments([...(outRes.data || []), ...(inRes.data || [])])
+  }
+
+  async function createAssignment(toUserId) {
+    if (!assignText.trim()) return
+    const { data } = await supabase.from('partner_assignments').insert({
+      from_user_id: user.id,
+      to_user_id: toUserId,
+      text: assignText.trim(),
+      note: assignNote.trim() || null,
+      due_date: assignDue || null,
+      is_joint: assignJoint,
+    }).select().single()
+    if (data) setAssignments(prev => [data, ...prev])
+    setAssignText(''); setAssignNote(''); setAssignDue(''); setAssignJoint(false)
+    setShowAssignForm(null)
+  }
+
+  async function toggleAssignmentComplete(a) {
+    const isMine = a.from_user_id === user.id
+    const field = isMine ? 'complete_from' : 'complete_to'
+    const next = isMine ? !a.complete_from : !a.complete_to
+    await supabase.from('partner_assignments').update({ [field]: next }).eq('id', a.id)
+    setAssignments(prev => prev.map(x => x.id === a.id ? { ...x, [field]: next } : x))
+  }
+
+  async function deleteAssignment(id) {
+    await supabase.from('partner_assignments').delete().eq('id', id)
+    setAssignments(prev => prev.filter(x => x.id !== id))
   }
 
   async function addPartner() {
@@ -274,7 +362,7 @@ export default function PartnersPage() {
                 </div>
 
                 {/* Today's daily todos */}
-                <div>
+                <div style={{ marginBottom: 16 }}>
                   <div className="flex items-center gap-2 mb-2">
                     <p className="mono" style={{ fontSize: 10, flex: 1 }}>Today's to-dos</p>
                     <NudgeInline partnerId={p.partner_id} label="Nudge on today" />
@@ -295,6 +383,81 @@ export default function PartnersPage() {
                     ))
                   )}
                 </div>
+
+                {/* Assigned / joint tasks */}
+                {(() => {
+                  const outgoing = assignments.filter(a => a.from_user_id === user.id && a.to_user_id === p.partner_id)
+                  const incoming = assignments.filter(a => a.to_user_id === user.id && a.from_user_id === p.partner_id)
+                  const partnerName = p.partner?.display_name || p.partner?.email?.split('@')[0] || 'Partner'
+                  return (
+                    <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14 }}>
+                      <div className="flex items-center gap-2 mb-3">
+                        <ClipboardList size={13} color="var(--career)" />
+                        <p style={{ fontSize: 12, fontWeight: 600, flex: 1 }}>Assigned tasks</p>
+                        <button
+                          className="btn btn-xs btn-ghost"
+                          onClick={() => { setShowAssignForm(showAssignForm === p.partner_id ? null : p.partner_id); setAssignText(''); setAssignNote(''); setAssignDue(''); setAssignJoint(false) }}
+                        >
+                          <Plus size={11} /> Assign task
+                        </button>
+                      </div>
+
+                      {showAssignForm === p.partner_id && (
+                        <div className="card" style={{ background: 'var(--bg-2)', padding: 12, marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          <input
+                            autoFocus
+                            value={assignText}
+                            onChange={e => setAssignText(e.target.value)}
+                            onKeyDown={e => e.key === 'Enter' && createAssignment(p.partner_id)}
+                            placeholder="Task description…"
+                            style={{ fontSize: 13 }}
+                          />
+                          <input
+                            value={assignNote}
+                            onChange={e => setAssignNote(e.target.value)}
+                            placeholder="Add a note (optional)"
+                            style={{ fontSize: 12 }}
+                          />
+                          <div className="flex items-center gap-3 wrap">
+                            <input type="date" value={assignDue} onChange={e => setAssignDue(e.target.value)} style={{ fontSize: 12 }} />
+                            <label className="flex items-center gap-2" style={{ fontSize: 12, cursor: 'pointer' }}>
+                              <input type="checkbox" checked={assignJoint} onChange={e => setAssignJoint(e.target.checked)} />
+                              Joint task (we both track it)
+                            </label>
+                          </div>
+                          <div className="flex gap-2">
+                            <button className="btn btn-career btn-sm" style={{ color: '#fff' }} onClick={() => createAssignment(p.partner_id)}>
+                              Assign to {partnerName}
+                            </button>
+                            <button className="btn btn-ghost btn-sm" onClick={() => setShowAssignForm(null)}>Cancel</button>
+                          </div>
+                        </div>
+                      )}
+
+                      {incoming.length > 0 && (
+                        <div style={{ marginBottom: 10 }}>
+                          <p style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', marginBottom: 6 }}>From {partnerName}</p>
+                          {incoming.map(a => (
+                            <AssignmentRow key={a.id} a={a} isMine={false} onToggle={() => toggleAssignmentComplete(a)} onDelete={null} />
+                          ))}
+                        </div>
+                      )}
+
+                      {outgoing.length > 0 && (
+                        <div>
+                          <p style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', marginBottom: 6 }}>Assigned to {partnerName}</p>
+                          {outgoing.map(a => (
+                            <AssignmentRow key={a.id} a={a} isMine={true} onToggle={a.is_joint ? () => toggleAssignmentComplete(a) : null} onDelete={() => deleteAssignment(a.id)} />
+                          ))}
+                        </div>
+                      )}
+
+                      {incoming.length === 0 && outgoing.length === 0 && (
+                        <p style={{ fontSize: 12, color: 'var(--text-3)', fontStyle: 'italic' }}>No assigned tasks yet.</p>
+                      )}
+                    </div>
+                  )
+                })()}
               </div>
             )
           })}
