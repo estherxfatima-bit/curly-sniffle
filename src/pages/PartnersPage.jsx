@@ -270,6 +270,19 @@ export default function PartnersPage() {
   async function acceptAssignment(id) {
     await supabase.from('partner_assignments').update({ status: 'accepted' }).eq('id', id)
     setAssignments(prev => prev.map(x => x.id === id ? { ...x, status: 'accepted' } : x))
+    // Insert into today's daily todos so it shows up in normal workflow
+    const a = assignments.find(x => x.id === id)
+    if (a) {
+      const today = new Date().toISOString().slice(0, 10)
+      await supabase.from('daily_todos').insert({
+        user_id: user.id,
+        text: a.text,
+        date: today,
+        complete: false,
+        category: 'Personal',
+        ...(a.note ? { notes: a.note } : {}),
+      })
+    }
   }
 
   async function declineAssignment(id, reason) {
