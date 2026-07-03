@@ -15,7 +15,7 @@ import TaskCarryoverModal from './TaskCarryoverModal'
 import BacklogPicker from './BacklogPicker'
 import TimerWidget from './TimerWidget'
 import TimeBlockModal from './TimeBlockModal'
-import { Plus, Trash2, ChevronDown, ChevronRight, Check, Target, Hourglass, AlarmClock, Link2, Timer as TimerIcon, CalendarClock, ChevronLeft, Download, Lightbulb, Lock, Unlock, FastForward, Rewind, Archive, Pencil } from 'lucide-react'
+import { Plus, Trash2, ChevronDown, ChevronRight, Check, Target, Hourglass, AlarmClock, Link2, Timer as TimerIcon, CalendarClock, ChevronLeft, Download, Lightbulb, Lock, Unlock, FastForward, Rewind, Archive, Pencil, ClipboardList } from 'lucide-react'
 
 const DEFAULT_CATS = DEFAULT_TODO_CATEGORIES.map(c => c.name)
 
@@ -84,8 +84,12 @@ export default function DailyTodos({ compact = false, date = null, onDateChange 
   const isToday = viewDate === today
   const viewDayOfWeek = (getDay(parseISO(viewDate)) + 6) % 7 // 0=Mon..6=Sun
 
+  const [pendingAssignments, setPendingAssignments] = useState([])
+  const [decliningId, setDecliningId] = useState(null)
+  const [declineReason, setDeclineReason] = useState('')
+
   useEffect(() => {
-    if (user) { loadGoals(); loadWorkingHours(); loadCategoryColors() }
+    if (user) { loadGoals(); loadWorkingHours(); loadCategoryColors(); loadPendingAssignments() }
   }, [user])
 
   // Follow the dashboard's day navigation (period-nav arrows) when this widget is
@@ -114,6 +118,33 @@ export default function DailyTodos({ compact = false, date = null, onDateChange 
     setMilestones(milestonesData || [])
     const { data: milestoneTasksData } = await supabase.from('milestone_tasks').select('*').eq('user_id', user.id).order('sort_order')
     setMilestoneTasks(milestoneTasksData || [])
+  }
+
+  async function loadPendingAssignments() {
+    const { data } = await supabase
+      .from('partner_assignments')
+      .select('*, profiles!partner_assignments_from_user_id_fkey(display_name, email)')
+      .eq('to_user_id', user.id)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false })
+    setPendingAssignments(data || [])
+  }
+
+  async function acceptAssignment(a) {
+    await supabase.from('partner_assignments').update({ status: 'accepted' }).eq('id', a.id)
+    const today = new Date().toISOString().slice(0, 10)
+    const { data: inserted } = await supabase.from('daily_todos').insert({
+      user_id: user.id, text: a.text, date: today, complete: false, category: 'Personal',
+    }).select().single()
+    if (inserted) setTodos(prev => [...prev, inserted])
+    setPendingAssignments(prev => prev.filter(x => x.id !== a.id))
+  }
+
+  async function declineAssignment(id, reason) {
+    await supabase.from('partner_assignments').update({ status: 'declined', decline_reason: reason || null }).eq('id', id)
+    setPendingAssignments(prev => prev.filter(x => x.id !== id))
+    setDecliningId(null)
+    setDeclineReason('')
   }
 
   async function loadCategoryColors() {
@@ -678,6 +709,58 @@ export default function DailyTodos({ compact = false, date = null, onDateChange 
             </button>
           ))}
         </div>
+
+        {/* Pending partner assignments */}
+        {pendingAssignments.length > 0 && (
+          <div style={{
+            marginBottom: 16,
+            borderRadius: 'var(--radius)',
+            border: '1.5px solid var(--career)',
+            background: 'var(--career-tint)',
+            overflow: 'hidden',
+          }}>
+            <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--career)', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <ClipboardList size={13} color="var(--career)" />
+              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--career)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                {pendingAssignments.length} task{pendingAssignments.length !== 1 ? 's' : ''} assigned to you
+              </span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              {pendingAssignments.map((a, i) => {
+                const fromName = a.profiles?.display_name || a.profiles?.email?.split('@')[0] || 'Partner'
+                const isDecliningSelf = decliningId === a.id
+                return (
+                  <div key={a.id} style={{ padding: '10px 12px', borderBottom: i < pendingAssignments.length - 1 ? '1px solid var(--career)' : 'none', opacity: 0.9 }}>
+                    <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)', marginBottom: 2 }}>{a.text}</div>
+                    {a.note && <div style={{ fontSize: 11, color: 'var(--text-3)', fontStyle: 'italic', marginBottom: 4 }}>{a.note}</div>}
+                    <div style={{ fontSize: 10, color: 'var(--career)', fontFamily: 'var(--font-mono)', marginBottom: 6 }}>
+                      from {fromName}{a.due_date ? ` · due ${a.due_date}` : ''}
+                    </div>
+                    {isDecliningSelf ? (
+                      <div className="flex items-center gap-1">
+                        <input
+                          autoFocus
+                          value={declineReason}
+                          onChange={e => setDeclineReason(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') declineAssignment(a.id, declineReason); if (e.key === 'Escape') { setDecliningId(null); setDeclineReason('') } }}
+                          placeholder="Reason (optional)…"
+                          style={{ fontSize: 12, flex: 1, padding: '3px 8px' }}
+                        />
+                        <button className="btn btn-xs" style={{ background: '#ef4444', color: '#fff', flexShrink: 0 }} onClick={() => declineAssignment(a.id, declineReason)}>Send</button>
+                        <button className="btn btn-xs btn-ghost" style={{ flexShrink: 0 }} onClick={() => { setDecliningId(null); setDeclineReason('') }}>✕</button>
+                      </div>
+                    ) : (
+                      <div className="flex gap-2">
+                        <button className="btn btn-xs btn-career" style={{ color: '#fff' }} onClick={() => acceptAssignment(a)}>✓ Accept</button>
+                        <button className="btn btn-xs btn-ghost" style={{ color: '#ef4444' }} onClick={() => { setDecliningId(a.id); setDeclineReason('') }}>Decline</button>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         {/* List */}
         {loading ? (
