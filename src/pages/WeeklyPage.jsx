@@ -1,4 +1,4 @@
-import { useState, useEffect, Fragment } from 'react'
+import { useState, useEffect, useRef, Fragment } from 'react'
 import { Link } from 'react-router-dom'
 import { format, startOfWeek, endOfWeek, addWeeks, subWeeks } from 'date-fns'
 import { supabase } from '../lib/supabase'
@@ -74,8 +74,12 @@ export default function WeeklyPage() {
   const weekStart = startOfWeek(currentWeek, { weekStartsOn: 1 })
   const weekEnd   = endOfWeek(currentWeek, { weekStartsOn: 1 })
   const weekStartStr = format(weekStart, 'yyyy-MM-dd')
+  const latestWeekRef = useRef(weekStartStr)
 
-  useEffect(() => { if (user) { loadTasks(); loadGoals(); loadQuote(); loadPrefs() } }, [user, currentWeek])
+  useEffect(() => {
+    latestWeekRef.current = weekStartStr
+    if (user) { loadTasks(); loadGoals(); loadQuote(); loadPrefs() }
+  }, [user, currentWeek])
   useEffect(() => { if (window.location.search.includes('review=1')) setShowReview(true) }, [])
 
   async function loadPrefs() {
@@ -195,9 +199,12 @@ export default function WeeklyPage() {
   }
 
   async function loadTasks() {
+    const snap = weekStartStr
     setLoading(true)
     const { data } = await supabase.from('weekly_tasks').select('*')
-      .eq('user_id', user.id).eq('week_start', weekStartStr).eq('archived', false).order('created_at')
+      .eq('user_id', user.id).eq('week_start', snap).eq('archived', false).order('created_at')
+    // Discard if the user navigated to a different week while this was in flight
+    if (latestWeekRef.current !== snap) return
     const loaded = data || []
     setTasks(loaded)
     setLoading(false)
