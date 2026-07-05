@@ -111,6 +111,26 @@ export default function GoalCard({
         </div>
       </div>
 
+      {goal.description && (
+        <p style={{ fontSize: 12, color: 'var(--text-2)', marginBottom: 10, lineHeight: 1.5, fontStyle: 'italic' }}>
+          {goal.description}
+        </p>
+      )}
+
+      {goal.key_actions && (
+        <div style={{ marginBottom: 12, background: 'var(--bg-3)', borderRadius: 8, padding: '8px 12px' }}>
+          <p style={{ fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase', color: color, marginBottom: 5 }}>Key actions</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            {goal.key_actions.split('\n').filter(l => l.trim()).map((line, i) => (
+              <div key={i} className="flex items-start gap-2">
+                <span style={{ color: color, fontSize: 10, marginTop: 2, flexShrink: 0 }}>▸</span>
+                <span style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.4 }}>{line.replace(/^[-•·▸*]\s*/, '')}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {isMetric && (
         <MetricBody goal={goal} progress={progress} color={color} readOnly={readOnly} onUpdateMetric={onUpdateMetric} />
       )}
@@ -235,9 +255,6 @@ export default function GoalCard({
                 <Link2 size={10} /> link a quarterly goal
               </button>
             )
-          )}
-          {goal.key_actions && (
-            <p style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 10, fontStyle: 'italic' }}>{goal.key_actions}</p>
           )}
         </div>
       )}

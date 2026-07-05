@@ -20,6 +20,7 @@ export default function GoalModal({
   const [form, setForm] = useState({
     category: goal?.category || defaults?.category || GOAL_CATEGORIES[0],
     primary_goal: goal?.primary_goal || '',
+    description: goal?.description || '',
     key_actions: goal?.key_actions || '',
     success_metrics: goal?.success_metrics || '',
     quarter: goal?.quarter || defaults?.quarter || getCurrentQuarter(),
@@ -58,6 +59,7 @@ export default function GoalModal({
     const payload = {
       category: form.category,
       primary_goal: form.primary_goal,
+      description: form.description || null,
       key_actions: form.key_actions,
       success_metrics: form.success_metrics,
       quarter: form.quarter,
@@ -137,7 +139,11 @@ export default function GoalModal({
           <input value={form.primary_goal} onChange={e => set('primary_goal', e.target.value)} placeholder="What do you want to achieve?" />
         </div>
         <div className="form-group">
-          <label>Key actions</label>
+          <label>Description <span style={{ fontWeight: 400, color: 'var(--text-3)', fontSize: 11 }}>(optional — context, motivation, or notes)</span></label>
+          <textarea value={form.description} onChange={e => set('description', e.target.value)} placeholder="Why does this goal matter? Any extra context…" style={{ minHeight: 60 }} />
+        </div>
+        <div className="form-group">
+          <label>Key actions <span style={{ fontWeight: 400, color: 'var(--text-3)', fontSize: 11 }}>(shown on the goal card)</span></label>
           <textarea value={form.key_actions} onChange={e => set('key_actions', e.target.value)} placeholder="The 2–3 things you need to do consistently…" style={{ minHeight: 70 }} />
         </div>
         <div className="form-group">
