@@ -21,6 +21,7 @@ import ResetPasswordPage from './pages/ResetPasswordPage'
 import ComparePage from './pages/ComparePage'
 import CalendarPage from './pages/CalendarPage'
 import AdminAiUsagePage from './pages/AdminAiUsagePage'
+import LearningPage from './pages/LearningPage'
 
 function AppRoutes() {
   const { session, loading } = useAuth()
@@ -54,6 +55,7 @@ function AppRoutes() {
             <Route path="/finance"  element={<FinancePage />} />
             <Route path="/wellness" element={<WellnessPage />} />
             <Route path="/books" element={<BooksPage />} />
+            <Route path="/learning" element={<LearningPage />} />
             <Route path="/bucket-list" element={<BucketListPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/admin/ai-usage" element={<AdminAiUsagePage />} />

@@ -3,7 +3,8 @@ import { useAuth } from '../hooks/useAuth'
 import { useTheme } from '../hooks/useTheme'
 import { supabase } from '../lib/supabase'
 import { registerServiceWorker, subscribeToPush, unsubscribeFromPush, isSubscribed } from '../lib/pushNotifications'
-import { Bell, BellOff, Sun, Moon, LogOut, Calendar, Unlink, MessageSquare, Clock4, Check, Plus, Trash2, Download } from 'lucide-react'
+import { Bell, BellOff, Sun, Moon, LogOut, Calendar, Unlink, MessageSquare, Clock4, Check, Plus, Trash2, Download, Wand2 } from 'lucide-react'
+import ContextWizard from '../components/learning/ContextWizard'
 import { DAY_LABELS } from '../lib/constants'
 import AiUsageSection from '../components/settings/AiUsageSection'
 import { EXPORT_RANGE_OPTIONS, EXPORT_TABLES, DEFAULT_EXPORT_KEYS, exportMyData } from '../lib/exportData'
@@ -46,6 +47,7 @@ export default function SettingsPage() {
   const [personalContext, setPersonalContext] = useState('')
   const [personalContextSaving, setPersonalContextSaving] = useState(false)
   const [personalContextSaved, setPersonalContextSaved] = useState(false)
+  const [showWizard, setShowWizard] = useState(false)
 
   // Account: change display name
   const [displayName, setDisplayName] = useState('')
@@ -801,9 +803,18 @@ export default function SettingsPage() {
 
       {/* AI context */}
       <div className="card mb-4">
-        <h3 style={{ fontSize: '0.9rem', marginBottom: 8 }}>My context</h3>
+        <div className="flex items-center justify-between mb-2">
+          <h3 style={{ fontSize: '0.9rem' }}>My context</h3>
+          <button
+            className="btn btn-sm flex items-center gap-2"
+            style={{ background: 'var(--learning)', color: '#fff', border: 'none', fontSize: 12 }}
+            onClick={() => setShowWizard(true)}
+          >
+            <Wand2 size={13} /> Set up with wizard
+          </button>
+        </div>
         <p style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 12 }}>
-          Tell the AI about you
+          Tell the AI about you — used as context across all AI features. You can type here directly or use the wizard.
         </p>
         <textarea
           value={personalContext}
@@ -818,6 +829,12 @@ export default function SettingsPage() {
           {personalContextSaved && <span style={{ fontSize: 11, color: 'var(--success)' }}>Saved</span>}
         </div>
       </div>
+      {showWizard && (
+        <ContextWizard
+          onClose={() => setShowWizard(false)}
+          onComplete={summary => { setPersonalContext(summary); setShowWizard(false) }}
+        />
+      )}
 
       <AiUsageSection user={user} />
 

@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard, CalendarDays, Target, CheckSquare, Film,
   TrendingUp, Users, LogOut, Sun, Moon, Sparkles, PiggyBank, Heart, Settings,
-  BookOpen, ListChecks, Search, Calendar,
+  BookOpen, ListChecks, Search, Calendar, GraduationCap,
 } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { useTheme } from '../../hooks/useTheme'
@@ -18,6 +18,7 @@ const navItems = [
   { to: '/finance',   label: 'Finance',     icon: PiggyBank,       section: 'finance'  },
   { to: '/wellness',  label: 'Wellness',    icon: Heart,           section: 'wellness' },
   { to: '/books',     label: 'Books',       icon: BookOpen,        section: 'creative' },
+  { to: '/learning',  label: 'Learning',    icon: GraduationCap,   section: 'learning' },
   { to: '/bucket-list', label: 'Bucket List', icon: ListChecks,    section: 'personal' },
   { to: '/insights',  label: 'Insights',    icon: TrendingUp,      section: 'career'   },
   { to: '/partners',  label: 'Partners',    icon: Users,           section: 'personal' },
@@ -31,6 +32,7 @@ const SECTION_COLORS = {
   finance:  'var(--finance)',
   wellness: 'var(--wellness)',
   personal: 'var(--personal)',
+  learning: 'var(--learning)',
 }
 
 export default function Sidebar({ onOpenSearch }) {

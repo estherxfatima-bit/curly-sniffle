@@ -32,9 +32,24 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'CLAUDE_API_KEY is not configured on the server' })
   }
 
-  const { model, max_tokens, system, messages } = req.body || {}
+  const { model, max_tokens, system, messages, skip_user_context } = req.body || {}
   if (!model || !max_tokens || !messages) {
     return res.status(400).json({ error: 'model, max_tokens, and messages are required' })
+  }
+
+  // Prepend user's AI context to the system prompt unless the caller opts out
+  let enrichedSystem = system || ''
+  if (!skip_user_context) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('ai_context_summary, personal_context')
+      .eq('id', userData.user.id)
+      .maybeSingle()
+    const ctx = profile?.ai_context_summary || profile?.personal_context
+    if (ctx) {
+      const prefix = `User context: ${ctx}\n\n`
+      enrichedSystem = prefix + enrichedSystem
+    }
   }
 
   const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
@@ -44,7 +59,7 @@ export default async function handler(req, res) {
       'x-api-key': process.env.CLAUDE_API_KEY,
       'anthropic-version': '2023-06-01',
     },
-    body: JSON.stringify({ model, max_tokens, system, messages }),
+    body: JSON.stringify({ model, max_tokens, system: enrichedSystem || undefined, messages }),
   })
 
   const data = await anthropicRes.json()

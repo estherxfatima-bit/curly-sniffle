@@ -47,6 +47,11 @@
   --personal-tint: #fceef2;
   --personal-dim:  rgba(196,64,96,0.10);
 
+  /* Learning — deep indigo */
+  --learning:      #4a3fff;
+  --learning-tint: #f0efff;
+  --learning-dim:  rgba(74,63,255,0.10);
+
   --success: #0a8a5a;
   --warning: #c8820a;
   --danger:  #c44060;
@@ -100,6 +105,11 @@
   --personal:      #e0607e;
   --personal-tint: rgba(224,96,126,0.14);
   --personal-dim:  rgba(224,96,126,0.20);
+
+  /* Learning — deep indigo (dark) */
+  --learning:      #7b72ff;
+  --learning-tint: rgba(123,114,255,0.14);
+  --learning-dim:  rgba(123,114,255,0.20);
 
   --success: #1fab7e;
   --warning: #d4921a;
