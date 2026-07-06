@@ -48,6 +48,21 @@ export async function generateCurriculum({ track, resources, userId }) {
     ? resources.map(r => `- ${r.title} (${r.type}, ${r.platform || 'no platform'})`).join('\n')
     : 'None yet'
 
+  const freeformFormat = `Numbered steps in logical order. Use exactly this format for each step:
+
+[n]. [Title]
+Estimated hours: [X]
+What to do: [specific action 1] | [specific action 2] | [specific action 3 — e.g. "Complete this exercise: take a creative brief and rewrite the positioning line using the framework you just learned"]
+What you'll be able to do after: [one sentence outcome — e.g. "You'll be able to write a strategic brief that holds up under client questioning"]`
+
+  const structuredFormat = `Modules with nested lessons. Use exactly this format:
+
+Module: [Title] — [one-line description of what this module covers]
+  Lesson: [Title]
+  Estimated hours: [X]
+  What to do: [specific action 1] | [specific action 2] | [specific action 3]
+  What you'll be able to do after: [one sentence outcome]`
+
   const prompt = `Learning track: ${track.name}
 Category: ${track.category}
 Why they want to learn this: ${track.why_text || 'Not specified'}
@@ -61,18 +76,20 @@ APPROACH NOTE:
 [One paragraph on the best way to approach learning this given their background.]
 
 CURRICULUM:
-${track.curriculum_mode === 'structured'
-    ? '[Modules with nested lessons. Format each module as:\nModule: [title] — [brief description]\n  Lesson: [title] | [estimated hours] hours | [brief description]'
-    : '[Numbered steps in logical order. Format each as:\n[n]. [title] | [estimated hours] hours | [brief description]'}
-]
+${track.curriculum_mode === 'structured' ? structuredFormat : freeformFormat}
 
 RESOURCES:
-[3-5 specific resources. Format each as:\nTitle: [title]\nType: [Course/Book/Article/Video/Podcast/Tool/Other]\nPlatform: [platform]\nURL: [url or "—"]\nWhy: [one sentence why it's relevant at their level]
-]`
+3-5 specific resources. Use exactly this format for each:
+
+Title: [title]
+Type: [Course/Book/Article/Video/Podcast/Tool/Other]
+Platform: [platform name]
+URL: [full URL — find the real one if you know it; only use "—" if genuinely unknown]
+Use for: [one specific sentence on exactly what to use this resource for — e.g. "Use for the strategic frameworks in module 2; skip the intro chapters if you already know positioning basics"]`
 
   const data = await proxy({
     model: MODEL,
-    max_tokens: 2000,
+    max_tokens: 2500,
     system,
     messages: [{ role: 'user', content: prompt }],
   })
@@ -80,6 +97,26 @@ RESOURCES:
   const usage = data.usage || {}
   await logAI(userId, 'learning_curriculum', `Curriculum: ${track.name}`, usage.input_tokens, usage.output_tokens)
   return parseCurriculumResponse(text, track.curriculum_mode)
+}
+
+function extractStepFields(block) {
+  const hoursMatch = block.match(/Estimated hours?:\s*([\d.]+)/i)
+  const estimated_minutes = hoursMatch ? Math.round(parseFloat(hoursMatch[1]) * 60) : null
+
+  const todoMatch = block.match(/What to do:\s*(.+?)(?=\nWhat you'll be able|$)/is)
+  const outcomeMatch = block.match(/What you(?:'ll| will) be able to do after:\s*(.+?)(?=\n[A-Z]|\n\d+\.|$)/is)
+
+  const actions = todoMatch
+    ? todoMatch[1].trim().split('|').map(a => a.trim()).filter(Boolean)
+    : []
+  const outcome = outcomeMatch?.[1]?.trim() || ''
+
+  const description = [
+    actions.length ? actions.map(a => `• ${a}`).join('\n') : '',
+    outcome ? `\nAfter this: ${outcome}` : '',
+  ].filter(Boolean).join('\n').trim()
+
+  return { estimated_minutes, description }
 }
 
 function parseCurriculumResponse(text, mode) {
@@ -96,25 +133,31 @@ function parseCurriculumResponse(text, mode) {
   let modules = []
 
   if (mode === 'structured') {
-    let currentModule = null
-    curriculumRaw.split('\n').forEach(line => {
-      const modMatch = line.match(/^Module:\s*(.+?)\s*—\s*(.+)/)
-      const lessonMatch = line.match(/^\s*Lesson:\s*(.+?)\s*\|\s*([\d.]+)\s*hours?\s*\|\s*(.+)/i)
-      if (modMatch) {
-        currentModule = { title: modMatch[1].trim(), description: modMatch[2].trim(), lessons: [] }
-        modules.push(currentModule)
-      } else if (lessonMatch && currentModule) {
-        currentModule.lessons.push({
-          title: lessonMatch[1].trim(),
-          estimated_minutes: Math.round(parseFloat(lessonMatch[2]) * 60),
-          description: lessonMatch[3].trim(),
-        })
-      }
+    // Split on "Module:" lines
+    const moduleBlocks = curriculumRaw.split(/\n(?=Module:)/i)
+    moduleBlocks.forEach(mBlock => {
+      const headerMatch = mBlock.match(/^Module:\s*(.+?)\s*—\s*(.+)/i)
+      if (!headerMatch) return
+      const currentModule = { title: headerMatch[1].trim(), description: headerMatch[2].trim(), lessons: [] }
+      modules.push(currentModule)
+      // Split remainder on "Lesson:" lines
+      const lessonParts = mBlock.split(/\n(?=\s*Lesson:)/i).slice(1)
+      lessonParts.forEach(lBlock => {
+        const titleMatch = lBlock.match(/Lesson:\s*(.+)/i)
+        if (!titleMatch) return
+        const { estimated_minutes, description } = extractStepFields(lBlock)
+        currentModule.lessons.push({ title: titleMatch[1].trim(), estimated_minutes, description })
+      })
     })
   } else {
-    curriculumRaw.split('\n').forEach(line => {
-      const m = line.match(/^\d+\.\s*(.+?)\s*\|\s*([\d.]+)\s*hours?\s*\|\s*(.+)/i)
-      if (m) steps.push({ title: m[1].trim(), estimated_minutes: Math.round(parseFloat(m[2]) * 60), description: m[3].trim() })
+    // Split on numbered step lines (1., 2., …)
+    const stepBlocks = curriculumRaw.split(/\n(?=\d+\.)/)
+    stepBlocks.forEach(block => {
+      const titleMatch = block.match(/^\d+\.\s*(.+)/)
+      if (!titleMatch) return
+      const title = titleMatch[1].trim()
+      const { estimated_minutes, description } = extractStepFields(block)
+      steps.push({ title, estimated_minutes, description })
     })
   }
 
@@ -125,7 +168,7 @@ function parseCurriculumResponse(text, mode) {
     const type = block.match(/Type:\s*(.+)/i)?.[1]?.trim()
     const platform = block.match(/Platform:\s*(.+)/i)?.[1]?.trim()
     const url = block.match(/URL:\s*(.+)/i)?.[1]?.trim()
-    const why = block.match(/Why:\s*(.+)/i)?.[1]?.trim()
+    const why = block.match(/Use for:\s*(.+)/i)?.[1]?.trim() || block.match(/Why:\s*(.+)/i)?.[1]?.trim()
     if (title) resources.push({ title, type: type || 'Other', platform: platform || '', url: url === '—' ? '' : (url || ''), why: why || '' })
   })
 
