@@ -47,6 +47,11 @@
   --personal-tint: #fceef2;
   --personal-dim:  rgba(196,64,96,0.10);
 
+  /* Business — violet */
+  --business:      #7c3aed;
+  --business-tint: #f3effe;
+  --business-dim:  rgba(124,58,237,0.10);
+
   /* Learning — deep indigo */
   --learning:      #4a3fff;
   --learning-tint: #f0efff;
@@ -105,6 +110,11 @@
   --personal:      #e0607e;
   --personal-tint: rgba(224,96,126,0.14);
   --personal-dim:  rgba(224,96,126,0.20);
+
+  /* Business — violet (dark) */
+  --business:      #9f67ff;
+  --business-tint: rgba(159,103,255,0.14);
+  --business-dim:  rgba(159,103,255,0.20);
 
   /* Learning — deep indigo (dark) */
   --learning:      #7b72ff;
@@ -343,6 +353,7 @@ input[type="range"]::-webkit-slider-thumb {
 
 /* Section accent: 3px left border, white body */
 .card-career   { border-left: 3px solid var(--career);   }
+.card-business { border-left: 3px solid var(--business); }
 .card-creative { border-left: 3px solid var(--creative); }
 .card-finance  { border-left: 3px solid var(--finance);  }
 .card-wellness { border-left: 3px solid var(--wellness); }

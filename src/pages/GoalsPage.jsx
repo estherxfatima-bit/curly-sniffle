@@ -9,6 +9,7 @@ import GoalModal from '../components/goals/GoalModal'
 
 const CATEGORY_COLORS = {
   Career:    'var(--career)',
+  Business:  'var(--business)',
   Creative:  'var(--creative)',
   Financial: 'var(--finance)',
   Personal:  'var(--personal)',
@@ -16,6 +17,7 @@ const CATEGORY_COLORS = {
 }
 const CATEGORY_CLASSES = {
   Career:    'card-career',
+  Business:  'card-business',
   Creative:  'card-creative',
   Financial: 'card-finance',
   Personal:  'card-personal',

@@ -1,7 +1,8 @@
-export const TASK_AREAS = ['Career', 'Creative', 'Personal', 'Financial', 'Health/Wellness', 'Work (9–5)', 'Other']
+export const TASK_AREAS = ['Career', 'Business', 'Creative', 'Personal', 'Financial', 'Health/Wellness', 'Work (9–5)', 'Other']
 
 export const AREA_COLORS = {
   Career: '#1a4fff',
+  Business: '#7c3aed',
   Creative: '#e8a020',
   Personal: '#d4506a',
   Financial: '#0a8a5a',
@@ -38,7 +39,7 @@ export const DEFAULT_TODO_CATEGORIES = [
   { name: 'Health',   colour: '#3d8a62' },
 ]
 
-export const GOAL_CATEGORIES = ['Career', 'Creative', 'Financial', 'Personal', 'Wellness']
+export const GOAL_CATEGORIES = ['Career', 'Business', 'Creative', 'Financial', 'Personal', 'Wellness']
 
 // Quarterly goals track progress as a manual metric or via milestones.
 // Yearly goals track progress as a manual metric or as a theme (a count of
