@@ -128,6 +128,12 @@ export default function FinancePage() {
   const [hiddenCats, setHiddenCats] = useState([])
   const [showCarryForwardPrompt, setShowCarryForwardPrompt] = useState(false)
 
+  // Settled debts & financial history
+  const [showSettledDebts, setShowSettledDebts] = useState(false)
+  const [showFinancialHistory, setShowFinancialHistory] = useState(false)
+  const [financialHistory, setFinancialHistory] = useState([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+
   // Category filter for variable expenses list
   const [filterCat, setFilterCat] = useState(null)
 
@@ -154,7 +160,7 @@ export default function FinancePage() {
       supabase.from('budgets').select('*').eq('user_id', user.id),
       supabase.from('dashboard_layout').select('card_order').eq('user_id', user.id).eq('view', 'finance').maybeSingle(),
       supabase.from('user_preferences').select('hidden_budget_categories').eq('user_id', user.id).maybeSingle(),
-      supabase.from('debts').select('*').eq('user_id', user.id).order('created_at'),
+      supabase.from('debts').select('*').eq('user_id', user.id).order('created_at', { ascending: true }),
       supabase.from('savings_accounts').select('*').eq('user_id', user.id).order('created_at'),
       supabase.from('investments').select('*').eq('user_id', user.id).order('created_at'),
       supabase.from('money_owed').select('*').eq('user_id', user.id).order('date', { ascending: false }),
@@ -378,6 +384,31 @@ export default function FinancePage() {
     setDebtRepayments(prev => ({ ...prev, [debtId]: [rep, ...(prev[debtId] || [])] }))
     await recordNetWorthSnapshot({ debts: updatedDebts })
   }
+  async function settleDebt(debtId) {
+    const settledAt = new Date().toISOString()
+    await supabase.from('debts').update({ settled_at: settledAt, current_balance: 0, updated_at: settledAt }).eq('id', debtId)
+    const updatedDebts = debts.map(d => d.id === debtId ? { ...d, current_balance: 0, settled_at: settledAt } : d)
+    setDebts(updatedDebts)
+    setSelectedDebt(null)
+    await recordNetWorthSnapshot({ debts: updatedDebts })
+  }
+
+  async function loadFinancialHistory() {
+    setHistoryLoading(true)
+    const [repRes, savRes, invRes] = await Promise.all([
+      supabase.from('debt_repayments').select('*, debts(name)').eq('user_id', user.id).order('date', { ascending: false }).limit(100),
+      supabase.from('savings_transactions').select('*, savings_accounts(name)').eq('user_id', user.id).order('date', { ascending: false }).limit(100),
+      supabase.from('investment_transactions').select('*, investments(name)').eq('user_id', user.id).order('date', { ascending: false }).limit(100),
+    ])
+    const rows = [
+      ...(repRes.data || []).map(r => ({ ...r, _kind: 'repayment', _label: r.debts?.name || 'Debt', _sign: '-' })),
+      ...(savRes.data || []).map(r => ({ ...r, _kind: 'savings', _label: r.savings_accounts?.name || 'Savings', _sign: r.type === 'withdrawal' ? '-' : '+' })),
+      ...(invRes.data || []).map(r => ({ ...r, _kind: 'investment', _label: r.investments?.name || 'Investment', _sign: r.type === 'withdrawal' ? '-' : '+' })),
+    ].sort((a, b) => new Date(b.date) - new Date(a.date))
+    setFinancialHistory(rows)
+    setHistoryLoading(false)
+  }
+
   async function saveEditDebt() {
     if (!editingDebt) return
     const payload = {
@@ -510,13 +541,34 @@ export default function FinancePage() {
   }
   async function logInvestmentTxn(investmentId) {
     if (!newInvestmentTxn.amount) return
-    const { data: txn } = await supabase.from('investment_transactions').insert({
-      user_id: user.id, investment_id: investmentId, type: newInvestmentTxn.type,
-      amount: parseFloat(newInvestmentTxn.amount), date: newInvestmentTxn.date,
-      note: newInvestmentTxn.note || null, status: 'pending',
-    }).select().single()
-    setInvestmentTxns(prev => ({ ...prev, [investmentId]: [txn, ...(prev[investmentId] || [])] }))
-    setNewInvestmentTxn({ type: 'contribution', amount: '', date: format(new Date(), 'yyyy-MM-dd'), note: '' })
+    const inv = investments.find(i => i.id === investmentId)
+
+    if (newInvestmentTxn.type === 'set_value') {
+      // Immediately update to the new value — log the delta as confirmed
+      const newVal = parseFloat(newInvestmentTxn.amount)
+      const delta = newVal - (inv?.current_value || 0)
+      const txnType = delta >= 0 ? 'contribution' : 'withdrawal'
+      const { data: txn } = await supabase.from('investment_transactions').insert({
+        user_id: user.id, investment_id: investmentId, type: txnType,
+        amount: Math.abs(delta), date: newInvestmentTxn.date,
+        note: `Value update${newInvestmentTxn.note ? ` — ${newInvestmentTxn.note}` : ''}`,
+        status: 'confirmed',
+      }).select().single()
+      await supabase.from('investments').update({ current_value: newVal, updated_at: new Date().toISOString() }).eq('id', investmentId)
+      const updatedInvestments = investments.map(i => i.id === investmentId ? { ...i, current_value: newVal } : i)
+      setInvestments(updatedInvestments)
+      if (txn) setInvestmentTxns(prev => ({ ...prev, [investmentId]: [txn, ...(prev[investmentId] || [])] }))
+      if (selectedInvestment?.id === investmentId) setSelectedInvestment(prev => ({ ...prev, current_value: newVal }))
+      await recordNetWorthSnapshot({ investments: updatedInvestments })
+    } else {
+      const { data: txn } = await supabase.from('investment_transactions').insert({
+        user_id: user.id, investment_id: investmentId, type: newInvestmentTxn.type,
+        amount: parseFloat(newInvestmentTxn.amount), date: newInvestmentTxn.date,
+        note: newInvestmentTxn.note || null, status: 'pending',
+      }).select().single()
+      setInvestmentTxns(prev => ({ ...prev, [investmentId]: [txn, ...(prev[investmentId] || [])] }))
+    }
+    setNewInvestmentTxn({ type: newInvestmentTxn.type, amount: '', date: format(new Date(), 'yyyy-MM-dd'), note: '' })
   }
   async function confirmInvestmentTxn(txn) {
     await supabase.from('investment_transactions').update({ status: 'confirmed', updated_at: new Date().toISOString() }).eq('id', txn.id)
@@ -773,7 +825,9 @@ export default function FinancePage() {
   // Net worth
   const totalSavingsBalance   = savingsAccounts.reduce((s, a) => s + (a.current_balance || 0), 0)
   const totalInvestmentsValue = investments.reduce((s, i) => s + (i.current_value || 0), 0)
-  const totalDebtBalance      = debts.reduce((s, d) => s + (d.current_balance || 0), 0)
+  const activeDebts           = debts.filter(d => !d.settled_at)
+  const settledDebts          = debts.filter(d => !!d.settled_at)
+  const totalDebtBalance      = activeDebts.reduce((s, d) => s + (d.current_balance || 0), 0)
   const netWorth = totalSavingsBalance + totalInvestmentsValue - totalDebtBalance
 
   // Financial health score (monthly view)
@@ -1501,7 +1555,7 @@ export default function FinancePage() {
                 </div>
                 {totalDebtBalance > 0 && (
                   <div style={{ padding: '8px 14px', background: 'color-mix(in srgb, var(--danger) 10%, transparent)', borderRadius: 8, border: '1px solid color-mix(in srgb, var(--danger) 30%, transparent)' }}>
-                    <p style={{ fontSize: 12, color: 'var(--danger)', fontWeight: 600 }}>You have £{totalDebtBalance.toFixed(0)} in debt across {debts.length} account{debts.length !== 1 ? 's' : ''}</p>
+                    <p style={{ fontSize: 12, color: 'var(--danger)', fontWeight: 600 }}>You have £{totalDebtBalance.toFixed(0)} in debt across {activeDebts.length} account{activeDebts.length !== 1 ? 's' : ''}</p>
                     <button className="btn btn-sm btn-ghost" style={{ fontSize: 11, marginTop: 6, color: 'var(--danger)' }} onClick={() => setShowAllocateDebt(v => !v)}>
                       Allocate to debt
                     </button>
@@ -1576,7 +1630,7 @@ export default function FinancePage() {
                   <h3 style={{ fontSize: '0.9rem' }}>Debt</h3>
                   <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--danger)', fontWeight: 700 }}>£{totalDebtBalance.toFixed(0)}</span>
                 </div>
-                {debts.map(d => {
+                {activeDebts.map(d => {
                   const pct = d.original_balance > 0 ? Math.min(100, ((d.original_balance - d.current_balance) / d.original_balance) * 100) : 0
                   return (
                     <div key={d.id} style={{ position: 'relative', marginBottom: 8 }}>
@@ -1604,7 +1658,28 @@ export default function FinancePage() {
                     </div>
                   )
                 })}
-                {debts.length === 0 && <p style={{ fontSize: 12, color: 'var(--text-3)', fontStyle: 'italic', marginBottom: 8 }}>No debts tracked.</p>}
+                {activeDebts.length === 0 && <p style={{ fontSize: 12, color: 'var(--text-3)', fontStyle: 'italic', marginBottom: 8 }}>No active debts.</p>}
+                {settledDebts.length > 0 && (
+                  <div style={{ marginBottom: 8 }}>
+                    <button
+                      onClick={() => setShowSettledDebts(p => !p)}
+                      style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', background: 'none', padding: '4px 0', display: 'flex', alignItems: 'center', gap: 4 }}
+                    >
+                      {showSettledDebts ? '▾' : '▸'} {settledDebts.length} settled debt{settledDebts.length !== 1 ? 's' : ''}
+                    </button>
+                    {showSettledDebts && settledDebts.map(d => (
+                      <div key={d.id} style={{ padding: '8px 12px', background: 'var(--bg-2)', borderRadius: 8, marginTop: 4, opacity: 0.6 }}>
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p style={{ fontSize: 12, fontWeight: 600, textDecoration: 'line-through', color: 'var(--text-2)' }}>{d.name}</p>
+                            <p style={{ fontSize: 10, color: 'var(--text-3)' }}>Settled {format(new Date(d.settled_at), 'd MMM yyyy')} · {d.category}</p>
+                          </div>
+                          <span className="badge" style={{ fontSize: 9, background: 'color-mix(in srgb, var(--success) 20%, transparent)', color: 'var(--success)' }}>Paid off</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10, marginTop: 4 }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     <input placeholder="Debt name" value={newDebt.name} onChange={e => setNewDebt(p => ({ ...p, name: e.target.value }))} style={{ fontSize: 12 }} />
@@ -1708,6 +1783,71 @@ export default function FinancePage() {
                 </div>
               </div>
 
+            </div>
+
+            {/* Financial History */}
+            <div className="card mt-4" style={{ padding: '14px 16px' }}>
+              <button
+                onClick={async () => {
+                  if (!showFinancialHistory && financialHistory.length === 0) await loadFinancialHistory()
+                  setShowFinancialHistory(p => !p)
+                }}
+                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'none', padding: 0 }}
+              >
+                <span style={{ fontSize: 13, fontWeight: 600 }}>Financial history</span>
+                <span style={{ fontSize: 11, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>
+                  {showFinancialHistory ? '▾ hide' : '▸ show all transactions'}
+                </span>
+              </button>
+              {showFinancialHistory && (
+                <div style={{ marginTop: 12 }}>
+                  {historyLoading && <p style={{ fontSize: 12, color: 'var(--text-3)', fontStyle: 'italic' }}>Loading…</p>}
+                  {!historyLoading && financialHistory.length === 0 && (
+                    <p style={{ fontSize: 12, color: 'var(--text-3)', fontStyle: 'italic' }}>No transactions yet.</p>
+                  )}
+                  {!historyLoading && financialHistory.length > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 360, overflowY: 'auto' }}>
+                      {financialHistory.map((r, i) => {
+                        const kindColor = r._kind === 'repayment' ? 'var(--danger)' : r._kind === 'savings' ? 'var(--finance)' : 'var(--career)'
+                        const kindLabel = r._kind === 'repayment' ? 'Repayment' : r._kind === 'savings' ? (r.type === 'set_balance' ? 'Balance set' : r.type) : (r.type === 'value_update' ? 'Value update' : r.type)
+                        return (
+                          <div key={`${r._kind}-${r.id}`} className="flex items-center justify-between" style={{ fontSize: 12, padding: '6px 10px', background: i % 2 === 0 ? 'var(--bg-2)' : 'transparent', borderRadius: 6 }}>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <span style={{ fontWeight: 600 }}>{r._label}</span>
+                              <span style={{ color: 'var(--text-3)', marginLeft: 6 }}>·</span>
+                              <span style={{ color: kindColor, marginLeft: 6, fontSize: 10, fontFamily: 'var(--font-mono)', textTransform: 'capitalize' }}>{kindLabel}</span>
+                              {r.note && <span style={{ color: 'var(--text-3)', marginLeft: 6 }}>— {r.note}</span>}
+                            </div>
+                            <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 12 }}>
+                              <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color: r._sign === '-' ? 'var(--danger)' : 'var(--success)' }}>
+                                {r._sign}£{r.amount.toFixed(0)}
+                              </span>
+                              <p style={{ fontSize: 10, color: 'var(--text-3)' }}>{format(new Date(r.date), 'd MMM yyyy')}</p>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                  {settledDebts.length > 0 && (
+                    <div style={{ marginTop: 12, borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+                      <p style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', marginBottom: 6 }}>SETTLED DEBTS</p>
+                      {settledDebts.map(d => (
+                        <div key={d.id} className="flex items-center justify-between" style={{ fontSize: 12, padding: '6px 10px', marginBottom: 4, background: 'color-mix(in srgb, var(--success) 10%, transparent)', borderRadius: 6 }}>
+                          <div>
+                            <span style={{ fontWeight: 600, color: 'var(--text-2)' }}>{d.name}</span>
+                            <span className="badge" style={{ fontSize: 9, marginLeft: 6, background: 'color-mix(in srgb, var(--success) 20%, transparent)', color: 'var(--success)' }}>Paid off</span>
+                          </div>
+                          <div style={{ textAlign: 'right' }}>
+                            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-3)' }}>Original £{(d.original_balance || 0).toFixed(0)}</p>
+                            <p style={{ fontSize: 10, color: 'var(--text-3)' }}>{format(new Date(d.settled_at), 'd MMM yyyy')}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )
@@ -1834,7 +1974,7 @@ export default function FinancePage() {
               </div>
 
               <p style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Repayment history</p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 200, overflowY: 'auto' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 200, overflowY: 'auto', marginBottom: 16 }}>
                 {reps.map(r => (
                   <div key={r.id} className="flex items-center justify-between" style={{ fontSize: 12, padding: '6px 8px', background: 'var(--bg-2)', borderRadius: 6 }}>
                     <span>{format(new Date(r.date), 'd MMM yyyy')}{r.note ? ` — ${r.note}` : ''}</span>
@@ -1843,6 +1983,25 @@ export default function FinancePage() {
                 ))}
                 {reps.length === 0 && <p style={{ fontSize: 12, color: 'var(--text-3)', fontStyle: 'italic' }}>No repayments logged yet.</p>}
               </div>
+
+              {!isEditing && !d.settled_at && (
+                <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+                  <button
+                    className="btn btn-sm"
+                    style={{ background: 'color-mix(in srgb, var(--success) 15%, transparent)', color: 'var(--success)', border: '1px solid var(--success)', width: '100%' }}
+                    onClick={() => { if (window.confirm(`Mark "${d.name}" as fully settled? It will be hidden from your active debts but saved in history.`)) settleDebt(d.id) }}
+                  >
+                    ✓ Mark as settled — debt paid off
+                  </button>
+                </div>
+              )}
+              {d.settled_at && (
+                <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12, textAlign: 'center' }}>
+                  <span className="badge" style={{ background: 'color-mix(in srgb, var(--success) 20%, transparent)', color: 'var(--success)', fontSize: 11 }}>
+                    ✓ Settled {format(new Date(d.settled_at), 'd MMM yyyy')}
+                  </span>
+                </div>
+              )}
             </div>
           </div>,
           document.body
@@ -1960,16 +2119,30 @@ export default function FinancePage() {
                 </div>
               )}
 
-              <p style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Add contribution / withdrawal</p>
+              <p style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Update value</p>
+              {newInvestmentTxn.type === 'set_value' && (
+                <p style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 8 }}>
+                  Enter the new current value — the difference will be logged automatically (useful for market fluctuations).
+                </p>
+              )}
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
-                <select value={newInvestmentTxn.type} onChange={e => setNewInvestmentTxn(p => ({ ...p, type: e.target.value }))} style={{ fontSize: 12, flex: '1 1 110px' }}>
-                  <option value="contribution">Contribution</option>
+                <select value={newInvestmentTxn.type} onChange={e => setNewInvestmentTxn(p => ({ ...p, type: e.target.value }))} style={{ fontSize: 12, flex: '1 1 130px' }}>
+                  <option value="contribution">Add contribution</option>
                   <option value="withdrawal">Withdrawal</option>
+                  <option value="set_value">Set current value</option>
                 </select>
-                <input type="text" inputMode="decimal" placeholder="Amount £" value={newInvestmentTxn.amount} onChange={e => setNewInvestmentTxn(p => ({ ...p, amount: sanitizeAmountInput(e.target.value) }))} style={{ fontSize: 12, flex: '1 1 80px' }} />
+                <input
+                  type="text" inputMode="decimal"
+                  placeholder={newInvestmentTxn.type === 'set_value' ? `New value £ (was £${inv.current_value.toFixed(0)})` : 'Amount £'}
+                  value={newInvestmentTxn.amount}
+                  onChange={e => setNewInvestmentTxn(p => ({ ...p, amount: sanitizeAmountInput(e.target.value) }))}
+                  style={{ fontSize: 12, flex: '1 1 80px' }}
+                />
                 <input type="date" value={newInvestmentTxn.date} onChange={e => setNewInvestmentTxn(p => ({ ...p, date: e.target.value }))} style={{ fontSize: 12, flex: '1 1 110px' }} />
                 <input placeholder="Note (optional)" value={newInvestmentTxn.note} onChange={e => setNewInvestmentTxn(p => ({ ...p, note: e.target.value }))} style={{ fontSize: 12, flex: '2 1 120px' }} />
-                <button className="btn btn-sm btn-finance" style={{ color: '#fff' }} onClick={() => logInvestmentTxn(inv.id)}>Log {newInvestmentTxn.type === 'withdrawal' ? 'withdrawal' : 'contribution'}</button>
+                <button className="btn btn-sm btn-finance" style={{ color: '#fff' }} onClick={() => logInvestmentTxn(inv.id)}>
+                  {newInvestmentTxn.type === 'set_value' ? 'Update value' : newInvestmentTxn.type === 'withdrawal' ? 'Log withdrawal' : 'Log contribution'}
+                </button>
               </div>
 
               <p style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>Transaction history</p>
