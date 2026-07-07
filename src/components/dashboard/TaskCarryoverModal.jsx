@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
-import { X, RotateCcw, Archive, ChevronRight } from 'lucide-react'
+import { X, RotateCcw, Archive, ChevronRight, ChevronDown } from 'lucide-react'
 import useLockBodyScroll from '../../hooks/useLockBodyScroll'
 
 const DECISION_LABELS = {
@@ -15,6 +15,7 @@ export default function TaskCarryoverModal({ tasks, catColor, onConfirm, onDismi
   const [decisions, setDecisions] = useState(() =>
     Object.fromEntries(tasks.map(t => [t.id, 'carry']))
   )
+  const [expanded, setExpanded] = useState({})
 
   function setDecision(id, val) {
     setDecisions(prev => ({ ...prev, [id]: val }))
@@ -72,17 +73,30 @@ export default function TaskCarryoverModal({ tasks, catColor, onConfirm, onDismi
               const decision = decisions[t.id]
               const cc = catColor(t.category)
               return (
-                <div key={t.id} style={{ display: 'flex', gap: 10, padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
-                  {/* Coloured category stripe */}
-                  <div style={{ width: 3, borderRadius: 2, alignSelf: 'stretch', background: cc, flexShrink: 0, minHeight: 20 }} />
-                  {/* Task text + controls stacked */}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: 13, fontWeight: 500, lineHeight: 1.4, wordBreak: 'break-word' }}>{t.text}</p>
-                    {t.category && (
-                      <p style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>{t.category}</p>
+                <div key={t.id} style={{ padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
+                  {/* Single-line row: stripe + truncated text + expand + buttons */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ width: 3, borderRadius: 2, alignSelf: 'stretch', background: cc, flexShrink: 0, minHeight: 20 }} />
+                    <button
+                      onClick={() => setExpanded(p => ({ ...p, [t.id]: !p[t.id] }))}
+                      style={{ flex: 1, minWidth: 0, textAlign: 'left', background: 'none', padding: 0 }}
+                    >
+                      <p style={{
+                        fontSize: 13, fontWeight: 500, lineHeight: 1.4,
+                        ...(expanded[t.id] ? { wordBreak: 'break-word' } : { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }),
+                      }}>{t.text}</p>
+                      {t.category && (
+                        <p style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>{t.category}</p>
+                      )}
+                    </button>
+                    {/* expand toggle — only show if text might be long */}
+                    {t.text.length > 40 && (
+                      <button onClick={() => setExpanded(p => ({ ...p, [t.id]: !p[t.id] }))} style={{ flexShrink: 0, color: 'var(--text-3)', background: 'none', padding: 2 }}>
+                        <ChevronDown size={12} style={{ transform: expanded[t.id] ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
+                      </button>
                     )}
-                    {/* Decision toggles below text */}
-                    <div style={{ display: 'flex', gap: 4, marginTop: 6, flexWrap: 'wrap' }}>
+                    {/* Decision toggles inline */}
+                    <div style={{ display: 'flex', gap: 3, flexShrink: 0 }}>
                       {Object.entries(DECISION_LABELS).map(([val, { label, color, icon }]) => (
                         <button
                           key={val}
@@ -91,20 +105,42 @@ export default function TaskCarryoverModal({ tasks, catColor, onConfirm, onDismi
                           className="btn btn-xs"
                           style={{
                             fontSize: 10,
-                            display: 'flex', alignItems: 'center', gap: 3,
+                            display: 'flex', alignItems: 'center', gap: 2,
                             background: decision === val ? color : 'var(--bg-2)',
                             color: decision === val ? '#fff' : 'var(--text-3)',
                             border: `1px solid ${decision === val ? color : 'var(--border)'}`,
-                            padding: '3px 7px',
+                            padding: '3px 6px',
                             borderRadius: 6,
                             fontWeight: decision === val ? 600 : 400,
                           }}
                         >
-                          {icon} {label}
+                          {icon}
                         </button>
                       ))}
                     </div>
                   </div>
+                  {/* Expanded: show label of selected decision */}
+                  {expanded[t.id] && (
+                    <div style={{ paddingLeft: 11, marginTop: 4 }}>
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                        {Object.entries(DECISION_LABELS).map(([val, { label, color, icon }]) => (
+                          <button
+                            key={val}
+                            onClick={() => setDecision(t.id, val)}
+                            className="btn btn-xs"
+                            style={{
+                              fontSize: 10, display: 'flex', alignItems: 'center', gap: 3,
+                              background: decision === val ? color : 'var(--bg-2)',
+                              color: decision === val ? '#fff' : 'var(--text-3)',
+                              border: `1px solid ${decision === val ? color : 'var(--border)'}`,
+                              padding: '3px 8px', borderRadius: 6,
+                              fontWeight: decision === val ? 600 : 400,
+                            }}
+                          >{icon} {label}</button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )
             })}
