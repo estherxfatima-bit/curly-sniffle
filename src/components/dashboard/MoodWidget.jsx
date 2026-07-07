@@ -35,28 +35,31 @@ function MoodSparkline({ history }) {
   )
 }
 
-export default function MoodWidget() {
+export default function MoodWidget({ date }) {
   const { user } = useAuth()
   const [todayMood, setTodayMood] = useState(null)
   const [moodHistory, setMoodHistory] = useState(Array(DAYS).fill(null))
   const [saving, setSaving] = useState(false)
-  const today = format(new Date(), 'yyyy-MM-dd')
+  const viewDate = date || format(new Date(), 'yyyy-MM-dd')
+  const isToday = viewDate === format(new Date(), 'yyyy-MM-dd')
 
   useEffect(() => {
     if (!user) return
-    const days = Array.from({ length: DAYS }, (_, i) => format(subDays(new Date(), DAYS - 1 - i), 'yyyy-MM-dd'))
-    supabase.from('mood_logs').select('mood_score, log_date').eq('user_id', user.id).gte('log_date', days[0]).lte('log_date', today)
+    setTodayMood(null)
+    const refDay = new Date(viewDate + 'T12:00:00')
+    const days = Array.from({ length: DAYS }, (_, i) => format(subDays(refDay, DAYS - 1 - i), 'yyyy-MM-dd'))
+    supabase.from('mood_logs').select('mood_score, log_date').eq('user_id', user.id).gte('log_date', days[0]).lte('log_date', viewDate)
       .then(({ data }) => {
         const map = Object.fromEntries((data || []).map(r => [r.log_date, r.mood_score]))
         setMoodHistory(days.map(d => map[d] ?? null))
-        if (map[today]) setTodayMood(map[today])
+        if (map[viewDate]) setTodayMood(map[viewDate])
       })
-  }, [user, today])
+  }, [user, viewDate])
 
   async function logMood(score) {
     if (saving) return
     setSaving(true)
-    await supabase.from('mood_logs').upsert({ user_id: user.id, mood_score: score, log_date: today }, { onConflict: 'user_id,log_date' })
+    await supabase.from('mood_logs').upsert({ user_id: user.id, mood_score: score, log_date: viewDate }, { onConflict: 'user_id,log_date' })
     setTodayMood(score)
     setMoodHistory(prev => { const next = [...prev]; next[DAYS - 1] = score; return next })
     setSaving(false)
@@ -68,7 +71,7 @@ export default function MoodWidget() {
   return (
     <div className="card card-personal card-sm">
       <div className="flex items-center justify-between mb-3">
-        <p className="mono">Today's mood</p>
+        <p className="mono">{isToday ? "Today's mood" : format(new Date(viewDate + 'T12:00:00'), 'd MMM') + ' mood'}</p>
         {avg !== null && filledDays > 1 && (
           <p style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-3)' }}>
             {avg.toFixed(1)} avg · {filledDays}d

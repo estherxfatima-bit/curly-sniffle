@@ -72,38 +72,38 @@ export default function TaskCarryoverModal({ tasks, catColor, onConfirm, onDismi
               const decision = decisions[t.id]
               const cc = catColor(t.category)
               return (
-                <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div key={t.id} style={{ display: 'flex', gap: 10, padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
                   {/* Coloured category stripe */}
-                  <div style={{ width: 3, borderRadius: 2, alignSelf: 'stretch', background: cc, flexShrink: 0 }} />
-                  {/* Task text */}
+                  <div style={{ width: 3, borderRadius: 2, alignSelf: 'stretch', background: cc, flexShrink: 0, minHeight: 20 }} />
+                  {/* Task text + controls stacked */}
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <p style={{ fontSize: 13, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.text}</p>
+                    <p style={{ fontSize: 13, fontWeight: 500, lineHeight: 1.4, wordBreak: 'break-word' }}>{t.text}</p>
                     {t.category && (
-                      <p style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>{t.category}</p>
+                      <p style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>{t.category}</p>
                     )}
-                  </div>
-                  {/* Decision toggles */}
-                  <div className="flex items-center gap-1" style={{ flexShrink: 0 }}>
-                    {Object.entries(DECISION_LABELS).map(([val, { label, color, icon }]) => (
-                      <button
-                        key={val}
-                        onClick={() => setDecision(t.id, val)}
-                        title={label}
-                        className="btn btn-xs"
-                        style={{
-                          fontSize: 10,
-                          display: 'flex', alignItems: 'center', gap: 3,
-                          background: decision === val ? color : 'var(--bg-2)',
-                          color: decision === val ? '#fff' : 'var(--text-3)',
-                          border: `1px solid ${decision === val ? color : 'var(--border)'}`,
-                          padding: '3px 7px',
-                          borderRadius: 6,
-                          fontWeight: decision === val ? 600 : 400,
-                        }}
-                      >
-                        {icon} {label}
-                      </button>
-                    ))}
+                    {/* Decision toggles below text */}
+                    <div style={{ display: 'flex', gap: 4, marginTop: 6, flexWrap: 'wrap' }}>
+                      {Object.entries(DECISION_LABELS).map(([val, { label, color, icon }]) => (
+                        <button
+                          key={val}
+                          onClick={() => setDecision(t.id, val)}
+                          title={label}
+                          className="btn btn-xs"
+                          style={{
+                            fontSize: 10,
+                            display: 'flex', alignItems: 'center', gap: 3,
+                            background: decision === val ? color : 'var(--bg-2)',
+                            color: decision === val ? '#fff' : 'var(--text-3)',
+                            border: `1px solid ${decision === val ? color : 'var(--border)'}`,
+                            padding: '3px 7px',
+                            borderRadius: 6,
+                            fontWeight: decision === val ? 600 : 400,
+                          }}
+                        >
+                          {icon} {label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
               )

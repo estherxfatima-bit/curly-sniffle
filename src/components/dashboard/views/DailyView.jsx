@@ -144,7 +144,7 @@ export default function DailyView({
 
     mood: (
       <div className="card card-wellness">
-        <MoodWidget />
+        <MoodWidget date={today} />
       </div>
     ),
 
