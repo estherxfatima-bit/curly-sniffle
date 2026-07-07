@@ -249,7 +249,24 @@ export default function PartnersPage() {
       due_date: assignDue || null,
       is_joint: assignJoint,
     }).select().single()
-    if (data) setAssignments(prev => [data, ...prev])
+    if (data) {
+      setAssignments(prev => [data, ...prev])
+      // Fire in-app notification + push to the recipient (best-effort)
+      const { data: { session } } = await supabase.auth.getSession()
+      const fromName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'Your partner'
+      fetch('/api/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token || ''}` },
+        body: JSON.stringify({
+          to_user_id: toUserId,
+          type: 'task_assigned',
+          title: `${fromName} assigned you a task`,
+          body: assignText.trim(),
+          link: '/partners',
+          source_id: `task_assigned:${data.id}`,
+        }),
+      }).catch(() => {}) // non-fatal
+    }
     setAssignText(''); setAssignNote(''); setAssignDue(''); setAssignJoint(false)
     setShowAssignForm(null)
   }

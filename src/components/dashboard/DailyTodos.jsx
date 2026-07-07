@@ -710,30 +710,52 @@ export default function DailyTodos({ compact = false, date = null, onDateChange 
           ))}
         </div>
 
-        {/* Pending partner assignments */}
+        {/* Pending partner assignments — prominent alert card */}
         {pendingAssignments.length > 0 && (
           <div style={{
-            marginBottom: 16,
+            marginBottom: 18,
             borderRadius: 'var(--radius)',
-            border: '1.5px solid var(--career)',
-            background: 'var(--career-tint)',
+            border: '2px solid var(--career)',
+            background: 'var(--card-bg)',
+            boxShadow: '0 0 0 4px var(--career-tint)',
             overflow: 'hidden',
           }}>
-            <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--career)', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <ClipboardList size={13} color="var(--career)" />
-              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--career)', fontFamily: 'var(--font-mono)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                {pendingAssignments.length} task{pendingAssignments.length !== 1 ? 's' : ''} assigned to you
+            {/* Header */}
+            <div style={{
+              padding: '10px 14px',
+              background: 'var(--career)',
+              display: 'flex', alignItems: 'center', gap: 8,
+            }}>
+              {/* Pulsing dot */}
+              <span style={{ position: 'relative', display: 'inline-flex', flexShrink: 0 }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#fff', display: 'block' }} />
+                <span style={{
+                  position: 'absolute', inset: 0, borderRadius: '50%', background: 'rgba(255,255,255,0.5)',
+                  animation: 'ping 1.5s cubic-bezier(0,0,0.2,1) infinite',
+                }} />
+              </span>
+              <ClipboardList size={14} color="#fff" />
+              <span style={{ fontSize: 12, fontWeight: 700, color: '#fff', flex: 1 }}>
+                {pendingAssignments.length === 1
+                  ? '1 task assigned to you — waiting for your response'
+                  : `${pendingAssignments.length} tasks assigned to you — waiting for your response`}
               </span>
             </div>
+
+            {/* Assignment rows */}
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               {pendingAssignments.map((a, i) => {
                 const fromName = a.profiles?.display_name || a.profiles?.email?.split('@')[0] || 'Partner'
                 const isDecliningSelf = decliningId === a.id
                 return (
-                  <div key={a.id} style={{ padding: '10px 12px', borderBottom: i < pendingAssignments.length - 1 ? '1px solid var(--career)' : 'none', opacity: 0.9 }}>
-                    <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text)', marginBottom: 2 }}>{a.text}</div>
-                    {a.note && <div style={{ fontSize: 11, color: 'var(--text-3)', fontStyle: 'italic', marginBottom: 4 }}>{a.note}</div>}
-                    <div style={{ fontSize: 10, color: 'var(--career)', fontFamily: 'var(--font-mono)', marginBottom: 6 }}>
+                  <div key={a.id} style={{
+                    padding: '12px 14px',
+                    borderBottom: i < pendingAssignments.length - 1 ? '1px solid var(--border)' : 'none',
+                    background: i % 2 === 0 ? 'var(--card-bg)' : 'var(--bg-2)',
+                  }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)', marginBottom: 2 }}>{a.text}</div>
+                    {a.note && <div style={{ fontSize: 12, color: 'var(--text-3)', fontStyle: 'italic', marginBottom: 4 }}>{a.note}</div>}
+                    <div style={{ fontSize: 11, color: 'var(--career)', fontFamily: 'var(--font-mono)', marginBottom: 8 }}>
                       from {fromName}{a.due_date ? ` · due ${a.due_date}` : ''}
                     </div>
                     {isDecliningSelf ? (
@@ -743,16 +765,28 @@ export default function DailyTodos({ compact = false, date = null, onDateChange 
                           value={declineReason}
                           onChange={e => setDeclineReason(e.target.value)}
                           onKeyDown={e => { if (e.key === 'Enter') declineAssignment(a.id, declineReason); if (e.key === 'Escape') { setDecliningId(null); setDeclineReason('') } }}
-                          placeholder="Reason (optional)…"
-                          style={{ fontSize: 12, flex: 1, padding: '3px 8px' }}
+                          placeholder="Reason for declining (optional)…"
+                          style={{ fontSize: 12, flex: 1, padding: '4px 8px' }}
                         />
                         <button className="btn btn-xs" style={{ background: '#ef4444', color: '#fff', flexShrink: 0 }} onClick={() => declineAssignment(a.id, declineReason)}>Send</button>
-                        <button className="btn btn-xs btn-ghost" style={{ flexShrink: 0 }} onClick={() => { setDecliningId(null); setDeclineReason('') }}>✕</button>
+                        <button className="btn btn-xs btn-ghost" style={{ flexShrink: 0 }} onClick={() => { setDecliningId(null); setDeclineReason('') }}>Cancel</button>
                       </div>
                     ) : (
                       <div className="flex gap-2">
-                        <button className="btn btn-xs btn-career" style={{ color: '#fff' }} onClick={() => acceptAssignment(a)}>✓ Accept</button>
-                        <button className="btn btn-xs btn-ghost" style={{ color: '#ef4444' }} onClick={() => { setDecliningId(a.id); setDeclineReason('') }}>Decline</button>
+                        <button
+                          className="btn btn-sm btn-career"
+                          style={{ color: '#fff', fontWeight: 600 }}
+                          onClick={() => acceptAssignment(a)}
+                        >
+                          ✓ Accept & add to today
+                        </button>
+                        <button
+                          className="btn btn-sm btn-ghost"
+                          style={{ color: '#ef4444' }}
+                          onClick={() => { setDecliningId(a.id); setDeclineReason('') }}
+                        >
+                          Decline
+                        </button>
                       </div>
                     )}
                   </div>

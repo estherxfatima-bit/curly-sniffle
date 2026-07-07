@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { formatDistanceToNow } from 'date-fns'
-import { Bell, X, MessageSquare, Flame, CalendarDays, Info, Sun, Moon, ListTodo, Users } from 'lucide-react'
+import { Bell, X, MessageSquare, Flame, CalendarDays, Info, Sun, Moon, ListTodo, Users, ClipboardList } from 'lucide-react'
 import { useNotifications } from '../../hooks/useNotifications'
 import useLockBodyScroll from '../../hooks/useLockBodyScroll'
 
@@ -13,7 +13,8 @@ const TYPE_ICON = {
   morning_reminder: { icon: Sun,           color: 'var(--creative)' },
   reflection:           { icon: Moon,    color: 'var(--wellness)' },
   plan_tomorrow:        { icon: ListTodo, color: 'var(--career)'   },
-  partner_nudge_prompt: { icon: Users,   color: 'var(--personal)' },
+  partner_nudge_prompt: { icon: Users,          color: 'var(--personal)' },
+  task_assigned:        { icon: ClipboardList,  color: 'var(--career)'   },
 }
 
 export default function NotificationsBell({ variant = 'sidebar' }) {
