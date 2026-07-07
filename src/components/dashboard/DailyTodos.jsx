@@ -121,13 +121,24 @@ export default function DailyTodos({ compact = false, date = null, onDateChange 
   }
 
   async function loadPendingAssignments() {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('partner_assignments')
-      .select('*, profiles!partner_assignments_from_user_id_fkey(display_name, email)')
+      .select('*')
       .eq('to_user_id', user.id)
       .eq('status', 'pending')
       .order('created_at', { ascending: false })
-    setPendingAssignments(data || [])
+    if (error) { console.warn('[DailyTodos] loadPendingAssignments error', error); return }
+    if (!data?.length) { setPendingAssignments([]); return }
+
+    // Fetch sender display names in one query
+    const fromIds = [...new Set(data.map(r => r.from_user_id))]
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, display_name, email')
+      .in('id', fromIds)
+    const profileMap = Object.fromEntries((profiles || []).map(p => [p.id, p]))
+
+    setPendingAssignments(data.map(r => ({ ...r, senderProfile: profileMap[r.from_user_id] || null })))
   }
 
   async function acceptAssignment(a) {
@@ -745,7 +756,7 @@ export default function DailyTodos({ compact = false, date = null, onDateChange 
             {/* Assignment rows */}
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               {pendingAssignments.map((a, i) => {
-                const fromName = a.profiles?.display_name || a.profiles?.email?.split('@')[0] || 'Partner'
+                const fromName = a.senderProfile?.display_name || a.senderProfile?.email?.split('@')[0] || 'Your partner'
                 const isDecliningSelf = decliningId === a.id
                 return (
                   <div key={a.id} style={{
