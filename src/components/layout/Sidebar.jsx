@@ -17,6 +17,7 @@ const navItems = [
   { to: '/content',   label: 'Content',     icon: Film,            section: 'creative' },
   { to: '/finance',   label: 'Finance',     icon: PiggyBank,       section: 'finance'  },
   { to: '/wellness',  label: 'Wellness',    icon: Heart,           section: 'wellness' },
+  { to: '/reflections', label: 'Reflections', icon: Moon,          section: 'wellness' },
   { to: '/books',     label: 'Books',       icon: BookOpen,        section: 'creative' },
   { to: '/learning',  label: 'Learning',    icon: GraduationCap,   section: 'learning' },
   { to: '/bucket-list', label: 'Bucket List', icon: ListChecks,    section: 'personal' },
