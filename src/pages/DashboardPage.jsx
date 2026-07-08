@@ -13,7 +13,7 @@ import DailyView, { DEFAULT_ORDER as DAILY_DEFAULT } from '../components/dashboa
 import WeeklyView, { DEFAULT_ORDER as WEEKLY_DEFAULT } from '../components/dashboard/views/WeeklyView'
 import MonthlyView, { DEFAULT_ORDER as MONTHLY_DEFAULT } from '../components/dashboard/views/MonthlyView'
 import QuarterlyView, { DEFAULT_ORDER as QUARTERLY_DEFAULT } from '../components/dashboard/views/QuarterlyView'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, Pencil, Check as CheckIcon } from 'lucide-react'
 import SpendingReminderBanner from '../components/finance/SpendingReminderBanner'
 import DashboardFab from '../components/dashboard/DashboardFab'
@@ -108,8 +108,12 @@ export default function DashboardPage() {
   const [confetti, setConfetti] = useState(false)
   const prevMomentum = useRef(0)
 
-  // Daily reflection deep link (?reflect=1)
-  const [showReflection, setShowReflection] = useState(() => new URLSearchParams(window.location.search).get('reflect') === '1')
+  // Daily reflection deep link (?reflect=1) — reactive to navigation
+  const [searchParams, setSearchParams] = useSearchParams()
+  const showReflection = searchParams.get('reflect') === '1'
+  function setShowReflection(val) {
+    if (!val) { const p = new URLSearchParams(searchParams); p.delete('reflect'); setSearchParams(p, { replace: true }) }
+  }
 
   // ── data loading ───────────────────────────────────────────────────────────
   useEffect(() => { if (user) loadStatic() }, [user])
@@ -526,12 +530,7 @@ export default function DashboardPage() {
       />
 
       {showReflection && (
-        <ReflectionModal onClose={() => {
-          setShowReflection(false)
-          const url = new URL(window.location.href)
-          url.searchParams.delete('reflect')
-          window.history.replaceState({}, '', url.toString())
-        }} />
+        <ReflectionModal onClose={() => setShowReflection(false)} />
       )}
 
       <DashboardFab onAddExpense={addFinanceVariable} />

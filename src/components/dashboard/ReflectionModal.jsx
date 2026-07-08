@@ -4,7 +4,7 @@ import { format, addDays } from 'date-fns'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
 import useLockBodyScroll from '../../hooks/useLockBodyScroll'
-import { X, RefreshCw } from 'lucide-react'
+import { RefreshCw } from 'lucide-react'
 
 const REFLECTION_PROMPTS = [
   "How did today go?",
@@ -66,11 +66,11 @@ export default function ReflectionModal({ onClose }) {
   }
 
   return createPortal(
-    <div style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.35)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={onClose}>
-      <div className="card" style={{ width: 440, maxHeight: '85vh', overflow: 'auto', padding: 18 }} onClick={e => e.stopPropagation()}>
+    <div style={{ position: 'fixed', inset: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.35)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div className="card" style={{ width: 440, maxHeight: '85vh', overflow: 'auto', padding: 18 }}>
         <div className="flex items-center justify-between mb-3">
           <h3 style={{ fontSize: '0.95rem' }}>Daily reflection</h3>
-          <button className="btn-icon" onClick={onClose}><X size={15} /></button>
+          <button className="btn btn-xs btn-ghost" onClick={onClose} style={{ fontSize: 11, color: 'var(--text-3)' }}>Skip</button>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
