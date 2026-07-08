@@ -196,7 +196,7 @@ function AIAnalysisPanel({ entries }) {
   )
 }
 
-export default function ReflectionsPage() {
+export default function ReflectionsPage({ embedded = false }) {
   const { user } = useAuth()
   const [entries, setEntries] = useState([])
   const [loading, setLoading] = useState(true)
@@ -223,33 +223,40 @@ export default function ReflectionsPage() {
   const entriesWithContent = entries.filter(e => e.reflection_text || e.day_rating || e.tomorrow_priorities?.length)
   const ratedEntries = [...entriesWithContent].reverse()
 
+  const rangeSelector = (
+    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+      {RANGE_OPTIONS.map(o => (
+        <button
+          key={o.days}
+          onClick={() => setRangeDays(o.days)}
+          className="btn btn-xs"
+          style={{
+            background: rangeDays === o.days ? 'var(--wellness)' : 'var(--bg-2)',
+            color: rangeDays === o.days ? '#fff' : 'var(--text-3)',
+            border: `1px solid ${rangeDays === o.days ? 'var(--wellness)' : 'var(--border)'}`,
+          }}
+        >{o.label}</button>
+      ))}
+    </div>
+  )
+
   return (
     <div>
-      <div className="page-header header-wellness mb-6">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1>Reflections</h1>
-            <p>Your daily journal — thoughts, patterns, and how your days feel</p>
+      {!embedded && (
+        <div className="page-header header-wellness mb-6">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h1>Reflections</h1>
+              <p>Your daily journal — thoughts, patterns, and how your days feel</p>
+            </div>
+            {rangeSelector}
           </div>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-            {RANGE_OPTIONS.map(o => (
-              <button
-                key={o.days}
-                onClick={() => setRangeDays(o.days)}
-                className="btn btn-xs"
-                style={{
-                  background: rangeDays === o.days ? 'var(--wellness)' : 'var(--bg-2)',
-                  color: rangeDays === o.days ? '#fff' : 'var(--text-3)',
-                  border: `1px solid ${rangeDays === o.days ? 'var(--wellness)' : 'var(--border)'}`,
-                }}
-              >{o.label}</button>
-            ))}
+          <div className="page-header-decoration" style={{ color: 'var(--wellness)' }}>
+            <Moon size={48} opacity={0.15} />
           </div>
         </div>
-        <div className="page-header-decoration" style={{ color: 'var(--wellness)' }}>
-          <Moon size={48} opacity={0.15} />
-        </div>
-      </div>
+      )}
+      {embedded && <div style={{ marginBottom: 20 }}>{rangeSelector}</div>}
 
       {loading ? (
         <p style={{ textAlign: 'center', padding: 40, color: 'var(--text-3)' }}>Loading…</p>

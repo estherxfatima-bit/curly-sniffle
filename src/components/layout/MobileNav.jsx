@@ -19,8 +19,7 @@ const overflowItems = [
   { to: '/learning',  label: 'Learning' },
   { to: '/insights',  label: 'Insights' },
   { to: '/partners', label: 'Partners' },
-  { to: '/ai-log',   label: 'AI Log'   },
-  { to: '/reflections', label: 'Reflections' },
+  { to: '/ai-log',     label: 'AI Log'       },
   { to: '/settings', label: 'Settings' },
 ]
 

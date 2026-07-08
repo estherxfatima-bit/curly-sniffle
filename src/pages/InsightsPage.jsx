@@ -7,6 +7,7 @@ import {
   CartesianGrid, ResponsiveContainer, Cell, Legend,
 } from 'recharts'
 import { Link } from 'react-router-dom'
+import ReflectionsPage from './ReflectionsPage'
 import { SortableCard, DraggableCardList } from '../components/dashboard/DraggableCard'
 import AddWidgetMenu from '../components/dashboard/AddWidgetMenu'
 import ArcRing from '../components/ui/ArcRing'
@@ -127,6 +128,7 @@ export default function InsightsPage() {
   // Card layout
   const [cardOrder, setCardOrder] = useState(null)
   const [editing, setEditing] = useState(false)
+  const [activeTab, setActiveTab] = useState('insights')
 
   useEffect(() => { if (user) load() }, [user])
 
@@ -756,41 +758,68 @@ export default function InsightsPage() {
             <h1>Insights</h1>
             <p>Patterns across habits, tasks, mood, content, and finances</p>
           </div>
-          <button
-            className={`btn btn-sm ${editing ? 'btn-career' : 'btn-ghost'}`}
-            style={editing ? { color: '#fff' } : {}}
-            onClick={() => setEditing(v => !v)}
-          >
-            {editing ? <><CheckIcon size={13} /> Done</> : <><Pencil size={13} /> Edit layout</>}
-          </button>
+          {activeTab === 'insights' && (
+            <button
+              className={`btn btn-sm ${editing ? 'btn-career' : 'btn-ghost'}`}
+              style={editing ? { color: '#fff' } : {}}
+              onClick={() => setEditing(v => !v)}
+            >
+              {editing ? <><CheckIcon size={13} /> Done</> : <><Pencil size={13} /> Edit layout</>}
+            </button>
+          )}
         </div>
         <div className="page-header-decoration" style={{ color: 'var(--career)' }}><InsightsDecoration /></div>
       </div>
 
-      {/* Period view switcher + navigation */}
-      <div className="mb-6">
-        <PeriodNav activeView={activeView} onViewChange={setActiveView} refDate={refDate} onRefDateChange={setRefDate} accentColor="var(--career)" />
+      {/* Tab switcher */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 24, borderBottom: '1px solid var(--border)', paddingBottom: 0 }}>
+        {[{ id: 'insights', label: 'Charts' }, { id: 'reflections', label: 'Reflections' }].map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            style={{
+              padding: '8px 16px',
+              fontSize: 13, fontWeight: activeTab === tab.id ? 600 : 400,
+              color: activeTab === tab.id ? 'var(--career)' : 'var(--text-3)',
+              background: 'none',
+              borderBottom: `2px solid ${activeTab === tab.id ? 'var(--career)' : 'transparent'}`,
+              marginBottom: -1,
+              transition: 'all 0.15s',
+            }}
+          >{tab.label}</button>
+        ))}
       </div>
 
-      {editing && (
-        <div className="mb-4">
-          <AddWidgetMenu available={available} onAdd={addCard} />
-        </div>
+      {activeTab === 'reflections' ? (
+        <ReflectionsPage embedded />
+      ) : (
+        <>
+          {/* Period view switcher + navigation */}
+          <div className="mb-6">
+            <PeriodNav activeView={activeView} onViewChange={setActiveView} refDate={refDate} onRefDateChange={setRefDate} accentColor="var(--career)" />
+          </div>
+
+          {editing && (
+            <div className="mb-4">
+              <AddWidgetMenu available={available} onAdd={addCard} />
+            </div>
+          )}
+          <DraggableCardList cardOrder={order} onReorder={saveCardOrder}>
+            {order.map(({ id, size }) => (
+              <SortableCard
+                key={id}
+                id={id}
+                size={size}
+                editing={editing}
+                onResize={s => resizeCard(id, s)}
+                onRemove={() => removeCard(id)}
+              >
+                {CARDS[id] || null}
+              </SortableCard>
+            ))}
+          </DraggableCardList>
+        </>
       )}
-      <DraggableCardList cardOrder={order} onReorder={saveCardOrder}>
-        {order.map(({ id, size }) => (
-          <SortableCard
-            key={id}
-            id={id}
-            size={size}
-            editing={editing}
-            onResize={s => resizeCard(id, s)}
-            onRemove={() => removeCard(id)}
-          >
-            {CARDS[id] || null}
-          </SortableCard>
-        ))}
-      </DraggableCardList>
     </div>
   )
 }
