@@ -5,11 +5,13 @@ import { useAuth } from '../../hooks/useAuth'
 import { generatePlan } from '../../lib/aiLog'
 import { parseSuggestedTasks, insertSuggestedTask } from '../../lib/suggestedTasks'
 import { format, startOfWeek, subWeeks, subDays } from 'date-fns'
-import { X, Send, Sparkles, Plus, ChevronDown, Check } from 'lucide-react'
+import { X, Send, Sparkles, Plus, ChevronDown, Check, RotateCcw } from 'lucide-react'
 import { getCurrentQuarter } from '../../lib/constants'
 import PriorityDot from '../shared/PriorityDot'
 import FormattedAiText from '../shared/FormattedAiText'
 import useLockBodyScroll from '../../hooks/useLockBodyScroll'
+
+const STORAGE_KEY = 'aiPanel_lastConversation'
 
 const QUICK_PROMPTS = [
   "What should I focus on today?",
@@ -31,13 +33,30 @@ export default function AIPlanningPanel({ onClose }) {
   const [addedTasks, setAddedTasks] = useState(new Set())
   const [recentEntries, setRecentEntries] = useState([])
   const [context, setContext] = useState(null)
+  const [savedConversation, setSavedConversation] = useState(null) // last session's messages
   const textareaRef = useRef(null)
   const bottomRef = useRef(null)
 
   useEffect(() => {
     if (user) { loadRecentEntries(); loadContext() }
+    // Load previous conversation from storage to offer resume
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY)
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (parsed?.messages?.length > 0) setSavedConversation(parsed)
+      }
+    } catch {}
     textareaRef.current?.focus()
   }, [user])
+
+  // Persist conversation whenever messages change
+  useEffect(() => {
+    if (messages.length === 0) return
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ messages, savedAt: new Date().toISOString() }))
+    } catch {}
+  }, [messages])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -131,6 +150,7 @@ export default function AIPlanningPanel({ onClose }) {
     if (!q || loading || !context) return
     setLoading(true)
     setQuestion('')
+    setSavedConversation(null) // clear resume prompt once a new message is sent
     const newMessages = [...messages, { role: 'user', text: q }]
     setMessages(newMessages)
     try {
@@ -212,6 +232,36 @@ export default function AIPlanningPanel({ onClose }) {
         {/* Quick-start chips — only show when no conversation yet */}
         {messages.length === 0 && (
           <div>
+            {savedConversation && (
+              <div style={{ marginBottom: 16, padding: '10px 14px', background: 'var(--bg-2)', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
+                <p className="mono mb-2" style={{ fontSize: 10 }}>Previous chat</p>
+                <p style={{ fontSize: 12, color: 'var(--text-3)', marginBottom: 8 }}>
+                  {savedConversation.messages[0]?.text?.slice(0, 80)}{savedConversation.messages[0]?.text?.length > 80 ? '…' : ''}
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    className="btn btn-sm btn-career"
+                    style={{ color: '#fff', fontSize: 11 }}
+                    onClick={() => {
+                      setMessages(savedConversation.messages)
+                      setSavedConversation(null)
+                    }}
+                  >
+                    <RotateCcw size={11} /> Resume
+                  </button>
+                  <button
+                    className="btn btn-sm btn-ghost"
+                    style={{ fontSize: 11 }}
+                    onClick={() => {
+                      localStorage.removeItem(STORAGE_KEY)
+                      setSavedConversation(null)
+                    }}
+                  >
+                    Discard
+                  </button>
+                </div>
+              </div>
+            )}
             <p className="mono mb-2" style={{ fontSize: 10 }}>Quick start</p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {QUICK_PROMPTS.map(p => (

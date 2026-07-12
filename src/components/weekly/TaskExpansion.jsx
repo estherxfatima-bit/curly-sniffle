@@ -47,6 +47,12 @@ export default function TaskExpansion({ task, goals, onUpdateField, onToggleSubt
       {/* Notes — shown first so it's the first thing visible on expand */}
       <div>
         <p className="mono mb-2" style={{ fontSize: 10 }}>Notes</p>
+        {task.prev_notes && (
+          <div style={{ marginBottom: 8, padding: '6px 10px', background: 'var(--bg-3)', borderRadius: 6, borderLeft: '2px solid var(--border)' }}>
+            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Last week</p>
+            <p style={{ fontSize: 12, color: 'var(--text-3)', lineHeight: 1.5, fontStyle: 'italic' }}>{task.prev_notes}</p>
+          </div>
+        )}
         {locked ? (
           <p style={{ fontSize: 12, color: notes ? 'var(--text-2)' : 'var(--text-3)', fontStyle: notes ? 'normal' : 'italic', lineHeight: 1.5 }}>
             {notes || (task.complete ? 'No notes added.' : 'No notes yet.')}

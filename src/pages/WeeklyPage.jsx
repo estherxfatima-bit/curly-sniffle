@@ -291,7 +291,7 @@ export default function WeeklyPage() {
     await supabase.from('weekly_tasks').insert({
       user_id: user.id, week_start: nextWeekStart, area: task.area, action: task.action,
       frequency: task.frequency, specific_task: task.specific_task, goal_id: task.goal_id,
-      complete: false, carried_forward: true, notes: task.notes, subtasks: task.subtasks, time_allocation: task.time_allocation,
+      complete: false, carried_forward: true, notes: '', prev_notes: task.notes || null, subtasks: task.subtasks, time_allocation: task.time_allocation,
     })
     await supabase.from('weekly_tasks').update({ archived: true }).eq('id', task.id)
     setTasks(prev => prev.filter(t => t.id !== task.id))
@@ -309,7 +309,7 @@ export default function WeeklyPage() {
     if (!tasksToKeep.length) return
     const nextWeekStart = format(addWeeks(weekStart, 1), 'yyyy-MM-dd')
     await supabase.from('weekly_tasks').insert(
-      tasksToKeep.map(t => ({ user_id: user.id, week_start: nextWeekStart, area: t.area, action: t.action, frequency: t.frequency, specific_task: t.specific_task, goal_id: t.goal_id, complete: false, carried_forward: true, notes: t.notes, subtasks: t.subtasks, time_allocation: t.time_allocation }))
+      tasksToKeep.map(t => ({ user_id: user.id, week_start: nextWeekStart, area: t.area, action: t.action, frequency: t.frequency, specific_task: t.specific_task, goal_id: t.goal_id, complete: false, carried_forward: true, notes: '', prev_notes: t.notes || null, subtasks: t.subtasks, time_allocation: t.time_allocation }))
     )
   }
 
