@@ -27,7 +27,7 @@ export default function GoalModal({
     year: goal?.year || defaults?.year || new Date().getFullYear(),
     parent_goal_id: goal?.parent_goal_id || '',
     priority_level: goal?.priority_level || '',
-    tracking_type: goal?.tracking_type || (isYearly ? 'theme' : 'milestone'),
+    tracking_type: (goal?.tracking_type === 'tasks' ? 'milestone' : goal?.tracking_type) || (isYearly ? 'theme' : 'milestone'),
     metric_current: goal?.metric_current ?? '',
     metric_target: goal?.metric_target ?? '',
     metric_unit: goal?.metric_unit || '',

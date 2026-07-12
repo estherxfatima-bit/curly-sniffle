@@ -40,7 +40,7 @@ export default function GoalCard({
   const [linking, setLinking] = useState(false)
 
   const isYearly = goal.quarter === 'Year'
-  const trackingType = goal.tracking_type
+  const trackingType = goal.tracking_type === 'tasks' ? 'milestone' : goal.tracking_type
   const isMetric = trackingType === 'metric'
   const isTheme = trackingType === 'theme'
   const lastUpdated = goal.updated_at || goal.created_at
