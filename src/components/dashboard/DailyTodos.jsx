@@ -57,6 +57,7 @@ export default function DailyTodos({ compact = false, date = null, onDateChange 
   const [newCatInput, setNewCatInput] = useState('')
   const [showAddCat,  setShowAddCat]  = useState(false)
   const [colorPickerCat, setColorPickerCat] = useState(null)
+  const [hoveredCat, setHoveredCat] = useState(null)
   const [goals, setGoals] = useState([])
   const [milestones, setMilestones] = useState([])
   const [milestoneTasks, setMilestoneTasks] = useState([])
@@ -523,6 +524,13 @@ export default function DailyTodos({ compact = false, date = null, onDateChange 
     setShowAddCat(false)
   }
 
+  async function deleteCategory(name) {
+    setCategories(prev => prev.filter(c => c !== name))
+    setCategoryColors(prev => { const n = { ...prev }; delete n[name]; return n })
+    if (categoryFilter === name) setCategoryFilter('')
+    await supabase.from('todo_categories').delete().eq('user_id', user.id).eq('name', name)
+  }
+
   const allCategories = [...new Set([...categories, ...todos.map(t => t.category).filter(Boolean)])]
 
   // Backfill: any category in use (typed before this feature existed) that has no colour
@@ -664,7 +672,8 @@ export default function DailyTodos({ compact = false, date = null, onDateChange 
             style={!categoryFilter ? { color: '#fff' } : {}}
           >All</button>
           {allCategories.map(c => (
-            <div key={c} style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+            <div key={c} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 2 }}
+              onMouseEnter={() => setHoveredCat(c)} onMouseLeave={() => setHoveredCat(null)}>
               <button onClick={() => setCategoryFilter(categoryFilter === c ? '' : c)}
                 className={`btn btn-xs ${categoryFilter === c ? '' : 'btn-ghost'}`}
                 style={{
@@ -683,6 +692,13 @@ export default function DailyTodos({ compact = false, date = null, onDateChange 
                 />
                 {c}
               </button>
+              {hoveredCat === c && (
+                <button
+                  onClick={e => { e.stopPropagation(); deleteCategory(c) }}
+                  title={`Delete "${c}" category`}
+                  style={{ background: 'none', padding: '1px 2px', color: 'var(--text-3)', lineHeight: 1, fontSize: 10, flexShrink: 0 }}
+                >✕</button>
+              )}
               {colorPickerCat === c && (
                 <CategoryColorPicker
                   current={catColor(c)}

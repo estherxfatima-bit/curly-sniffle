@@ -115,6 +115,41 @@ export default function DashboardPage() {
     if (!val) { const p = new URLSearchParams(searchParams); p.delete('reflect'); setSearchParams(p, { replace: true }) }
   }
 
+  // Auto-show reflection after the user's configured reflection time if not yet done today
+  useEffect(() => {
+    if (!user || showReflection) return
+    let timer
+    async function checkAndSchedule() {
+      const { data: prefs } = await supabase.from('user_preferences')
+        .select('reflection_enabled, reflection_time').eq('user_id', user.id).maybeSingle()
+      if (!prefs?.reflection_enabled) return
+      const [hh, mm] = (prefs.reflection_time || '20:00').split(':').map(Number)
+      const { data: existing } = await supabase.from('daily_reflections')
+        .select('date').eq('user_id', user.id).eq('date', format(new Date(), 'yyyy-MM-dd')).maybeSingle()
+      if (existing) return // already done today
+
+      function triggerIfTime() {
+        const now = new Date()
+        const triggerMs = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hh, mm, 0).getTime()
+        const msUntil = triggerMs - now.getTime()
+        if (msUntil <= 0) {
+          // Past the trigger time — show immediately
+          const p = new URLSearchParams(window.location.search); p.set('reflect', '1')
+          setSearchParams(p, { replace: true })
+        } else {
+          // Schedule for the trigger time
+          timer = setTimeout(() => {
+            const p = new URLSearchParams(window.location.search); p.set('reflect', '1')
+            setSearchParams(p, { replace: true })
+          }, msUntil)
+        }
+      }
+      triggerIfTime()
+    }
+    checkAndSchedule()
+    return () => clearTimeout(timer)
+  }, [user])
+
   // ── data loading ───────────────────────────────────────────────────────────
   useEffect(() => { if (user) loadStatic() }, [user])
   useEffect(() => { if (user) loadPeriod() }, [user, today, weekStart])
