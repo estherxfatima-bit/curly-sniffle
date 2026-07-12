@@ -276,7 +276,6 @@ export default function GoalsPage() {
                   <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
                     {(() => {
                       const yearlyGoals = yearGoals.filter(g => g.quarter === 'Year')
-                      if (!yearlyGoals.length) return null
                       return (
                         <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14 }}>
                           <div className="flex items-center justify-between mb-2">
@@ -289,6 +288,9 @@ export default function GoalsPage() {
                               <Plus size={12} />
                             </button>
                           </div>
+                          {!yearlyGoals.length && (
+                            <p style={{ fontSize: 13, color: 'var(--text-3)', fontStyle: 'italic', marginTop: 4 }}>No yearly goals yet — add one with the + above.</p>
+                          )}
                           <div className="grid-2 mt-1">
                             {GOAL_CATEGORIES.map(cat => {
                               const catGoals = visibleSorted(yearlyGoals.filter(g => g.category === cat))

@@ -33,6 +33,7 @@ export default function GoalModal({
     metric_unit: goal?.metric_unit || '',
   })
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState('')
   const [milestoneTitle, setMilestoneTitle] = useState('')
   const [milestoneDate, setMilestoneDate] = useState('')
   const [taskText, setTaskText] = useState({}) // milestoneId -> draft text
@@ -55,6 +56,7 @@ export default function GoalModal({
   async function save() {
     if (!form.primary_goal.trim()) return
     setSaving(true)
+    setSaveError('')
     const level = form.quarter === 'Year' ? 'yearly' : 'quarterly'
     const payload = {
       category: form.category,
@@ -77,7 +79,8 @@ export default function GoalModal({
       ? await supabase.from('goals').insert({ ...payload, user_id: user.id }).select().single()
       : await supabase.from('goals').update(payload).eq('id', goal.id).select().single()
     setSaving(false)
-    if (!error) onSave(data)
+    if (error) { setSaveError(error.message); return }
+    onSave(data)
   }
 
   return createPortal(
@@ -267,6 +270,12 @@ export default function GoalModal({
         {form.tracking_type === 'theme' && (
           <p style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 12 }}>
             Theme goals have no fixed percentage — progress is "X of Y" quarterly goals completed, linked via their own "Break down from yearly goal" field. Link them from the quarterly goal's edit modal.
+          </p>
+        )}
+
+        {saveError && (
+          <p style={{ fontSize: 12, color: 'var(--danger)', marginBottom: 8, padding: '8px 10px', background: 'color-mix(in srgb, var(--danger) 10%, transparent)', borderRadius: 6 }}>
+            Could not save: {saveError}
           </p>
         )}
 
