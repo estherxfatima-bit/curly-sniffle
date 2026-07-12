@@ -157,8 +157,7 @@ export default function PartnersPage() {
   const [partnerTodos, setPartnerTodos] = useState({}) // userId -> today's daily todos
   const [partnerGoals, setPartnerGoals] = useState({}) // userId -> goals[]
   const [expandedTask, setExpandedTask] = useState(null) // task id
-  const [taskTableModal, setTaskTableModal] = useState(null) // { partnerName, tasks, goals }
-  const [assignments, setAssignments] = useState([]) // all partner_assignments involving me
+const [assignments, setAssignments] = useState([]) // all partner_assignments involving me
   const [showAssignForm, setShowAssignForm] = useState(null) // partnerId or null
   const [assignText, setAssignText] = useState('')
   const [assignNote, setAssignNote] = useState('')
@@ -413,13 +412,7 @@ export default function PartnersPage() {
                 <div style={{ marginBottom: 12 }}>
                   <div className="flex items-center gap-2 mb-2">
                     <p className="mono" style={{ fontSize: 10, flex: 1 }}>This week's tasks</p>
-                    {tasks.length > 0 && (
-                      <button className="btn btn-xs btn-ghost" style={{ fontSize: 10 }}
-                        onClick={() => setTaskTableModal({ partnerName, tasks, goals: partnerGoals[p.partner_id] || [] })}>
-                        View all
-                      </button>
-                    )}
-                    <NudgeInline partnerId={p.partner_id} label="Nudge on weekly plan" />
+<NudgeInline partnerId={p.partner_id} label="Nudge on weekly plan" />
                   </div>
                   {tasks.length === 0 ? (
                     <p style={{ fontSize: 12, color: 'var(--text-3)', fontStyle: 'italic' }}>Nothing planned this week.</p>
@@ -584,54 +577,6 @@ export default function PartnersPage() {
         </div>
       )}
 
-      {/* Weekly tasks full detail modal */}
-      {taskTableModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
-          onClick={() => setTaskTableModal(null)}>
-          <div className="card" style={{ width: '100%', maxWidth: 700, maxHeight: '85vh', display: 'flex', flexDirection: 'column', padding: 0 }} onClick={e => e.stopPropagation()}>
-            <div style={{ padding: '14px 18px 10px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <h3 style={{ fontSize: '0.95rem' }}>{taskTableModal.partnerName}'s weekly tasks</h3>
-              <button className="btn-icon" onClick={() => setTaskTableModal(null)}>✕</button>
-            </div>
-            <div style={{ flex: 1, overflowY: 'auto', padding: '10px 18px' }}>
-              {taskTableModal.tasks.map(t => {
-                const linkedGoal = t.goal_id ? taskTableModal.goals.find(g => g.id === t.goal_id) : null
-                return (
-                  <div key={t.id} style={{ padding: '12px 0', borderBottom: '1px solid var(--border)' }}>
-                    <div className="flex items-start gap-2">
-                      <span style={{ fontSize: 15, flexShrink: 0, marginTop: 1 }}>{t.complete ? '✅' : '⬜'}</span>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{ fontSize: 13, fontWeight: 600, textDecoration: t.complete ? 'line-through' : 'none', color: t.complete ? 'var(--text-3)' : 'var(--text)' }}>
-                          {t.specific_task}
-                        </p>
-                        <div className="flex items-center gap-2 wrap" style={{ marginTop: 4 }}>
-                          {t.area && <span className="badge" style={{ fontSize: 9 }}>{t.area}</span>}
-                          {t.action && <span style={{ fontSize: 11, color: 'var(--text-3)' }}>{t.action}</span>}
-                          {t.frequency && t.frequency !== 'One-off' && <span className="mono" style={{ fontSize: 9, color: 'var(--text-3)' }}>{t.frequency}</span>}
-                          {t.carried_forward && <span className="badge badge-warning" style={{ fontSize: 9 }}>carried</span>}
-                          {t.is_private && <span className="badge" style={{ fontSize: 9, background: 'var(--bg-3)' }}>private</span>}
-                        </div>
-                        {linkedGoal && (
-                          <p style={{ fontSize: 11, color: 'var(--career)', marginTop: 4 }}>🎯 {linkedGoal.primary_goal}</p>
-                        )}
-                        {t.notes && (
-                          <div style={{ marginTop: 8, padding: '8px 10px', background: 'var(--bg-2)', borderRadius: 6 }}>
-                            <p style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 3 }}>Notes</p>
-                            <p style={{ fontSize: 12, color: 'var(--text-2)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{t.notes}</p>
-                          </div>
-                        )}
-                        {!t.notes && !t.complete && (
-                          <p style={{ fontSize: 11, color: 'var(--text-3)', fontStyle: 'italic', marginTop: 6 }}>No notes added.</p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

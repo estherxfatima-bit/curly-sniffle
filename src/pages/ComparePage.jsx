@@ -125,8 +125,62 @@ function milestonesFor(goalId, milestones, milestoneTasks) {
   }))
 }
 
+function TaskDetailModal({ tasks, goals, name, onClose }) {
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal scale-in" onClick={e => e.stopPropagation()} style={{ maxWidth: 560 }}>
+        <div className="modal-header">
+          <h2 style={{ fontSize: '1.1rem' }}>{name}'s weekly tasks</h2>
+          <button className="btn-icon btn" onClick={onClose}>✕</button>
+        </div>
+        {tasks.length === 0 ? (
+          <p style={{ fontSize: 13, color: 'var(--text-3)', fontStyle: 'italic' }}>No tasks this week.</p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {tasks.map(t => {
+              const linkedGoal = goals.find(g => g.id === t.goal_id)
+              return (
+                <div key={t.id} style={{ borderRadius: 8, background: 'var(--bg-2)', border: '1px solid var(--border)', padding: '10px 12px' }}>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span>{t.complete ? '✅' : '⬜'}</span>
+                    <span style={{ fontSize: 13, flex: 1, fontWeight: 500, color: t.complete ? 'var(--text-3)' : 'var(--text)', textDecoration: t.complete ? 'line-through' : 'none' }}>
+                      {t.specific_task}
+                    </span>
+                    {t.complete
+                      ? <span className="badge badge-success" style={{ fontSize: 9 }}>Done</span>
+                      : <span className="badge badge-muted" style={{ fontSize: 9 }}>Pending</span>
+                    }
+                  </div>
+                  {linkedGoal && (
+                    <p style={{ fontSize: 11, color: 'var(--text-3)', fontStyle: 'italic', paddingLeft: 24 }}>
+                      Goal: {linkedGoal.primary_goal}
+                    </p>
+                  )}
+                  {t.notes && (
+                    <p style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 6, paddingLeft: 24, lineHeight: 1.5, borderLeft: '2px solid var(--border)', marginLeft: 24, paddingTop: 4 }}>
+                      {t.notes}
+                    </p>
+                  )}
+                  {!t.complete && t.reason && (
+                    <p style={{ fontSize: 12, color: 'var(--text-2)', marginTop: 6, paddingLeft: 24, lineHeight: 1.5, borderLeft: '2px solid #ef444440', marginLeft: 24, paddingTop: 4 }}>
+                      Why not done: {t.reason}
+                    </p>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+        <div className="flex justify-end mt-3">
+          <button className="btn btn-ghost" onClick={onClose}>Close</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function CompareColumn({
-  name, data, onNudge, isSelf,
+  name, data, onNudge, isSelf, onViewAllTasks,
   weekStart, onWeekShift, onWeekToday, isCurrentWeek,
   todoDate, onTodoShift, onTodoToday, isCurrentTodoDate,
   goalQuarter, goalYear, onGoalPeriodShift, onGoalPeriodToday, isCurrentGoalPeriod,
@@ -162,6 +216,11 @@ function CompareColumn({
           <div className="flex items-center gap-2">
             <CheckSquare size={14} color="var(--career)" />
             <p style={{ fontSize: 12, fontWeight: 600 }}>Weekly tasks</p>
+            {!isSelf && weekTasks.length > 0 && (
+              <button className="btn btn-xs btn-ghost" style={{ fontSize: 10 }} onClick={() => onViewAllTasks(weekTasks, goals, name)}>
+                View all
+              </button>
+            )}
           </div>
           <MiniNav label={format(new Date(weekStart), 'd MMM')} onPrev={() => onWeekShift(-1)} onNext={() => onWeekShift(1)} onToday={onWeekToday} isCurrent={isCurrentWeek} />
         </div>
@@ -389,7 +448,8 @@ export default function ComparePage() {
   const [loading, setLoading] = useState(true)
   const [nudgeSent, setNudgeSent] = useState(false)
   const [view, setView] = useState('simple') // 'simple' | 'deep'
-  const [mobileTab, setMobileTab] = useState('self') // 'self' | 'partner'
+  const [mobileTab, setMobileTab] = useState('partner') // 'self' | 'partner'
+  const [taskDetailModal, setTaskDetailModal] = useState(null) // { tasks, goals, name }
 
   // Shared navigation state — applies to both columns so the comparison stays apples-to-apples.
   const [weekRef, setWeekRef] = useState(new Date())
@@ -511,7 +571,7 @@ export default function ComparePage() {
             <button
               className={`btn btn-sm ${view === 'deep' ? 'btn-career' : 'btn-ghost'}`}
               style={{ fontSize: 11, color: view === 'deep' ? '#fff' : undefined }}
-              onClick={() => setView('deep')}
+              onClick={() => { setView('deep'); setMobileTab('partner') }}
             >
               <BarChart2 size={12} /> Deep dive
             </button>
@@ -550,14 +610,23 @@ export default function ComparePage() {
           </div>
           <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
             <div style={{ flex: 1, minWidth: 0, display: mobileTab === 'self' ? 'flex' : 'none', flexDirection: 'column', gap: 16 }} className="compare-col-self">
-              <CompareColumn name="You" data={selfData} onNudge={() => {}} isSelf={true} {...sharedColProps} />
+              <CompareColumn name="You" data={selfData} onNudge={() => {}} isSelf={true} onViewAllTasks={() => {}} {...sharedColProps} />
             </div>
             <div style={{ flex: 1, minWidth: 0, display: mobileTab === 'partner' ? 'flex' : 'none', flexDirection: 'column', gap: 16 }} className="compare-col-partner">
-              <CompareColumn name={partnerName} data={partnerData} onNudge={sendNudge} isSelf={false} {...sharedColProps} />
+              <CompareColumn name={partnerName} data={partnerData} onNudge={sendNudge} isSelf={false} onViewAllTasks={(tasks, goals, name) => setTaskDetailModal({ tasks, goals, name })} {...sharedColProps} />
             </div>
           </div>
           <style>{`@media (min-width: 640px) { .compare-col-self, .compare-col-partner { display: flex !important; } }`}</style>
         </>
+      )}
+
+      {taskDetailModal && (
+        <TaskDetailModal
+          tasks={taskDetailModal.tasks}
+          goals={taskDetailModal.goals}
+          name={taskDetailModal.name}
+          onClose={() => setTaskDetailModal(null)}
+        />
       )}
     </div>
   )
