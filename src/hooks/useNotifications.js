@@ -309,6 +309,22 @@ export function useNotifications() {
       }
       await load(user)
     })()
+
+    // Realtime: when a partner sends a nudge (comment where partner_id = me),
+    // regenerate nudge notifications and reload so the bell dot appears instantly.
+    const channel = supabase
+      .channel(`nudges:${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'comments', filter: `partner_id=eq.${user.id}` },
+        async () => {
+          await generateNudgeNotifications(user)
+          await load(user)
+        },
+      )
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
   }, [user])
 
   async function markRead(id) {

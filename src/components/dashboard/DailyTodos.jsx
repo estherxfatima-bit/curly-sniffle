@@ -4,7 +4,7 @@ import { withNetworkRetry, friendlyErrorMessage } from '../../lib/network'
 import { useAuth } from '../../hooks/useAuth'
 import { useTimer } from '../../hooks/useTimer'
 import { format, subDays, addDays, startOfWeek, getDay, parseISO } from 'date-fns'
-import { parseTimeAllocationToMinutes, priorityRank, priorityFilterOptions, PRIORITY_COLORS, DEFAULT_TODO_CATEGORIES, TODO_CATEGORY_COLOR_PALETTE } from '../../lib/constants'
+import { parseTimeAllocationToMinutes, priorityRank, priorityFilterOptions, PRIORITY_COLORS, DEFAULT_TODO_CATEGORIES, TODO_CATEGORY_COLOR_PALETTE, getQuarterFromDate } from '../../lib/constants'
 import PriorityDot from '../shared/PriorityDot'
 import SubtaskList from '../shared/SubtaskList'
 import { deleteCalendarEvent } from '../../lib/googleCalendar'
@@ -562,6 +562,10 @@ export default function DailyTodos({ compact = false, date = null, onDateChange 
   const total = todos.length
   const blockable = todos.filter(t => !t.complete && t.duration_minutes > 0)
 
+  const viewQuarter = getQuarterFromDate(new Date(viewDate))
+  const viewYear = new Date(viewDate).getFullYear()
+  const quarterGoals = goals.filter(g => g.quarter === viewQuarter && g.year === viewYear)
+
   return (
     <div>
       {/* Header — tapping it opens the full-screen drawer on mobile */}
@@ -840,7 +844,7 @@ export default function DailyTodos({ compact = false, date = null, onDateChange 
                 todo={todo}
                 categories={allCategories}
                 catColor={catColor}
-                goals={goals}
+                goals={quarterGoals}
                 isTimerRunning={timerCtx?.timer?.todoId === todo.id}
                 onToggle={() => toggle(todo)}
                 onRemove={() => remove(todo)}
@@ -944,6 +948,8 @@ function TodoItem({ todo, categories, catColor, goals, isTimerRunning, onToggle,
   const [editingGoal,  setEditingGoal]  = useState(false)
   const [editingDuration, setEditingDuration] = useState(false)
   const [editingScheduled, setEditingScheduled] = useState(false)
+  const [showNoteInput, setShowNoteInput] = useState(false)
+  const [noteInput, setNoteInput] = useState(todo.completion_note || '')
   const subtasks = todo.subtasks || []
   const linkedGoal = goals.find(g => g.id === todo.goal_id)
   const cc = catColor(todo.category)
@@ -990,7 +996,8 @@ function TodoItem({ todo, categories, catColor, goals, isTimerRunning, onToggle,
         ) : <div style={{ width: 18, flexShrink: 0 }} />}
 
         {/* Toggle dot */}
-        <div className={`toggle-dot ${todo.complete ? 'done' : ''}`} onClick={onToggle}
+        <div className={`toggle-dot ${todo.complete ? 'done' : ''}`}
+          onClick={() => { onToggle(); if (!todo.complete) setShowNoteInput(true) }}
           style={{ borderColor: todo.complete ? 'var(--success)' : cc, flexShrink: 0, cursor: 'pointer', marginTop: 2 }}>
           {todo.complete && <Check size={10} color="white" strokeWidth={3} />}
         </div>
@@ -1227,6 +1234,38 @@ function TodoItem({ todo, categories, catColor, goals, isTimerRunning, onToggle,
             onKeyDown={e => { if (e.key === 'Enter') submitSub(); if (e.key === 'Escape') setAddingSub(false) }}
           />
           <button className="btn btn-career btn-xs" style={{ color: '#fff' }} onClick={submitSub}>Add</button>
+        </div>
+      )}
+
+      {/* Completion note */}
+      {(showNoteInput || todo.completion_note) && (
+        <div style={{ marginTop: 8, paddingLeft: 27 }}>
+          {showNoteInput ? (
+            <div style={{ display: 'flex', gap: 6 }}>
+              <input
+                autoFocus
+                value={noteInput}
+                onChange={e => setNoteInput(e.target.value)}
+                placeholder="Add a note… (optional)"
+                style={{ fontSize: 12, flex: 1, padding: '3px 8px' }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') { onUpdateField('completion_note', noteInput || null); setShowNoteInput(false) }
+                  if (e.key === 'Escape') setShowNoteInput(false)
+                }}
+              />
+              <button className="btn btn-xs btn-career" style={{ color: '#fff' }}
+                onClick={() => { onUpdateField('completion_note', noteInput || null); setShowNoteInput(false) }}>Save</button>
+              <button className="btn btn-xs btn-ghost" onClick={() => setShowNoteInput(false)}>Skip</button>
+            </div>
+          ) : todo.completion_note ? (
+            <p
+              onClick={() => { setNoteInput(todo.completion_note); setShowNoteInput(true) }}
+              style={{ fontSize: 11, color: 'var(--text-3)', fontStyle: 'italic', cursor: 'pointer', lineHeight: 1.4 }}
+              title="Click to edit note"
+            >
+              {todo.completion_note}
+            </p>
+          ) : null}
         </div>
       )}
     </div>
