@@ -108,7 +108,7 @@ For each suggested task, set "priority_level" based on the goal's urgency, deadl
 Only include this block when you are actually suggesting tasks. Omit it entirely for conversational responses.`
 
 // AI planning with full user context — saves to ai_log
-export async function generatePlan(userId, { goals, tasks, habits, moodAvg, todayTodos, question, personalContext, quarterlyWins, recentReflections, history }) {
+export async function generatePlan(userId, { goals, tasks, habits, moodAvg, todayTodos, question, personalContext, quarterlyWins, recentReflections, history, aiMemory }) {
   let system = CHAT_SYSTEM_PROMPT
 
   if (personalContext) {
@@ -141,7 +141,17 @@ QUARTERLY WINS LOGGED THIS QUARTER:
 ${(quarterlyWins || []).map(w => `- ${w}`).join('\n') || 'None'}
 
 RECENT DAILY REFLECTIONS (last 7 days):
-${(recentReflections || []).length > 0 ? (recentReflections || []).map(r => `- ${r.date}: ${r.content?.slice(0, 120) || ''}${(r.content?.length || 0) > 120 ? '…' : ''}`).join('\n') : 'None logged'}`
+${(recentReflections || []).length > 0 ? (recentReflections || []).map(r => `- ${r.date}: ${r.content?.slice(0, 120) || ''}${(r.content?.length || 0) > 120 ? '…' : ''}`).join('\n') : 'None logged'}
+
+PAST AI CONVERSATIONS (memory — pinned entries marked ★):
+${(aiMemory || []).length > 0
+  ? (aiMemory || []).map(e => {
+      const date = e.created_at.slice(0, 10)
+      const pin = e.pinned ? '★ ' : ''
+      const snippet = e.response.replace(/```[\s\S]*?```/g, '').replace(/\n+/g, ' ').trim().slice(0, 200)
+      return `- ${pin}[${date}] ${e.title}: ${snippet}${e.response.length > 200 ? '…' : ''}`
+    }).join('\n')
+  : 'None yet'}`
 
   // Build messages array — include prior conversation turns for follow-up
   const priorMessages = (history || []).map(m => ({
@@ -150,7 +160,7 @@ ${(recentReflections || []).length > 0 ? (recentReflections || []).map(r => `- $
   }))
   const allMessages = [...priorMessages, { role: 'user', content: question }]
 
-  const { text: response, usage } = await callClaudeMessages(allMessages, system, 2400)
+  const { text: response, usage } = await callClaudeMessages(allMessages, system, 2800)
   const title = `AI plan — ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}: ${question.slice(0, 40)}`
   const record = await saveAndReturn(userId, 'weekly_plan', title, response, {
     inputTokens: usage.input_tokens,

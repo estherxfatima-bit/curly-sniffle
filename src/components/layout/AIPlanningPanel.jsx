@@ -44,9 +44,21 @@ export default function AIPlanningPanel({ onClose }) {
   }, [messages, loading])
 
   async function loadRecentEntries() {
-    const { data } = await supabase.from('ai_log').select('id, type, title, response, created_at')
-      .eq('user_id', user.id).eq('dismissed', false).order('created_at', { ascending: false }).limit(5)
-    setRecentEntries(data || [])
+    // Fetch pinned entries (always relevant) + last 8 non-pinned for memory
+    const [pinnedRes, recentRes] = await Promise.all([
+      supabase.from('ai_log').select('id, type, title, response, created_at, pinned')
+        .eq('user_id', user.id).eq('dismissed', false).eq('pinned', true)
+        .order('created_at', { ascending: false }).limit(10),
+      supabase.from('ai_log').select('id, type, title, response, created_at, pinned')
+        .eq('user_id', user.id).eq('dismissed', false).eq('pinned', false)
+        .order('created_at', { ascending: false }).limit(8),
+    ])
+    const pinned = pinnedRes.data || []
+    const recent = recentRes.data || []
+    // Merge: pinned first, then recent, dedup by id
+    const seen = new Set(pinned.map(e => e.id))
+    const merged = [...pinned, ...recent.filter(e => !seen.has(e.id))]
+    setRecentEntries(merged)
   }
 
   async function loadContext() {
@@ -122,7 +134,7 @@ export default function AIPlanningPanel({ onClose }) {
     const newMessages = [...messages, { role: 'user', text: q }]
     setMessages(newMessages)
     try {
-      const { response: res } = await generatePlan(user.id, { ...context, question: q, history: messages })
+      const { response: res } = await generatePlan(user.id, { ...context, question: q, history: messages, aiMemory: recentEntries })
       const { text, tasks } = parseSuggestedTasks(res)
       const taskOffset = suggestedTasks.length
       setSuggestedTasks(prev => [...prev, ...tasks])
