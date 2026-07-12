@@ -4,7 +4,7 @@ import { format, startOfWeek, endOfWeek, addWeeks, subWeeks } from 'date-fns'
 import { supabase } from '../lib/supabase'
 import { withNetworkRetry, friendlyErrorMessage } from '../lib/network'
 import { useAuth } from '../hooks/useAuth'
-import { TASK_AREAS, AREA_COLORS, priorityRank, priorityFilterOptions, PRIORITY_COLORS, DAY_LABELS } from '../lib/constants'
+import { TASK_AREAS, AREA_COLORS, priorityRank, priorityFilterOptions, PRIORITY_COLORS, DAY_LABELS, getQuarterFromDate } from '../lib/constants'
 import PriorityDot from '../components/shared/PriorityDot'
 import { toMinutes, minutesToTimeString, dateAndMinutesToISO } from '../lib/timeBlocking'
 import { createCalendarEvent } from '../lib/googleCalendar'
@@ -74,6 +74,9 @@ export default function WeeklyPage() {
   const weekStart = startOfWeek(currentWeek, { weekStartsOn: 1 })
   const weekEnd   = endOfWeek(currentWeek, { weekStartsOn: 1 })
   const weekStartStr = format(weekStart, 'yyyy-MM-dd')
+  const weekQuarter = getQuarterFromDate(weekStart)
+  const weekYear = weekStart.getFullYear()
+  const quarterGoals = goals.filter(g => g.quarter === weekQuarter && g.year === weekYear)
   const latestWeekRef = useRef(weekStartStr)
 
   useEffect(() => {
@@ -376,7 +379,7 @@ export default function WeeklyPage() {
       key: area, label: area, color: areaColor(area), tasks: visibleTasks.filter(t => t.area === area).sort(byPriority),
     })).filter(g => g.tasks.length)
   } else {
-    groups = goals.map(g => ({
+    groups = quarterGoals.map(g => ({
       key: g.id, label: g.primary_goal, goal: g, pct: goalProgress(g, milestones), tasks: visibleTasks.filter(t => t.goal_id === g.id).sort(byPriority),
     }))
     const ungrouped = visibleTasks.filter(t => !t.goal_id).sort(byPriority)
@@ -520,7 +523,7 @@ export default function WeeklyPage() {
                 <td>
                   <select value={newTask.goal_id} onChange={e => setNewTask(p => ({ ...p, goal_id: e.target.value }))} style={{ fontSize: 12, padding: '4px 8px' }}>
                     <option value="">No goal</option>
-                    {goals.map(g => <option key={g.id} value={g.id}>{g.category}: {g.primary_goal?.slice(0, 28)}</option>)}
+                    {quarterGoals.map(g => <option key={g.id} value={g.id}>{g.category}: {g.primary_goal?.slice(0, 28)}</option>)}
                   </select>
                 </td>
                 <td>
@@ -760,7 +763,7 @@ export default function WeeklyPage() {
       {showReview && <WeeklyReviewModal weekStart={weekStartStr} incompleteTasks={tasks.filter(t => !t.complete)} onClose={() => setShowReview(false)} onComplete={() => { setShowReview(false); carryForwardIncomplete() }} />}
       {showCarryForwardReview && <CarryForwardReviewModal incompleteTasks={tasks.filter(t => !t.complete)} onConfirm={confirmCarryForward} onClose={() => setShowCarryForwardReview(false)} />}
       {showPastReviews && <PastReviews onClose={() => setShowPastReviews(false)} />}
-      {showGoalPicker && <GoalTaskPicker goals={goals} milestones={milestones} milestoneTasks={milestoneTasks} onSelect={pullFromGoalTask} onClose={() => setShowGoalPicker(false)} />}
+      {showGoalPicker && <GoalTaskPicker goals={quarterGoals} milestones={milestones} milestoneTasks={milestoneTasks} onSelect={pullFromGoalTask} onClose={() => setShowGoalPicker(false)} />}
 
     </div>
   )
