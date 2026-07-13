@@ -108,12 +108,18 @@ export default function DashboardPage() {
   const [confetti, setConfetti] = useState(false)
   const prevMomentum = useRef(0)
 
-  // Daily reflection deep link (?reflect=1) — reactive to navigation
+  // Daily reflection modal — driven by local state so tab-switching can't clear it
   const [searchParams, setSearchParams] = useSearchParams()
-  const showReflection = searchParams.get('reflect') === '1'
-  function setShowReflection(val) {
-    if (!val) { const p = new URLSearchParams(searchParams); p.delete('reflect'); setSearchParams(p, { replace: true }) }
-  }
+  const [showReflection, setShowReflection] = useState(() => searchParams.get('reflect') === '1')
+
+  // Clean ?reflect=1 out of the URL once we've captured it into local state
+  useEffect(() => {
+    if (searchParams.get('reflect') === '1') {
+      const p = new URLSearchParams(searchParams)
+      p.delete('reflect')
+      setSearchParams(p, { replace: true })
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-show reflection after the user's configured reflection time if not yet done today
   useEffect(() => {
@@ -133,15 +139,9 @@ export default function DashboardPage() {
         const triggerMs = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hh, mm, 0).getTime()
         const msUntil = triggerMs - now.getTime()
         if (msUntil <= 0) {
-          // Past the trigger time — show immediately
-          const p = new URLSearchParams(window.location.search); p.set('reflect', '1')
-          setSearchParams(p, { replace: true })
+          setShowReflection(true)
         } else {
-          // Schedule for the trigger time
-          timer = setTimeout(() => {
-            const p = new URLSearchParams(window.location.search); p.set('reflect', '1')
-            setSearchParams(p, { replace: true })
-          }, msUntil)
+          timer = setTimeout(() => setShowReflection(true), msUntil)
         }
       }
       triggerIfTime()
