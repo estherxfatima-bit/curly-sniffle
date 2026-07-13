@@ -55,6 +55,7 @@ async function generateNudgeNotifications(user) {
       link: '/weekly',
       source_id: c.id,
       created_at: c.created_at,
+      metadata: { sender_id: c.user_id, sender_name: senderName },
     }
   })
   await supabase.from('notifications').upsert(rows, { onConflict: 'user_id,type,source_id', ignoreDuplicates: true })
