@@ -3,7 +3,7 @@ import { format } from 'date-fns'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
 import { TASK_AREAS, parseTimeAllocationToParts, buildTimeAllocation } from '../../lib/constants'
-import { Plus, Clock, Target, Send, CalendarDays, SkipForward, Repeat, Tag } from 'lucide-react'
+import { Plus, Clock, Target, Send, CalendarDays, SkipForward, Repeat, Tag, Ban, RotateCcw } from 'lucide-react'
 import SubtaskList from '../shared/SubtaskList'
 
 const HOUR_OPTS = Array.from({ length: 9 }, (_, i) => i) // 0-8 hours
@@ -181,12 +181,23 @@ export default function TaskExpansion({ task, goals, onUpdateField, onToggleSubt
         </div>
       </div>
 
-      {/* Push to next week */}
-      {!task.complete && onPushNextWeek && (
-        <div>
-          <button className="btn btn-ghost btn-sm" onClick={() => onPushNextWeek(task)}>
-            <SkipForward size={13} /> Push to next week
-          </button>
+      {/* Push to next week / Dismiss */}
+      {!task.complete && (onPushNextWeek || onUpdateField) && (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {onPushNextWeek && (
+            <button className="btn btn-ghost btn-sm" onClick={() => onPushNextWeek(task)}>
+              <SkipForward size={13} /> Push to next week
+            </button>
+          )}
+          {task.dismissed ? (
+            <button className="btn btn-ghost btn-sm" onClick={() => onUpdateField('dismissed', false)} title="Undo dismiss — task will show as incomplete again">
+              <RotateCcw size={13} /> Undo dismiss
+            </button>
+          ) : (
+            <button className="btn btn-ghost btn-sm" style={{ color: 'var(--text-3)' }} onClick={() => onUpdateField('dismissed', true)} title="Mark as dealt with — won't count as incomplete or be suggested for carry-forward">
+              <Ban size={13} /> Dismiss
+            </button>
+          )}
         </div>
       )}
     </div>

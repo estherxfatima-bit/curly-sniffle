@@ -94,7 +94,7 @@ export default function AIPlanningPanel({ onClose }) {
 
     const [goalsRes, tasksRes, habitsRes, logsRes, moodRes, todosRes, winsRes, profileRes, goalTasksRes, goalTodosRes, reflectionsRes] = await Promise.all([
       supabase.from('goals').select('id, category, primary_goal, tracking_type, metric_start, metric_target').eq('user_id', user.id).eq('quarter', quarter).eq('year', year),
-      supabase.from('weekly_tasks').select('area, specific_task, complete, carried_forward, notes').eq('user_id', user.id).gte('week_start', twoWeeksAgo),
+      supabase.from('weekly_tasks').select('area, specific_task, complete, carried_forward, notes, dismissed').eq('user_id', user.id).gte('week_start', twoWeeksAgo),
       supabase.from('habits').select('id, name').eq('user_id', user.id),
       supabase.from('habit_logs').select('habit_id, log_date').eq('user_id', user.id).gte('log_date', days[0]),
       supabase.from('mood_logs').select('mood_score').eq('user_id', user.id).gte('log_date', weekStart),

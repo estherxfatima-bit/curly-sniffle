@@ -600,15 +600,16 @@ export default function WeeklyPage() {
                             <div className="flex items-center gap-1">
                               <ChevronDown size={12} color="var(--text-3)" style={{ flexShrink: 0, transform: expanded ? 'none' : 'rotate(-90deg)', transition: 'transform 0.15s' }} />
                               {task.priority && <Star size={12} color="var(--warning)" fill="var(--warning)" style={{ flexShrink: 0 }} />}
-                              <span style={{ textDecoration: task.complete ? 'line-through' : 'none', fontSize: 13 }}>{task.specific_task}</span>
+                              <span style={{ textDecoration: task.complete ? 'line-through' : 'none', fontSize: 13, opacity: task.dismissed ? 0.45 : 1 }}>{task.specific_task}</span>
                               {task.recurring && <Repeat size={11} color="var(--career)" style={{ flexShrink: 0 }} title="Recurring every week" />}
                               {task.carried_forward && <span className="badge badge-warning" style={{ marginLeft: 6, fontSize: 9 }}>carried</span>}
+                              {task.dismissed && <span className="badge" style={{ marginLeft: 6, fontSize: 9, background: 'var(--bg-3)', color: 'var(--text-3)' }}>dismissed</span>}
                               {task.day_of_week != null && <span className="badge" style={{ marginLeft: 6, fontSize: 9, background: 'var(--career-tint)', color: 'var(--career)' }}>{DAY_SHORT_LABELS[task.day_of_week]}</span>}
                               {task.notes && <MessageSquare size={11} color="var(--creative)" style={{ flexShrink: 0 }} />}
                             </div>
                           </td>
                           <td style={{ fontSize: 12, color: 'var(--text-3)' }}>{goals.find(g => g.id === task.goal_id)?.primary_goal?.slice(0, 24) || '—'}</td>
-                          <td>{task.complete ? <span className="badge badge-success">Done</span> : <span className="badge badge-muted">Open</span>}</td>
+                          <td>{task.complete ? <span className="badge badge-success">Done</span> : task.dismissed ? <span className="badge" style={{ background: 'var(--bg-3)', color: 'var(--text-3)' }}>Dismissed</span> : <span className="badge badge-muted">Open</span>}</td>
                           <td>
                             <div className="flex items-center gap-1">
                               <PriorityDot priority={task.priority_level} onChange={v => updateTaskField(task.id, 'priority_level', v)} />
@@ -760,8 +761,8 @@ export default function WeeklyPage() {
         <BrainDump />
       </div>
 
-      {showReview && <WeeklyReviewModal weekStart={weekStartStr} incompleteTasks={tasks.filter(t => !t.complete)} onClose={() => setShowReview(false)} onComplete={() => { setShowReview(false); carryForwardIncomplete() }} />}
-      {showCarryForwardReview && <CarryForwardReviewModal incompleteTasks={tasks.filter(t => !t.complete)} onConfirm={confirmCarryForward} onClose={() => setShowCarryForwardReview(false)} />}
+      {showReview && <WeeklyReviewModal weekStart={weekStartStr} incompleteTasks={tasks.filter(t => !t.complete && !t.dismissed)} onClose={() => setShowReview(false)} onComplete={() => { setShowReview(false); carryForwardIncomplete() }} />}
+      {showCarryForwardReview && <CarryForwardReviewModal incompleteTasks={tasks.filter(t => !t.complete && !t.dismissed)} onConfirm={confirmCarryForward} onClose={() => setShowCarryForwardReview(false)} />}
       {showPastReviews && <PastReviews onClose={() => setShowPastReviews(false)} />}
       {showGoalPicker && <GoalTaskPicker goals={quarterGoals} milestones={milestones} milestoneTasks={milestoneTasks} onSelect={pullFromGoalTask} onClose={() => setShowGoalPicker(false)} />}
 

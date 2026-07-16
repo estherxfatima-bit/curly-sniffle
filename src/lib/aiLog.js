@@ -115,9 +115,11 @@ export async function generatePlan(userId, { goals, tasks, habits, moodAvg, toda
     system += `\n\nABOUT THIS USER:\n${personalContext}`
   }
 
-  // Cap task data to last 2 weeks to control cost
-  const recentTasks = tasks.slice(0, 30)
-  const carriedCount = tasks.filter(t => t.carried_forward).length
+  // Cap task data to last 2 weeks to control cost; exclude dismissed tasks (user dealt with them outside the app)
+  const activeTasks = tasks.filter(t => !t.dismissed)
+  const recentTasks = activeTasks.slice(0, 30)
+  const carriedCount = activeTasks.filter(t => t.carried_forward).length
+  const dismissedCount = tasks.filter(t => t.dismissed).length
 
   system += `\n\nCURRENT CONTEXT:
 
@@ -126,7 +128,7 @@ TODAY'S DATE: ${new Date().toISOString().slice(0, 10)}
 THIS QUARTER'S GOALS:
 ${goals.map(g => `- [${g.category}] ${g.primary_goal} — ${g.status}`).join('\n') || 'None set'}
 
-THIS WEEK'S TASKS (${tasks.filter(t => !t.complete).length} incomplete, ${tasks.filter(t => t.complete).length} done${carriedCount > 0 ? `, ${carriedCount} carried forward` : ''}):
+THIS WEEK'S TASKS (${activeTasks.filter(t => !t.complete).length} incomplete, ${activeTasks.filter(t => t.complete).length} done${carriedCount > 0 ? `, ${carriedCount} carried forward` : ''}${dismissedCount > 0 ? `, ${dismissedCount} dismissed` : ''}):
 ${recentTasks.map(t => `- [${t.area}] ${t.specific_task} — ${t.complete ? '✓ done' : 'incomplete'}${t.carried_forward ? ' (carried forward)' : ''}${t.notes ? ` [note: ${t.notes}]` : ''}`).join('\n') || 'None'}
 
 HABIT STREAKS:
