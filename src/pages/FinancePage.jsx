@@ -1239,6 +1239,38 @@ export default function FinancePage() {
               </div>
             )}
           </>
+        ) : activeView === 'daily' ? (
+          (() => {
+            const todayCats = VARIABLE_CATS.filter(c => !hiddenCats.includes(c) && (periodCategorySpend[c] || 0) > 0)
+            const todayTotal = todayCats.reduce((s, c) => s + (periodCategorySpend[c] || 0), 0)
+            if (!todayCats.length) return (
+              <p style={{ fontSize: 12, color: 'var(--text-3)', fontStyle: 'italic', textAlign: 'center', padding: '16px 0' }}>No variable spending today.</p>
+            )
+            return (
+              <div onClick={e => e.stopPropagation()}>
+                <p className="mono mb-3" style={{ fontSize: 10 }}>Today's spending by category</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {todayCats.sort((a, b) => (periodCategorySpend[b] || 0) - (periodCategorySpend[a] || 0)).map(cat => {
+                    const amt = periodCategorySpend[cat] || 0
+                    const pct = todayTotal > 0 ? (amt / todayTotal) * 100 : 0
+                    const color = CAT_COLORS[cat] || 'var(--finance)'
+                    return (
+                      <div key={cat} onClick={() => setFilterCat(filterCat === cat ? null : cat)} style={{ cursor: 'pointer', outline: filterCat === cat ? `2px solid ${color}` : 'none', borderRadius: 4, padding: '2px 0' }}>
+                        <div className="flex items-center justify-between mb-1">
+                          <span style={{ fontSize: 11, color: 'var(--text-2)' }}>{CAT_EMOJI[cat]} {cat}</span>
+                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-3)' }}>£{amt.toFixed(0)} · {pct.toFixed(0)}%</span>
+                        </div>
+                        <div style={{ height: 7, borderRadius: 3.5, background: 'var(--bg-2)' }}>
+                          <div style={{ height: '100%', width: `${pct}%`, borderRadius: 3.5, background: color, transition: 'width 0.3s' }} />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+                <p className="mono mt-3" style={{ fontSize: 10, color: 'var(--text-3)' }}>Total today: £{todayTotal.toFixed(2)}</p>
+              </div>
+            )
+          })()
         ) : (
           <>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 12 }}>
@@ -1248,7 +1280,7 @@ export default function FinancePage() {
                 </div>
               ))}
             </div>
-            {/* Category spend breakdown bars */}
+            {/* Category spend breakdown bars — this month vs last month */}
             {(() => {
               const lastMonthStr = format(subMonths(refDate, 1), 'yyyy-MM')
               const lastMonthSpend = {}
