@@ -10,10 +10,12 @@ const HOUR_OPTS = Array.from({ length: 9 }, (_, i) => i) // 0-8 hours
 const MINUTE_OPTS = [0, 15, 30, 45]
 const DAY_LABELS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 
-export default function TaskExpansion({ task, goals, onUpdateField, onToggleSubtask, onAddSubtask, onEditSubtask, onRemoveSubtask, onReorderSubtasks, onPushNextWeek, readOnly }) {
+export default function TaskExpansion({ task, goals, onUpdateField, onDismiss, onToggleSubtask, onAddSubtask, onEditSubtask, onRemoveSubtask, onReorderSubtasks, onPushNextWeek, readOnly }) {
   const { user } = useAuth()
   const [subInput, setSubInput] = useState('')
   const [notes, setNotes] = useState(task.notes || '')
+  const [showDismissInput, setShowDismissInput] = useState(false)
+  const [dismissReason, setDismissReason] = useState('')
   const [comments, setComments] = useState([])
   const [loadingComments, setLoadingComments] = useState(true)
   const [commentInput, setCommentInput] = useState('')
@@ -182,21 +184,44 @@ export default function TaskExpansion({ task, goals, onUpdateField, onToggleSubt
       </div>
 
       {/* Push to next week / Dismiss */}
-      {!task.complete && (onPushNextWeek || onUpdateField) && (
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {onPushNextWeek && (
-            <button className="btn btn-ghost btn-sm" onClick={() => onPushNextWeek(task)}>
-              <SkipForward size={13} /> Push to next week
-            </button>
-          )}
-          {task.dismissed ? (
-            <button className="btn btn-ghost btn-sm" onClick={() => onUpdateField('dismissed', false)} title="Undo dismiss — task will show as incomplete again">
-              <RotateCcw size={13} /> Undo dismiss
-            </button>
-          ) : (
-            <button className="btn btn-ghost btn-sm" style={{ color: 'var(--text-3)' }} onClick={() => onUpdateField('dismissed', true)} title="Mark as dealt with — won't count as incomplete or be suggested for carry-forward">
-              <Ban size={13} /> Dismiss
-            </button>
+      {!task.complete && (onPushNextWeek || onDismiss || onUpdateField) && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {onPushNextWeek && (
+              <button className="btn btn-ghost btn-sm" onClick={() => onPushNextWeek(task)}>
+                <SkipForward size={13} /> Push to next week
+              </button>
+            )}
+            {!showDismissInput && (
+              <button className="btn btn-ghost btn-sm" style={{ color: 'var(--text-3)' }} onClick={() => setShowDismissInput(true)} title="Mark as dealt with — moves to a dismissed log">
+                <Ban size={13} /> Dismiss
+              </button>
+            )}
+          </div>
+          {showDismissInput && (
+            <div style={{ padding: '10px 12px', background: 'var(--bg-2)', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
+              <p style={{ fontSize: 12, color: 'var(--text-2)', marginBottom: 8 }}>What happened to this task? <span style={{ color: 'var(--text-3)' }}>(optional)</span></p>
+              <textarea
+                autoFocus
+                value={dismissReason}
+                onChange={e => setDismissReason(e.target.value)}
+                placeholder="e.g. dealt with it in a meeting, no longer relevant, already done offline…"
+                rows={2}
+                style={{ fontSize: 12, width: '100%', resize: 'vertical', marginBottom: 8 }}
+              />
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  className="btn btn-sm btn-ghost"
+                  style={{ color: 'var(--text-3)' }}
+                  onClick={() => { onDismiss?.(dismissReason.trim() || null); setShowDismissInput(false) }}
+                >
+                  <Ban size={12} /> Confirm dismiss
+                </button>
+                <button className="btn btn-sm btn-ghost" onClick={() => { setShowDismissInput(false); setDismissReason('') }}>
+                  Cancel
+                </button>
+              </div>
+            </div>
           )}
         </div>
       )}

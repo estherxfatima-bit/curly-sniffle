@@ -8,7 +8,7 @@ import { TASK_AREAS, AREA_COLORS, priorityRank, priorityFilterOptions, PRIORITY_
 import PriorityDot from '../components/shared/PriorityDot'
 import { toMinutes, minutesToTimeString, dateAndMinutesToISO } from '../lib/timeBlocking'
 import { createCalendarEvent } from '../lib/googleCalendar'
-import { ChevronLeft, ChevronRight, ChevronDown, Plus, Trash2, RotateCcw, Repeat, MessageSquare, Check, Target, Star, CalendarClock } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Plus, Trash2, RotateCcw, Repeat, MessageSquare, Check, Target, Star, CalendarClock, Ban } from 'lucide-react'
 import WeeklyReviewModal from '../components/weekly/WeeklyReviewModal'
 import CarryForwardReviewModal from '../components/weekly/CarryForwardReviewModal'
 import PastReviews from '../components/weekly/PastReviews'
@@ -63,6 +63,7 @@ export default function WeeklyPage() {
   const [showReview, setShowReview] = useState(false)
   const [showPastReviews, setShowPastReviews] = useState(false)
   const [showCarryForwardReview, setShowCarryForwardReview] = useState(false)
+  const [showDismissedLog, setShowDismissedLog] = useState(false)
   const [expandedTask, setExpandedTask] = useState(null)
   const [groupBy, setGroupBy] = useState('none')
   const [priorityFilter, setPriorityFilter] = useState('') // '' | urgent | high | medium | low | none
@@ -322,6 +323,16 @@ export default function WeeklyPage() {
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, [field]: value } : t))
   }
 
+  async function dismissTask(taskId, reason) {
+    await supabase.from('weekly_tasks').update({ dismissed: true, dismissed_reason: reason || null }).eq('id', taskId)
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, dismissed: true, dismissed_reason: reason || null } : t))
+  }
+
+  async function undismissTask(taskId) {
+    await supabase.from('weekly_tasks').update({ dismissed: false, dismissed_reason: null }).eq('id', taskId)
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, dismissed: false, dismissed_reason: null } : t))
+  }
+
   async function toggleSubtask(task, subId) {
     const subs = (task.subtasks || []).map(s => s.id === subId ? { ...s, complete: !s.complete } : s)
     await supabase.from('weekly_tasks').update({ subtasks: subs }).eq('id', task.id)
@@ -361,7 +372,9 @@ export default function WeeklyPage() {
   const missingNotesCount = tasks.filter(t => !t.notes?.trim()).length
   const carriedThisWeek = tasks.filter(t => t.carried_forward && !t.complete).length
 
-  const visibleTasks = tasks.filter(t => {
+  const dismissedTasks = tasks.filter(t => t.dismissed)
+
+  const visibleTasks = tasks.filter(t => !t.dismissed).filter(t => {
     if (priorityFilter === 'none') return !t.priority_level
     if (priorityFilter) return t.priority_level === priorityFilter
     return true
@@ -600,16 +613,15 @@ export default function WeeklyPage() {
                             <div className="flex items-center gap-1">
                               <ChevronDown size={12} color="var(--text-3)" style={{ flexShrink: 0, transform: expanded ? 'none' : 'rotate(-90deg)', transition: 'transform 0.15s' }} />
                               {task.priority && <Star size={12} color="var(--warning)" fill="var(--warning)" style={{ flexShrink: 0 }} />}
-                              <span style={{ textDecoration: task.complete ? 'line-through' : 'none', fontSize: 13, opacity: task.dismissed ? 0.45 : 1 }}>{task.specific_task}</span>
+                              <span style={{ textDecoration: task.complete ? 'line-through' : 'none', fontSize: 13 }}>{task.specific_task}</span>
                               {task.recurring && <Repeat size={11} color="var(--career)" style={{ flexShrink: 0 }} title="Recurring every week" />}
                               {task.carried_forward && <span className="badge badge-warning" style={{ marginLeft: 6, fontSize: 9 }}>carried</span>}
-                              {task.dismissed && <span className="badge" style={{ marginLeft: 6, fontSize: 9, background: 'var(--bg-3)', color: 'var(--text-3)' }}>dismissed</span>}
                               {task.day_of_week != null && <span className="badge" style={{ marginLeft: 6, fontSize: 9, background: 'var(--career-tint)', color: 'var(--career)' }}>{DAY_SHORT_LABELS[task.day_of_week]}</span>}
                               {task.notes && <MessageSquare size={11} color="var(--creative)" style={{ flexShrink: 0 }} />}
                             </div>
                           </td>
                           <td style={{ fontSize: 12, color: 'var(--text-3)' }}>{goals.find(g => g.id === task.goal_id)?.primary_goal?.slice(0, 24) || '—'}</td>
-                          <td>{task.complete ? <span className="badge badge-success">Done</span> : task.dismissed ? <span className="badge" style={{ background: 'var(--bg-3)', color: 'var(--text-3)' }}>Dismissed</span> : <span className="badge badge-muted">Open</span>}</td>
+                          <td>{task.complete ? <span className="badge badge-success">Done</span> : <span className="badge badge-muted">Open</span>}</td>
                           <td>
                             <div className="flex items-center gap-1">
                               <PriorityDot priority={task.priority_level} onChange={v => updateTaskField(task.id, 'priority_level', v)} />
@@ -632,6 +644,7 @@ export default function WeeklyPage() {
                                 task={task}
                                 goals={goals}
                                 onUpdateField={(field, value) => updateTaskField(task.id, field, value)}
+                                onDismiss={reason => dismissTask(task.id, reason)}
                                 onToggleSubtask={subId => toggleSubtask(task, subId)}
                                 onAddSubtask={text => addSubtask(task, text)}
                                 onEditSubtask={(subId, text) => editSubtaskText(task, subId, text)}
@@ -733,6 +746,7 @@ export default function WeeklyPage() {
                   onToggleExpand={id => setExpandedTask(expandedTask === id ? null : id)}
                   onToggle={toggleTask}
                   onUpdateField={(field, value) => updateTaskField(task.id, field, value)}
+                  onDismiss={reason => dismissTask(task.id, reason)}
                   onToggleSubtask={subId => toggleSubtask(task, subId)}
                   onAddSubtask={text => addSubtask(task, text)}
                   onEditSubtask={(subId, text) => editSubtaskText(task, subId, text)}
@@ -747,6 +761,44 @@ export default function WeeklyPage() {
           )})
         )}
       </div>
+
+      {/* Dismissed tasks log */}
+      {dismissedTasks.length > 0 && (
+        <div className="card mt-4" style={{ padding: '12px 16px' }}>
+          <button
+            onClick={() => setShowDismissedLog(v => !v)}
+            style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--text-3)' }}
+          >
+            {showDismissedLog ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            <Ban size={13} />
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>Dismissed this week ({dismissedTasks.length})</span>
+          </button>
+          {showDismissedLog && (
+            <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {dismissedTasks.map(task => (
+                <div key={task.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 10px', background: 'var(--bg-2)', borderRadius: 'var(--radius)', borderLeft: '2px solid var(--border)' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{ fontSize: 13, color: 'var(--text-2)', opacity: 0.7 }}>{task.specific_task}</p>
+                    {task.dismissed_reason ? (
+                      <p style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 3, fontStyle: 'italic' }}>"{task.dismissed_reason}"</p>
+                    ) : (
+                      <p style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 3, fontStyle: 'italic' }}>No note left — what happened to this one?</p>
+                    )}
+                  </div>
+                  <button
+                    className="btn btn-xs btn-ghost"
+                    style={{ flexShrink: 0 }}
+                    onClick={() => undismissTask(task.id)}
+                    title="Restore to active tasks"
+                  >
+                    <RotateCcw size={11} /> Restore
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* This week's calendar */}
       <div className="card mt-4">

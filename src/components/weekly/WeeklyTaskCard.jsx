@@ -5,7 +5,7 @@ import { PRIORITY_COLORS } from '../../lib/constants'
 
 const DAY_SHORT_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
-export default function WeeklyTaskCard({ task, areaColor, goals, expanded, onToggleExpand, onToggle, onUpdateField, onToggleSubtask, onAddSubtask, onEditSubtask, onRemoveSubtask, onReorderSubtasks, onPushNextWeek, onTogglePriority, onDelete }) {
+export default function WeeklyTaskCard({ task, areaColor, goals, expanded, onToggleExpand, onToggle, onUpdateField, onDismiss, onToggleSubtask, onAddSubtask, onEditSubtask, onRemoveSubtask, onReorderSubtasks, onPushNextWeek, onTogglePriority, onDelete }) {
   const goal = goals.find(g => g.id === task.goal_id)
 
   return (
@@ -98,6 +98,7 @@ export default function WeeklyTaskCard({ task, areaColor, goals, expanded, onTog
             task={task}
             goals={goals}
             onUpdateField={onUpdateField}
+            onDismiss={onDismiss}
             onToggleSubtask={onToggleSubtask}
             onAddSubtask={onAddSubtask}
             onEditSubtask={onEditSubtask}
