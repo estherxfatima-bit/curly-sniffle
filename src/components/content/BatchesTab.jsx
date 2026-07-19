@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
 import { buildICSFile, buildICSEvent, downloadICS } from '../../lib/ics'
 import { Plus, X, Calendar, MapPin, Trash2 } from 'lucide-react'
+import IdeaDetailModal from './IdeaDetailModal'
 
 const TIME_OF_DAY = ['Morning', 'Afternoon', 'Evening']
 import { startOfWeek, addDays, format } from 'date-fns'
@@ -36,6 +37,7 @@ export default function BatchesTab() {
   const [showAdd, setShowAdd] = useState(false)
   const [newBatch, setNewBatch] = useState({ name: '', description: '' })
   const [dragItem, setDragItem] = useState(null)
+  const [detailIdea, setDetailIdea] = useState(null)
 
   useEffect(() => {
     if (user) loadAll()
@@ -67,6 +69,13 @@ export default function BatchesTab() {
   async function moveToBatch(ideaId, batchName) {
     await supabase.from('content_ideas').update({ batch: batchName }).eq('id', ideaId)
     setIdeas(prev => prev.map(i => i.id === ideaId ? { ...i, batch: batchName } : i))
+  }
+
+  async function updateIdea(id, field, value) {
+    const clean = value === '' ? null : value
+    await supabase.from('content_ideas').update({ [field]: clean }).eq('id', id)
+    setIdeas(prev => prev.map(i => i.id === id ? { ...i, [field]: clean } : i))
+    setDetailIdea(prev => prev?.id === id ? { ...prev, [field]: clean } : prev)
   }
 
   async function updateBatch(batchId, field, value) {
@@ -163,7 +172,8 @@ export default function BatchesTab() {
                   key={idea.id}
                   draggable
                   onDragStart={e => e.dataTransfer.setData('ideaId', idea.id)}
-                  style={{ background: 'var(--bg-3)', borderRadius: 'var(--radius)', padding: '8px 10px', marginBottom: '6px', cursor: 'grab', fontSize: '12px' }}
+                  onClick={() => setDetailIdea(idea)}
+                  style={{ background: 'var(--bg-3)', borderRadius: 'var(--radius)', padding: '8px 10px', marginBottom: '6px', cursor: 'pointer', fontSize: '12px' }}
                 >
                   {idea.title}
                   {idea.pillar && <span className="badge badge-accent" style={{ marginLeft: '6px', fontSize: '9px' }}>{idea.pillar.split(' ')[0]}</span>}
@@ -199,12 +209,13 @@ export default function BatchesTab() {
                       key={idea.id}
                       draggable
                       onDragStart={e => e.dataTransfer.setData('ideaId', idea.id)}
+                      onClick={() => setDetailIdea(idea)}
                       style={{
                         background: 'var(--bg-3)',
                         borderRadius: 'var(--radius)',
                         padding: '8px 10px',
                         marginBottom: '6px',
-                        cursor: 'grab',
+                        cursor: 'pointer',
                         fontSize: '12px',
                         opacity: idea.status === 'Posted' ? 0.5 : 1,
                       }}
@@ -291,6 +302,15 @@ export default function BatchesTab() {
             )
           })}
         </div>
+      )}
+
+      {detailIdea && (
+        <IdeaDetailModal
+          idea={detailIdea}
+          batches={batches}
+          onUpdate={updateIdea}
+          onClose={() => setDetailIdea(null)}
+        />
       )}
     </div>
   )

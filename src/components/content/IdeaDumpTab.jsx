@@ -3,10 +3,11 @@ import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
 import { useContentPillars } from '../../hooks/useContentPillars'
 import { CONTENT_FORMATS, CONTENT_STATUSES } from '../../lib/constants'
-import { Plus, Trash2, Sparkles, Wand2, BarChart2 } from 'lucide-react'
+import { Plus, Trash2, Sparkles, Wand2, BarChart2, LayoutList, LayoutGrid } from 'lucide-react'
 import IdeaGeneratorModal from './IdeaGeneratorModal'
 import FleshOutModal from './FleshOutModal'
 import MetricsModal from './MetricsModal'
+import IdeaDetailModal from './IdeaDetailModal'
 
 const STATUS_COLORS = {
   'Idea': 'badge-muted',
@@ -78,6 +79,8 @@ export default function IdeaDumpTab({ refreshKey = 0, onIdeaSaved }) {
   const [fleshOutIdea, setFleshOutIdea] = useState(null)
   const [fleshOutSavedLog, setFleshOutSavedLog] = useState(null)
   const [metricsIdea, setMetricsIdea] = useState(null)
+  const [detailIdea, setDetailIdea] = useState(null)
+  const [viewMode, setViewMode] = useState('list') // 'list' | 'cards'
 
   useEffect(() => {
     if (user) { loadIdeas(); loadBatches(); loadPillarDefs() }
@@ -107,6 +110,7 @@ export default function IdeaDumpTab({ refreshKey = 0, onIdeaSaved }) {
     const { error } = await supabase.from('content_ideas').update({ [field]: clean }).eq('id', id)
     if (error) { setError(error.message); return }
     setIdeas(prev => prev.map(i => i.id === id ? { ...i, [field]: clean } : i))
+    setDetailIdea(prev => prev?.id === id ? { ...prev, [field]: clean } : prev)
     if (field === 'status' && clean === 'Posted') {
       const idea = ideas.find(i => i.id === id)
       if (idea) setMetricsIdea({ ...idea, status: 'Posted' })
@@ -215,6 +219,25 @@ export default function IdeaDumpTab({ refreshKey = 0, onIdeaSaved }) {
           {batches.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
         </select>
         <div style={{ flex: 1 }} />
+        {/* View toggle */}
+        <div style={{ display: 'flex', gap: 2, background: 'var(--bg-2)', borderRadius: 8, padding: 3 }}>
+          <button
+            className={`btn btn-xs ${viewMode === 'list' ? 'btn-primary' : 'btn-ghost'}`}
+            style={viewMode === 'list' ? { color: '#fff' } : {}}
+            onClick={() => setViewMode('list')}
+            title="List view"
+          >
+            <LayoutList size={13} />
+          </button>
+          <button
+            className={`btn btn-xs ${viewMode === 'cards' ? 'btn-primary' : 'btn-ghost'}`}
+            style={viewMode === 'cards' ? { color: '#fff' } : {}}
+            onClick={() => setViewMode('cards')}
+            title="Card view"
+          >
+            <LayoutGrid size={13} />
+          </button>
+        </div>
         <button className="btn btn-accent btn-sm flex items-center gap-2" onClick={() => setShowGenerator(true)}>
           <Sparkles size={13} /> Generate ideas
         </button>
@@ -229,6 +252,58 @@ export default function IdeaDumpTab({ refreshKey = 0, onIdeaSaved }) {
 
       {loading ? (
         <p className="text-dim" style={{ textAlign: 'center', padding: '40px' }}>Loading…</p>
+      ) : viewMode === 'cards' ? (
+        <>
+          {filtered.length === 0 ? (
+            <div className="empty-state"><p>No ideas match the current filters.</p></div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
+              {filtered.map(idea => {
+                const statusStyle = {
+                  'Idea':           { border: 'var(--text-3)',   badge: 'badge-muted' },
+                  'Film next':      { border: 'var(--career)',   badge: 'badge-cobalt' },
+                  'Ready to edit':  { border: '#8b5cf6',        badge: 'badge-accent' },
+                  'Pull clip':      { border: 'var(--warning)',  badge: 'badge-warning' },
+                  'Posted':         { border: 'var(--success)',  badge: 'badge-success' },
+                }[idea.status] || { border: 'var(--text-3)', badge: 'badge-muted' }
+                return (
+                  <div
+                    key={idea.id}
+                    onClick={() => setDetailIdea(idea)}
+                    style={{
+                      background: 'var(--bg-2)', borderRadius: 'var(--radius)', padding: '14px 14px 10px',
+                      borderTop: `3px solid ${statusStyle.border}`, cursor: 'pointer',
+                      display: 'flex', flexDirection: 'column', gap: 8,
+                      opacity: idea.status === 'Posted' ? 0.65 : 1,
+                      transition: 'box-shadow 0.15s',
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.boxShadow = 'var(--shadow-md)'}
+                    onMouseLeave={e => e.currentTarget.style.boxShadow = 'none'}
+                  >
+                    <p style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.4, color: 'var(--text)' }}>{idea.title}</p>
+                    {idea.hook && (
+                      <p style={{ fontSize: 11, color: 'var(--text-3)', lineHeight: 1.4, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                        {idea.hook}
+                      </p>
+                    )}
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 'auto' }}>
+                      <span className={`badge ${statusStyle.badge}`} style={{ fontSize: 9 }}>{idea.status || 'Idea'}</span>
+                      {idea.format && <span className="badge badge-muted" style={{ fontSize: 9 }}>{idea.format}</span>}
+                      {idea.pillar && <span className="badge" style={{ fontSize: 9, background: 'var(--creative-tint)', color: 'var(--creative)' }}>{idea.pillar.split(' ')[0]}</span>}
+                      {idea.batch && <span className="badge badge-muted" style={{ fontSize: 9 }}>{idea.batch}</span>}
+                    </div>
+                    <div style={{ display: 'flex', gap: 4, borderTop: '1px solid var(--border)', paddingTop: 8 }} onClick={e => e.stopPropagation()}>
+                      <button className="btn-icon btn" title="Flesh out" onClick={() => { setFleshOutSavedLog(null); setFleshOutIdea(idea) }}><Wand2 size={12} /></button>
+                      {idea.last_flesh_out_id && <button className="btn-icon btn" title="View last flesh out" onClick={() => viewLastFleshOut(idea)}><Sparkles size={12} /></button>}
+                      {idea.status === 'Posted' && <button className="btn-icon btn" title="Metrics" onClick={() => setMetricsIdea(idea)}><BarChart2 size={12} /></button>}
+                      <button className="btn-icon btn" style={{ marginLeft: 'auto' }} onClick={() => deleteIdea(idea.id)}><Trash2 size={12} /></button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </>
       ) : (
         <div className="table-scroll">
           <table className="data-table" style={{ minWidth: '1500px' }}>
@@ -241,10 +316,10 @@ export default function IdeaDumpTab({ refreshKey = 0, onIdeaSaved }) {
             </thead>
             <tbody>
               {filtered.map((idea, idx) => (
-                <tr key={idea.id} style={{ opacity: idea.status === 'Posted' ? 0.5 : 1 }}>
-                  <td><span className="mono">{idx + 1}</span></td>
+                <tr key={idea.id} style={{ opacity: idea.status === 'Posted' ? 0.5 : 1, cursor: 'pointer' }} onClick={() => setDetailIdea(idea)}>
+                  <td onClick={e => e.stopPropagation()}><span className="mono">{idx + 1}</span></td>
                   {cols.map(col => (
-                    <td key={col.key}>
+                    <td key={col.key} onClick={e => e.stopPropagation()}>
                       <InlineCell
                         value={idea[col.key]}
                         onChange={v => updateIdea(idea.id, col.key, v)}
@@ -254,7 +329,7 @@ export default function IdeaDumpTab({ refreshKey = 0, onIdeaSaved }) {
                       />
                     </td>
                   ))}
-                  <td>
+                  <td onClick={e => e.stopPropagation()}>
                     <div className="flex items-center gap-1">
                       <button className="btn-icon btn" title="Flesh this out" onClick={() => { setFleshOutSavedLog(null); setFleshOutIdea(idea) }}>
                         <Wand2 size={12} />
@@ -314,6 +389,18 @@ export default function IdeaDumpTab({ refreshKey = 0, onIdeaSaved }) {
           idea={metricsIdea}
           onSave={saveMetrics}
           onClose={() => setMetricsIdea(null)}
+        />
+      )}
+
+      {detailIdea && (
+        <IdeaDetailModal
+          idea={detailIdea}
+          batches={batches}
+          onUpdate={updateIdea}
+          onClose={() => setDetailIdea(null)}
+          onFleshOut={idea => { setFleshOutSavedLog(null); setFleshOutIdea(idea); setDetailIdea(null) }}
+          onViewFleshOut={idea => { viewLastFleshOut(idea); setDetailIdea(null) }}
+          onMetrics={idea => { setMetricsIdea(idea); setDetailIdea(null) }}
         />
       )}
     </div>
