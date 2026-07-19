@@ -22,6 +22,9 @@ export default function TaskExpansion({ task, goals, onUpdateField, onDismiss, o
   const subtasks = task.subtasks || []
 
   useEffect(() => { loadComments() }, [task.id])
+  useEffect(() => { setNotes(task.notes || '') }, [task.notes])
+  useEffect(() => { setSpecificTask(task.specific_task || '') }, [task.specific_task])
+  useEffect(() => { setAction(task.action || '') }, [task.action])
 
   async function loadComments() {
     setLoadingComments(true)
@@ -42,10 +45,35 @@ export default function TaskExpansion({ task, goals, onUpdateField, onDismiss, o
     if (subInput.trim()) { onAddSubtask(subInput.trim()); setSubInput('') }
   }
 
+  const [specificTask, setSpecificTask] = useState(task.specific_task || '')
+  const [action, setAction] = useState(task.action || '')
   const locked = readOnly || task.complete
 
   return (
     <div onClick={e => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '4px 4px 8px' }}>
+
+      {/* Task title + action — editable */}
+      {!locked && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <input
+            value={specificTask}
+            onChange={e => setSpecificTask(e.target.value)}
+            onBlur={() => { if (specificTask.trim() !== (task.specific_task || '')) onUpdateField('specific_task', specificTask.trim()) }}
+            onKeyDown={e => { if (e.key === 'Enter') e.target.blur() }}
+            placeholder="Task title"
+            style={{ fontSize: 14, fontWeight: 600, padding: '6px 8px', width: '100%' }}
+          />
+          <input
+            value={action}
+            onChange={e => setAction(e.target.value)}
+            onBlur={() => { if (action !== (task.action || '')) onUpdateField('action', action) }}
+            onKeyDown={e => { if (e.key === 'Enter') e.target.blur() }}
+            placeholder="Area of action (optional)"
+            style={{ fontSize: 12, padding: '4px 8px', width: '100%', color: 'var(--text-2)' }}
+          />
+        </div>
+      )}
+
       {/* Notes — shown first so it's the first thing visible on expand */}
       <div>
         <p className="mono mb-2" style={{ fontSize: 10 }}>Notes</p>
