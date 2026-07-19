@@ -501,27 +501,38 @@ export default function WeeklyPage() {
       </div>
 
       {/* View switcher */}
-      <div style={{ display: 'flex', gap: 2, marginBottom: 16, borderBottom: '1px solid var(--border)', paddingBottom: 0 }}>
-        {[['table', 'Table'], ['cards', 'Cards'], ['kanban', 'Kanban'], ['timeline', 'Timeline']].map(([v, label]) => (
-          <button
-            key={v}
-            onClick={() => setViewMode(v)}
-            style={{
-              padding: '7px 14px',
-              fontSize: 12,
-              fontWeight: 500,
-              background: 'none',
-              border: 'none',
-              borderBottom: viewMode === v ? '2px solid var(--career)' : '2px solid transparent',
-              color: viewMode === v ? 'var(--career)' : 'var(--text-3)',
-              cursor: 'pointer',
-              marginBottom: -1,
-              transition: 'color 0.15s',
-            }}
-          >
-            {label}
-          </button>
-        ))}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 20 }}>
+        {[
+          ['table', 'Table', 'M3 4h18M3 9h18M3 14h18M3 19h18'],
+          ['cards', 'Cards', 'M4 5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5zm10 0a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1V5zM4 15a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-4zm10 0a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1v-4z'],
+          ['kanban', 'Kanban', 'M3 3h5v18H3zM9.5 3h5v12h-5zM16 3h5v8h-5z'],
+          ['timeline', 'Timeline', 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2z'],
+        ].map(([v, label, icon]) => {
+          const active = viewMode === v
+          return (
+            <button
+              key={v}
+              onClick={() => setViewMode(v)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '7px 14px',
+                fontSize: 13,
+                fontWeight: 500,
+                background: active ? 'var(--career)' : 'var(--bg-2)',
+                border: `1px solid ${active ? 'var(--career)' : 'var(--border)'}`,
+                borderRadius: 20,
+                color: active ? '#fff' : 'var(--text-2)',
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d={icon} />
+              </svg>
+              {label}
+            </button>
+          )
+        })}
       </div>
 
       {/* Priority filter bar */}
