@@ -15,6 +15,10 @@ import PastReviews from '../components/weekly/PastReviews'
 import WeeklyQuote from '../components/dashboard/WeeklyQuote'
 import TaskExpansion from '../components/weekly/TaskExpansion'
 import WeeklyTaskCard from '../components/weekly/WeeklyTaskCard'
+import TaskDetailPanel from '../components/weekly/TaskDetailPanel'
+import CardView from '../components/weekly/CardView'
+import KanbanView from '../components/weekly/KanbanView'
+import TimelineView from '../components/weekly/TimelineView'
 import WeeklyAgenda from '../components/calendar/WeeklyAgenda'
 import ArcRing from '../components/ui/ArcRing'
 import GoalTaskPicker from '../components/dashboard/GoalTaskPicker'
@@ -71,6 +75,10 @@ export default function WeeklyPage() {
   const [savedQuote, setSavedQuote] = useState(null)
   const [prefs, setPrefs] = useState(null)
   const [timeBlocking, setTimeBlocking] = useState(false)
+  const [viewMode, setViewModeState] = useState(() => localStorage.getItem('weeklyViewMode') || 'table')
+  const [detailTask, setDetailTask] = useState(null)
+
+  function setViewMode(v) { setViewModeState(v); localStorage.setItem('weeklyViewMode', v) }
 
   const weekStart = startOfWeek(currentWeek, { weekStartsOn: 1 })
   const weekEnd   = endOfWeek(currentWeek, { weekStartsOn: 1 })
@@ -492,6 +500,30 @@ export default function WeeklyPage() {
         </button>
       </div>
 
+      {/* View switcher */}
+      <div style={{ display: 'flex', gap: 2, marginBottom: 16, borderBottom: '1px solid var(--border)', paddingBottom: 0 }}>
+        {[['table', 'Table'], ['cards', 'Cards'], ['kanban', 'Kanban'], ['timeline', 'Timeline']].map(([v, label]) => (
+          <button
+            key={v}
+            onClick={() => setViewMode(v)}
+            style={{
+              padding: '7px 14px',
+              fontSize: 12,
+              fontWeight: 500,
+              background: 'none',
+              border: 'none',
+              borderBottom: viewMode === v ? '2px solid var(--career)' : '2px solid transparent',
+              color: viewMode === v ? 'var(--career)' : 'var(--text-3)',
+              cursor: 'pointer',
+              marginBottom: -1,
+              transition: 'color 0.15s',
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       {/* Priority filter bar */}
       <div className="flex items-center gap-2 mb-5" style={{ overflowX: 'auto', flexWrap: 'nowrap' }}>
         {priorityFilterOptions().map(opt => (
@@ -509,8 +541,54 @@ export default function WeeklyPage() {
         ))}
       </div>
 
+      {/* Cards view */}
+      {viewMode === 'cards' && (
+        <div className="mb-4">
+          {loading ? (
+            <p style={{ textAlign: 'center', padding: 40, color: 'var(--text-3)' }}>Loading…</p>
+          ) : (
+            <CardView
+              tasks={visibleTasks}
+              goals={goals}
+              onToggle={toggleTask}
+              onOpenDetail={setDetailTask}
+            />
+          )}
+        </div>
+      )}
+
+      {/* Kanban view */}
+      {viewMode === 'kanban' && (
+        <div className="mb-4">
+          {loading ? (
+            <p style={{ textAlign: 'center', padding: 40, color: 'var(--text-3)' }}>Loading…</p>
+          ) : (
+            <KanbanView
+              tasks={visibleTasks}
+              onOpenDetail={setDetailTask}
+              onUpdateField={updateTaskField}
+            />
+          )}
+        </div>
+      )}
+
+      {/* Timeline view */}
+      {viewMode === 'timeline' && (
+        <div className="card mb-4" style={{ padding: '12px 8px' }}>
+          {loading ? (
+            <p style={{ textAlign: 'center', padding: 40, color: 'var(--text-3)' }}>Loading…</p>
+          ) : (
+            <TimelineView
+              tasks={visibleTasks}
+              weekStart={weekStart}
+              onOpenDetail={setDetailTask}
+            />
+          )}
+        </div>
+      )}
+
       {/* Table — desktop/tablet */}
-      <div className="card weekly-table-view" style={{ padding: 0, overflow: 'hidden' }}>
+      <div className="card weekly-table-view" style={{ padding: 0, overflow: 'hidden', display: viewMode === 'table' ? undefined : 'none' }}>
         <div className="table-scroll">
         <table className="data-table">
           <thead>
@@ -666,8 +744,8 @@ export default function WeeklyPage() {
         </div>
       </div>
 
-      {/* Cards — mobile */}
-      <div className="weekly-card-view">
+      {/* Cards — mobile (shown for table view on small screens) */}
+      <div className="weekly-card-view" style={{ display: viewMode === 'table' ? undefined : 'none' }}>
         {showAddRow && (
           <div className="card-sm" style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius)', background: 'var(--career-tint)', display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div className="flex gap-2 wrap">
@@ -813,6 +891,21 @@ export default function WeeklyPage() {
         <BrainDump />
       </div>
 
+      {detailTask && (
+        <TaskDetailPanel
+          task={tasks.find(t => t.id === detailTask.id) || detailTask}
+          goals={goals}
+          onClose={() => setDetailTask(null)}
+          onUpdateField={(field, value) => updateTaskField(detailTask.id, field, value)}
+          onDismiss={reason => { dismissTask(detailTask.id, reason); setDetailTask(null) }}
+          onToggleSubtask={subId => toggleSubtask(tasks.find(t => t.id === detailTask.id) || detailTask, subId)}
+          onAddSubtask={text => addSubtask(tasks.find(t => t.id === detailTask.id) || detailTask, text)}
+          onEditSubtask={(subId, text) => editSubtaskText(tasks.find(t => t.id === detailTask.id) || detailTask, subId, text)}
+          onRemoveSubtask={subId => removeSubtask(tasks.find(t => t.id === detailTask.id) || detailTask, subId)}
+          onReorderSubtasks={subs => reorderSubtasks(tasks.find(t => t.id === detailTask.id) || detailTask, subs)}
+          onPushNextWeek={task => { pushToNextWeek(task); setDetailTask(null) }}
+        />
+      )}
       {showReview && <WeeklyReviewModal weekStart={weekStartStr} incompleteTasks={tasks.filter(t => !t.complete && !t.dismissed)} onClose={() => setShowReview(false)} onComplete={() => { setShowReview(false); carryForwardIncomplete() }} />}
       {showCarryForwardReview && <CarryForwardReviewModal incompleteTasks={tasks.filter(t => !t.complete && !t.dismissed)} onConfirm={confirmCarryForward} onClose={() => setShowCarryForwardReview(false)} />}
       {showPastReviews && <PastReviews onClose={() => setShowPastReviews(false)} />}
