@@ -32,8 +32,28 @@ export default function BooksPage() {
   async function loadBooks() {
     setLoading(true)
     const { data } = await supabase.from('books').select('*').eq('user_id', user.id).order('created_at', { ascending: false })
-    setBooks(data || [])
+    const loaded = data || []
+    setBooks(loaded)
     setLoading(false)
+    // Backfill covers for books missing one via Google Books
+    const missing = loaded.filter(b => !b.cover_url)
+    if (missing.length) repairCovers(missing)
+  }
+
+  async function repairCovers(books) {
+    for (const book of books) {
+      try {
+        const q = encodeURIComponent(`${book.title} ${book.author}`)
+        const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${q}&maxResults=1&fields=items(volumeInfo/imageLinks)`)
+        if (!res.ok) continue
+        const data = await res.json()
+        const cover = data.items?.[0]?.volumeInfo?.imageLinks?.thumbnail || data.items?.[0]?.volumeInfo?.imageLinks?.smallThumbnail
+        if (!cover) continue
+        const https_cover = cover.replace('http://', 'https://')
+        await supabase.from('books').update({ cover_url: https_cover }).eq('id', book.id)
+        setBooks(prev => prev.map(b => b.id === book.id ? { ...b, cover_url: https_cover } : b))
+      } catch {}
+    }
   }
 
   async function addBook(book, status = 'reading') {
@@ -183,14 +203,15 @@ export default function BooksPage() {
 function BookCard({ book, onSetStatus, onRemove, onSaveNotes, onEditReview }) {
   const [notesOpen, setNotesOpen] = useState(false)
   const [notes, setNotes] = useState(book.notes || '')
+  const [coverFailed, setCoverFailed] = useState(false)
   return (
     <div className="card card-creative" style={{ display: 'flex', gap: 12, padding: 14 }}>
       <div style={{
         width: 52, height: 76, borderRadius: 4, flexShrink: 0, overflow: 'hidden',
         background: 'var(--bg-2)', display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
-        {book.cover_url ? (
-          <img src={book.cover_url} alt={book.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        {book.cover_url && !coverFailed ? (
+          <img src={book.cover_url} alt={book.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={() => setCoverFailed(true)} />
         ) : (
           <BookOpen size={18} color="var(--text-3)" />
         )}
