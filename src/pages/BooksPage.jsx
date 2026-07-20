@@ -56,6 +56,20 @@ export default function BooksPage() {
     }
   }
 
+  async function repairOneCover(book) {
+    try {
+      const q = encodeURIComponent(`${book.title} ${book.author}`)
+      const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${q}&maxResults=1&fields=items(volumeInfo/imageLinks)`)
+      if (!res.ok) return
+      const data = await res.json()
+      const cover = data.items?.[0]?.volumeInfo?.imageLinks?.thumbnail || data.items?.[0]?.volumeInfo?.imageLinks?.smallThumbnail
+      if (!cover) return
+      const https_cover = cover.replace('http://', 'https://')
+      await supabase.from('books').update({ cover_url: https_cover }).eq('id', book.id)
+      setBooks(prev => prev.map(b => b.id === book.id ? { ...b, cover_url: https_cover } : b))
+    } catch {}
+  }
+
   async function addBook(book, status = 'reading') {
     const { data } = await supabase.from('books').insert({
       user_id: user.id, ol_key: book.ol_key, title: book.title, author: book.author,
@@ -143,7 +157,7 @@ export default function BooksPage() {
             <section>
               <h3 style={{ marginBottom: 14 }}>Wishlist</h3>
               <div className="grid-3" style={{ gap: 14 }}>
-                {wishlist.map(b => <BookCard key={b.id} book={b} onSetStatus={setStatus} onRemove={removeBook} onSaveNotes={saveNotes} onEditReview={setReviewBook} />)}
+                {wishlist.map(b => <BookCard key={b.id} book={b} onSetStatus={setStatus} onRemove={removeBook} onSaveNotes={saveNotes} onEditReview={setReviewBook} onRepairCover={repairOneCover} />)}
               </div>
             </section>
           )}
@@ -154,7 +168,7 @@ export default function BooksPage() {
               <p style={{ fontSize: 13, color: 'var(--text-3)', fontStyle: 'italic' }}>Nothing on the go. Add a book to start tracking.</p>
             ) : (
               <div className="grid-3" style={{ gap: 14 }}>
-                {reading.map(b => <BookCard key={b.id} book={b} onSetStatus={setStatus} onRemove={removeBook} onSaveNotes={saveNotes} onEditReview={setReviewBook} />)}
+                {reading.map(b => <BookCard key={b.id} book={b} onSetStatus={setStatus} onRemove={removeBook} onSaveNotes={saveNotes} onEditReview={setReviewBook} onRepairCover={repairOneCover} />)}
               </div>
             )}
           </section>
@@ -163,7 +177,7 @@ export default function BooksPage() {
             <section>
               <h3 style={{ marginBottom: 14 }}>Paused</h3>
               <div className="grid-3" style={{ gap: 14 }}>
-                {paused.map(b => <BookCard key={b.id} book={b} onSetStatus={setStatus} onRemove={removeBook} onSaveNotes={saveNotes} onEditReview={setReviewBook} />)}
+                {paused.map(b => <BookCard key={b.id} book={b} onSetStatus={setStatus} onRemove={removeBook} onSaveNotes={saveNotes} onEditReview={setReviewBook} onRepairCover={repairOneCover} />)}
               </div>
             </section>
           )}
@@ -178,7 +192,7 @@ export default function BooksPage() {
                   <div key={q}>
                     <p className="mono mb-2">{q}</p>
                     <div className="grid-3" style={{ gap: 14 }}>
-                      {byQuarter[q].map(b => <BookCard key={b.id} book={b} onSetStatus={setStatus} onRemove={removeBook} onSaveNotes={saveNotes} onEditReview={setReviewBook} />)}
+                      {byQuarter[q].map(b => <BookCard key={b.id} book={b} onSetStatus={setStatus} onRemove={removeBook} onSaveNotes={saveNotes} onEditReview={setReviewBook} onRepairCover={repairOneCover} />)}
                     </div>
                   </div>
                 ))}
@@ -200,10 +214,11 @@ export default function BooksPage() {
   )
 }
 
-function BookCard({ book, onSetStatus, onRemove, onSaveNotes, onEditReview }) {
+function BookCard({ book, onSetStatus, onRemove, onSaveNotes, onEditReview, onRepairCover }) {
   const [notesOpen, setNotesOpen] = useState(false)
   const [notes, setNotes] = useState(book.notes || '')
   const [coverFailed, setCoverFailed] = useState(false)
+  useEffect(() => { setCoverFailed(false) }, [book.cover_url])
   return (
     <div className="card card-creative" style={{ display: 'flex', gap: 12, padding: 14 }}>
       <div style={{
@@ -211,7 +226,7 @@ function BookCard({ book, onSetStatus, onRemove, onSaveNotes, onEditReview }) {
         background: 'var(--bg-2)', display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
         {book.cover_url && !coverFailed ? (
-          <img src={book.cover_url} alt={book.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={() => setCoverFailed(true)} />
+          <img src={book.cover_url} alt={book.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={() => { setCoverFailed(true); onRepairCover?.(book) }} />
         ) : (
           <BookOpen size={18} color="var(--text-3)" />
         )}
