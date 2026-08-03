@@ -3,12 +3,13 @@ import { format } from 'date-fns'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../hooks/useAuth'
 import { TASK_AREAS, parseTimeAllocationToParts, buildTimeAllocation } from '../../lib/constants'
-import { Plus, Clock, Target, Send, CalendarDays, SkipForward, Repeat, Tag, Ban, RotateCcw } from 'lucide-react'
+import { Plus, Clock, Target, Send, CalendarDays, SkipForward, Repeat, Tag, Ban, RotateCcw, RefreshCw } from 'lucide-react'
 import SubtaskList from '../shared/SubtaskList'
 
 const HOUR_OPTS = Array.from({ length: 9 }, (_, i) => i) // 0-8 hours
 const MINUTE_OPTS = [0, 15, 30, 45]
 const DAY_LABELS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+const FREQUENCIES = ['Daily', 'Weekly', '2x/week', '3x/week', 'One-off']
 
 export default function TaskExpansion({ task, goals, onUpdateField, onDismiss, onToggleSubtask, onAddSubtask, onEditSubtask, onRemoveSubtask, onReorderSubtasks, onPushNextWeek, readOnly }) {
   const { user } = useAuth()
@@ -132,6 +133,16 @@ export default function TaskExpansion({ task, goals, onUpdateField, onDismiss, o
           ) : (
             <select value={task.area} onChange={e => onUpdateField('area', e.target.value)} style={{ fontSize: 12, padding: '4px 8px' }}>
               {TASK_AREAS.map(a => <option key={a} value={a}>{a}</option>)}
+            </select>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <RefreshCw size={13} color="var(--text-3)" />
+          {locked ? (
+            <span style={{ fontSize: 12, color: 'var(--text-2)' }}>{task.frequency}</span>
+          ) : (
+            <select value={task.frequency || 'Weekly'} onChange={e => onUpdateField('frequency', e.target.value)} style={{ fontSize: 12, padding: '4px 8px' }}>
+              {FREQUENCIES.map(f => <option key={f} value={f}>{f}</option>)}
             </select>
           )}
         </div>

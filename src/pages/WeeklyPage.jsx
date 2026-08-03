@@ -77,8 +77,10 @@ export default function WeeklyPage() {
   const [timeBlocking, setTimeBlocking] = useState(false)
   const [viewMode, setViewModeState] = useState(() => localStorage.getItem('weeklyViewMode') || 'table')
   const [detailTask, setDetailTask] = useState(null)
+  const [showGoalsPanel, setShowGoalsPanelState] = useState(() => localStorage.getItem('weeklyShowGoals') !== 'false')
 
   function setViewMode(v) { setViewModeState(v); localStorage.setItem('weeklyViewMode', v) }
+  function setShowGoalsPanel(v) { setShowGoalsPanelState(v); localStorage.setItem('weeklyShowGoals', v) }
 
   const weekStart = startOfWeek(currentWeek, { weekStartsOn: 1 })
   const weekEnd   = endOfWeek(currentWeek, { weekStartsOn: 1 })
@@ -499,6 +501,59 @@ export default function WeeklyPage() {
           <Plus size={14} /> Add task
         </button>
       </div>
+
+      {/* Quarterly goals panel */}
+      {quarterGoals.length > 0 && (
+        <div style={{ marginBottom: 16, border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
+          <button
+            onClick={() => setShowGoalsPanel(!showGoalsPanel)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+              padding: '9px 14px', background: 'var(--bg-2)', border: 'none', cursor: 'pointer',
+              color: 'var(--text-2)',
+            }}
+          >
+            <Target size={13} color="var(--career)" />
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--career)', flex: 1, textAlign: 'left' }}>
+              Q{weekQuarter} goals — {quarterGoals.length} this quarter
+            </span>
+            {showGoalsPanel ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+          </button>
+          {showGoalsPanel && (
+            <div style={{ padding: '10px 14px 12px', display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {quarterGoals.map(g => {
+                const taskCount = visibleTasks.filter(t => t.goal_id === g.id).length
+                const pct = goalProgress(g, milestones)
+                const color = AREA_COLORS[g.category === 'Wellness' ? 'Health/Wellness' : g.category] || AREA_COLORS.Other
+                return (
+                  <div key={g.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    padding: '6px 12px', borderRadius: 20,
+                    background: color + '12',
+                    border: `1px solid ${color}30`,
+                    fontSize: 12,
+                  }}>
+                    <span style={{
+                      width: 8, height: 8, borderRadius: '50%',
+                      background: color, flexShrink: 0,
+                      opacity: pct === 100 ? 1 : 0.6,
+                    }} />
+                    <span style={{ color: 'var(--text)', fontWeight: 500, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {g.primary_goal}
+                    </span>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: color, fontWeight: 600 }}>{pct}%</span>
+                    {taskCount > 0 && (
+                      <span style={{ fontSize: 10, color: 'var(--text-3)', background: 'var(--bg-3)', borderRadius: 10, padding: '1px 6px' }}>
+                        {taskCount} task{taskCount !== 1 ? 's' : ''} this week
+                      </span>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* View switcher */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 20 }}>
