@@ -16,6 +16,7 @@ import WeeklyQuote from '../components/dashboard/WeeklyQuote'
 import TaskExpansion from '../components/weekly/TaskExpansion'
 import WeeklyTaskCard from '../components/weekly/WeeklyTaskCard'
 import TaskDetailPanel from '../components/weekly/TaskDetailPanel'
+import GoalDetailPanel from '../components/weekly/GoalDetailPanel'
 import CardView from '../components/weekly/CardView'
 import KanbanView from '../components/weekly/KanbanView'
 import TimelineView from '../components/weekly/TimelineView'
@@ -78,6 +79,7 @@ export default function WeeklyPage() {
   const [viewMode, setViewModeState] = useState(() => localStorage.getItem('weeklyViewMode') || 'table')
   const [detailTask, setDetailTask] = useState(null)
   const [showGoalsPanel, setShowGoalsPanelState] = useState(() => localStorage.getItem('weeklyShowGoals') !== 'false')
+  const [detailGoal, setDetailGoal] = useState(null)
 
   function setViewMode(v) { setViewModeState(v); localStorage.setItem('weeklyViewMode', v) }
   function setShowGoalsPanel(v) { setShowGoalsPanelState(v); localStorage.setItem('weeklyShowGoals', v) }
@@ -526,13 +528,18 @@ export default function WeeklyPage() {
                 const pct = goalProgress(g, milestones)
                 const color = AREA_COLORS[g.category === 'Wellness' ? 'Health/Wellness' : g.category] || AREA_COLORS.Other
                 return (
-                  <div key={g.id} style={{
+                  <div key={g.id} onClick={() => setDetailGoal(g)} style={{
                     display: 'flex', alignItems: 'center', gap: 8,
                     padding: '6px 12px', borderRadius: 20,
                     background: color + '12',
                     border: `1px solid ${color}30`,
                     fontSize: 12,
-                  }}>
+                    cursor: 'pointer',
+                    transition: 'background 0.15s',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = color + '22'}
+                  onMouseLeave={e => e.currentTarget.style.background = color + '12'}
+                  >
                     <span style={{
                       width: 8, height: 8, borderRadius: '50%',
                       background: color, flexShrink: 0,
@@ -957,6 +964,14 @@ export default function WeeklyPage() {
         <BrainDump />
       </div>
 
+      {detailGoal && (
+        <GoalDetailPanel
+          goal={detailGoal}
+          milestones={milestones}
+          weekTasks={tasks}
+          onClose={() => setDetailGoal(null)}
+        />
+      )}
       {detailTask && (
         <TaskDetailPanel
           task={tasks.find(t => t.id === detailTask.id) || detailTask}
