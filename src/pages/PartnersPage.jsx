@@ -435,12 +435,18 @@ const [assignments, setAssignments] = useState([]) // all partner_assignments in
                           }
                           {isExpanded ? <ChevronDown size={13} color="var(--text-3)" /> : <ChevronRight size={13} color="var(--text-3)" />}
                         </div>
-                        <div className="flex items-center gap-2 wrap" style={{ paddingBottom: 6 }}>
+                        <div className="flex items-center gap-2 wrap" style={{ paddingBottom: task.notes && !isExpanded ? 4 : 6 }}>
                           {task.area && <span className="badge" style={{ fontSize: 9 }}>{task.area}</span>}
+                          {task.frequency && <span className="mono" style={{ fontSize: 9, color: 'var(--text-3)' }}>{task.frequency}</span>}
                           {task.action && <span style={{ fontSize: 11, color: 'var(--text-3)' }}>{task.action}</span>}
-                          {task.frequency && task.frequency !== 'One-off' && <span className="mono" style={{ fontSize: 9, color: 'var(--text-3)' }}>{task.frequency}</span>}
+                          {task.time_allocation && <span style={{ fontSize: 9, color: 'var(--text-3)', fontFamily: 'var(--font-mono)' }}>{task.time_allocation}</span>}
                           {task.carried_forward && <span className="badge badge-warning" style={{ fontSize: 9 }}>carried</span>}
                         </div>
+                        {task.notes && !isExpanded && (
+                          <p style={{ fontSize: 12, color: 'var(--text-2)', fontStyle: 'italic', paddingBottom: 8, lineHeight: 1.45, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                            "{task.notes}"
+                          </p>
+                        )}
                         {isExpanded && (
                           <div style={{ paddingBottom: 10 }}>
                             <TaskExpansion

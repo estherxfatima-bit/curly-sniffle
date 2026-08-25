@@ -53,8 +53,8 @@ export default function TaskExpansion({ task, goals, onUpdateField, onDismiss, o
   return (
     <div onClick={e => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '4px 4px 8px' }}>
 
-      {/* Task title + action — editable */}
-      {!locked && (
+      {/* Task title + action */}
+      {!locked ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <input
             value={specificTask}
@@ -73,6 +73,10 @@ export default function TaskExpansion({ task, goals, onUpdateField, onDismiss, o
             style={{ fontSize: 12, padding: '4px 8px', width: '100%', color: 'var(--text-2)' }}
           />
         </div>
+      ) : (
+        task.action ? (
+          <p style={{ fontSize: 12, color: 'var(--text-3)', fontStyle: 'italic' }}>{task.action}</p>
+        ) : null
       )}
 
       {/* Notes — shown first so it's the first thing visible on expand */}
