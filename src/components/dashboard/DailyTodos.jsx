@@ -15,7 +15,7 @@ import TaskCarryoverModal from './TaskCarryoverModal'
 import BacklogPicker from './BacklogPicker'
 import TimerWidget from './TimerWidget'
 import TimeBlockModal from './TimeBlockModal'
-import { Plus, Trash2, ChevronDown, ChevronRight, Check, Target, Hourglass, AlarmClock, Link2, Timer as TimerIcon, CalendarClock, ChevronLeft, Download, Lightbulb, Lock, Unlock, FastForward, Rewind, Archive, Pencil, ClipboardList } from 'lucide-react'
+import { Plus, Trash2, ChevronDown, ChevronRight, Check, Target, Hourglass, AlarmClock, Link2, Timer as TimerIcon, CalendarClock, ChevronLeft, Download, Lightbulb, Lock, Unlock, FastForward, Rewind, Archive, Pencil, ClipboardList, StickyNote } from 'lucide-react'
 
 const DEFAULT_CATS = DEFAULT_TODO_CATEGORIES.map(c => c.name)
 
@@ -950,6 +950,8 @@ function TodoItem({ todo, categories, catColor, goals, isTimerRunning, onToggle,
   const [editingScheduled, setEditingScheduled] = useState(false)
   const [showNoteInput, setShowNoteInput] = useState(false)
   const [noteInput, setNoteInput] = useState(todo.completion_note || '')
+  const [showTaskNotes, setShowTaskNotes] = useState(false)
+  const [taskNotesInput, setTaskNotesInput] = useState(todo.notes || '')
   const subtasks = todo.subtasks || []
   const linkedGoal = goals.find(g => g.id === todo.goal_id)
   const cc = catColor(todo.category)
@@ -1201,11 +1203,47 @@ function TodoItem({ todo, categories, catColor, goals, isTimerRunning, onToggle,
           <Pencil size={12} />
         </button>
 
+        {/* Notes */}
+        <button className="btn-icon" style={{ padding: 2, flexShrink: 0, color: (todo.notes || showTaskNotes) ? 'var(--career)' : 'var(--text-3)' }} onClick={() => setShowTaskNotes(v => !v)} title={todo.notes ? 'View/edit notes' : 'Add notes'}>
+          <StickyNote size={12} />
+        </button>
+
         {/* Delete */}
         <button className="btn-icon" style={{ padding: 2, flexShrink: 0 }} onClick={onRemove} title="Delete to-do">
           <Trash2 size={12} />
         </button>
       </div>
+      )}
+
+      {/* Task notes */}
+      {(showTaskNotes || todo.notes) && (
+        <div style={{ marginTop: 8, paddingLeft: 27 }}>
+          {showTaskNotes ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <textarea
+                autoFocus={showTaskNotes && !todo.notes}
+                value={taskNotesInput}
+                onChange={e => setTaskNotesInput(e.target.value)}
+                placeholder="Add notes…"
+                rows={3}
+                style={{ fontSize: 12, flex: 1, padding: '6px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--bg-2)', color: 'var(--text)', resize: 'vertical', width: '100%', boxSizing: 'border-box', fontFamily: 'inherit', lineHeight: 1.5 }}
+                onKeyDown={e => { if (e.key === 'Escape') { setTaskNotesInput(todo.notes || ''); setShowTaskNotes(false) } }}
+              />
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button className="btn btn-xs btn-career" style={{ color: '#fff' }} onClick={() => { onUpdateField('notes', taskNotesInput.trim() || null); setShowTaskNotes(false) }}>Save</button>
+                <button className="btn btn-xs btn-ghost" onClick={() => { setTaskNotesInput(todo.notes || ''); setShowTaskNotes(false) }}>Cancel</button>
+                {todo.notes && <button className="btn btn-xs btn-ghost" style={{ color: 'var(--error)' }} onClick={() => { onUpdateField('notes', null); setTaskNotesInput(''); setShowTaskNotes(false) }}>Clear</button>}
+              </div>
+            </div>
+          ) : todo.notes ? (
+            <p
+              onClick={() => setShowTaskNotes(true)}
+              style={{ fontSize: 12, color: 'var(--text-2)', margin: 0, fontStyle: 'italic', cursor: 'pointer', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}
+            >
+              {todo.notes}
+            </p>
+          ) : null}
+        </div>
       )}
 
       {/* Subtasks */}

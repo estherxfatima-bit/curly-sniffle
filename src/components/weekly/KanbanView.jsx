@@ -29,16 +29,15 @@ function KanbanCard({ task, onOpenDetail, isDragging }) {
         background: 'var(--bg)',
         borderRadius: 10,
         padding: '12px 14px',
-        cursor: 'grab',
-        opacity: isDragging ? 0.35 : 1,
+        cursor: isDragging ? 'grabbing' : 'grab',
+        opacity: isDragging ? 0.3 : 1,
         display: 'flex',
         flexDirection: 'column',
         gap: 8,
-        transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
-        boxShadow: '0 1px 4px rgba(0,0,0,0.07)',
+        boxShadow: isDragging ? 'none' : '0 1px 4px rgba(0,0,0,0.07)',
         userSelect: 'none',
         touchAction: 'none',
-        border: '1px solid var(--border)',
+        border: `1px solid ${isDragging ? 'var(--career)' : 'var(--border)'}`,
       }}
     >
       <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', lineHeight: 1.4, margin: 0 }}>
